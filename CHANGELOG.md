@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Recurrence expansion (issue #14):** a pure `apps/api/app/recurrence.py`
+  module expands the next `n` concrete occurrences of an event via
+  `dateutil.rrule` (daily/weekly/monthly/quarterly/yearly/custom RFC 5545
+  rules), with correct timezone handling (event tz vs stored UTC, DST-aware)
+  and all-day events anchored date-only at local midnight so they never drift
+  across DST. `next_occurrences(event, n, after=...)` materializes results on
+  read (returning UTC `Occurrence`s with stable `occurrence_id`s and per-
+  occurrence ends) and caches them per (rrule, start, tz, all-day, end, n,
+  after) so repeated reads don't recompute (`clear_cache()` for edits/tests).
+  Edge cases covered by pytest: DST spring-forward, leap day, quarterly drift,
+  no-end-date recurrences, and a 'series next June' one-time event; one-time
+  events (no rrule) yield a single occurrence. Adds `python-dateutil` (and
+  `types-python-dateutil` for mypy) to the API deps; ruff + mypy pass.
 - **tz / locale / quiet hours / license (issue #9):** owner-confirmed defaults
   (UTC timezone, `en-US` locale, no quiet hours, MIT license) are now
   documented and wired into the API settings. `apps/api/app/config.py` gains
