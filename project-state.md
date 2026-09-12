@@ -7,9 +7,10 @@
 **In progress (M2 — Core domain: events, recurrence, local API, SQLite).**
 M1 implementation is merged (monorepo skeleton, backend skeleton, tooling
 gates, local run paths, need-owner issues filed). The M2 core-domain slice is
-now planned and in flight. The six M1 need-owner issues (#5–#10) remain
-`pi:blocked` awaiting owner input (secrets/access to local `.env` only); each
-has a documented fallback and does not block M2.
+now planned and in flight. The owner has begun responding to the need-owner
+issues: #7 (Telegram bot) and #9 (tz/locale/quiet-hours/license) were unblocked
+to `pi:ready` after owner input; #5, #6, #8, #10 remain `pi:blocked` awaiting
+owner input (secrets/access to local `.env` only). None of these block M2.
 
 ## What's here
 
@@ -32,12 +33,12 @@ M2 — Core domain (current batch, pi:ready):
 - [ ] #M2-T2 — Recurrence expansion: rrule + tz/all-day + next_occurrences (pi:ready, p2).
 - [ ] #M2-T3 — Event CRUD + summary endpoint + seed data (pi:ready, p3).
 
-M1 (owner-in-the-loop, pi:blocked — not blocking M2):
+M1 (owner-in-the-loop):
+- [x] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (pi:ready; owner provided input — token was posted publicly, rotate + confirm numeric user id).
+- [x] #9 — tz / locale / quiet hours / license (MIT?) (pi:ready; owner confirmed defaults).
 - [ ] #5 — natalies-corner access / local path (pi:blocked, p1).
 - [ ] #6 — JoinGonka LLM_BASE_URL / LLM_MODEL / API key (pi:blocked, p1).
-- [ ] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (pi:blocked, p1).
 - [ ] #8 — Email decision for v1 (SMTP/Resend or skip) (pi:blocked, p2).
-- [ ] #9 — tz / locale / quiet hours / license (MIT?) (pi:blocked, p2).
 - [ ] #10 — Confirm voxtype installed / install via Omarchy (pi:blocked, p2).
 
 Further milestones (M3 web UI, M4 reminder engine, M5 Telegram inbound/STT/AI,
