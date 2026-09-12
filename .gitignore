@@ -51,6 +51,8 @@ yarn-error.log*
 # --- Coverage ---
 coverage/
 htmlcov/
+.coverage
+.coverage.*
 
 # --- auto-pi local state (secrets + run artifacts — never commit) ---
 .pi/local.json

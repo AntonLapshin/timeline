@@ -52,6 +52,10 @@ class Settings:
     port: int = field(default_factory=lambda: int(os.getenv("TIMELINE_PORT", "8123")))
     #: Enable SQLite WAL mode (durable + concurrent readers).
     wal_enabled: bool = field(default_factory=lambda: _bool_env("TIMELINE_WAL", True))
+    #: Seed the initial events on startup when the events table is empty.
+    seed_on_start: bool = field(
+        default_factory=lambda: _bool_env("TIMELINE_SEED", True)
+    )
     #: IANA timezone used for event parsing/display ("now + tz").
     tz: str = field(default_factory=lambda: os.getenv("TZ", "UTC"))
     #: Locale used for date formatting (e.g. en-US).
