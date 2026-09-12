@@ -29,3 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `src/core/**/*.ts`; CI runs backend + web checks and a gitleaks secret scan.
 - **Hygiene:** `.gitignore` covers `.env`, `data/`, `backups/`, `*.db*`, audio
   and logs; `.env.example` added with placeholders only (no secrets).
+- **Need-owner access issues (issue #3):** filed six `need-owner` GitHub issues
+  (#5–#10) covering `natalies-corner` access, JoinGonka LLM config, Telegram bot,
+  email decision, tz/locale/quiet-hours/license, and voxtype availability. Each
+  uses the What/Why/Where(`.env`)/Fallback template with `need-owner` +
+  `pi:blocked` labels; no real secrets are committed (secrets go to local
+  `.env` only).
