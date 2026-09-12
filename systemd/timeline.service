@@ -1,0 +1,46 @@
+# Timeline — systemd --user service (daily-driver native run path).
+#
+# Example unit for running the timeline API (FastAPI) as the daily driver,
+# bound to loopback only (127.0.0.1:8123) because the app has no auth. It must
+# NEVER bind to 0.0.0.0 or a LAN/internet interface.
+#
+# Install (per-user, autostarts on login):
+#
+#   mkdir -p ~/.config/systemd/user
+#   cp systemd/timeline.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now timeline.service
+#
+# Check status / logs:
+#
+#   systemctl --user status timeline
+#   journalctl --user -u timeline -f
+#
+# Health probe: curl http://127.0.0.1:8123/healthz
+#
+# NOTE: paths below are examples — adjust WorkingDirectory and ExecStart to
+# your clone location and Python environment. The SQLite DB lives under
+# ./data (gitignored) and secrets come from a local .env (gitignored).
+
+[Unit]
+Description=Timeline local-first schedule API (loopback only)
+After=network.target
+
+[Service]
+Type=simple
+# Loopback bind only — no auth. Never change --host to 0.0.0.0.
+ExecStart=/home/USER/timeline/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8123
+WorkingDirectory=/home/USER/timeline/apps/api
+Environment=TIMELINE_HOST=127.0.0.1
+Environment=TIMELINE_PORT=8123
+Environment=TIMELINE_DATA_DIR=/home/USER/timeline/data
+Restart=on-failure
+RestartSec=5
+# Harden the service (loopback-only network; read-only filesystem except data).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/home/USER/timeline/data
+
+[Install]
+WantedBy=default.target
