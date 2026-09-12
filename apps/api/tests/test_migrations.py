@@ -1,9 +1,10 @@
-"""Tests for the Alembic migration wiring (issue #1)."""
+"""Tests for the Alembic migration wiring (issues #1 and #13)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+import sqlalchemy as sa
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect
 
@@ -52,3 +53,45 @@ def test_migration_uses_settings_database_url(tmp_path: Path) -> None:
     """Settings.database_url points at the configured data dir + db name."""
     settings = Settings(data_dir=tmp_path, db_name="migrate.db")
     assert settings.database_url == f"sqlite:///{tmp_path / 'migrate.db'}"
+
+
+def test_full_upgrade_creates_domain_tables(tmp_path: Path, monkeypatch) -> None:  # noqa: ANN001
+    """Upgrading from a clean DB creates all domain tables (issue #13)."""
+    monkeypatch.setenv("TIMELINE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("TIMELINE_DB_NAME", "full.db")
+
+    cfg = _alembic_config(tmp_path, "full.db")
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'full.db'}")
+    tables = inspect(engine).get_table_names()
+    for table in [
+        "app_config",
+        "events",
+        "reminders",
+        "delivery_logs",
+        "telegram_inbound",
+    ]:
+        assert table in tables
+
+    # The alembic version is stamped to the head revision (0002).
+    with engine.connect() as conn:
+        version = conn.execute(
+            sa.text("SELECT version_num FROM alembic_version")
+        ).scalar()
+    assert version == "0002"
+
+    # Spot-check the events table has the schema-aligned columns.
+    event_columns = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert {
+        "title",
+        "type",
+        "start_at",
+        "tz",
+        "rrule",
+        "priority",
+        "channels",
+        "reminder_offsets",
+        "source",
+        "status",
+    } <= event_columns

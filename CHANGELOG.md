@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Domain models + migrations (issue #13):** full SQLAlchemy domain model in
+  `apps/api` — `Event` (one_time/recurrent, tz, all-day, priority, tags, source,
+  status, rrule), `Reminder` (channels, offsets, remind_time_of_day,
+  repeat_until_ack, snooze_allowed, quiet_hours), `DeliveryLog` (event_id,
+  occurrence_id, offset, status, timestamps) and `TelegramInbound` (message/voice
+  metadata, parsed draft, status) — alongside the existing `AppConfig`. A new
+  Alembic migration `0002` creates all tables on SQLite (WAL), upgradeable from
+  the existing `0001_initial`. Enum values mirror `packages/shared` (EventStatus,
+  EventSource, EventType, EventPriority, EventChannel) via `app/enums.py` so the
+  wire format stays in one place. pytest covers model creation, defaults,
+  relationships and the full migration upgrade from a clean DB; ruff + mypy pass.
 - Initial React + Tailwind + TypeScript scaffold (Vite).
 - Core/UI separation with `src/core` (business logic) and `src/ui` (thin views).
 - Vitest setup enforcing 100% coverage on `src/core/**/*.ts`.
