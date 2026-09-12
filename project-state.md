@@ -8,9 +8,14 @@
 M1 implementation is merged (monorepo skeleton, backend skeleton, tooling
 gates, local run paths, need-owner issues filed). The M2 core-domain slice is
 now planned and in flight. The owner has begun responding to the need-owner
-issues: #7 (Telegram bot) and #9 (tz/locale/quiet-hours/license) were unblocked
-to `pi:ready` after owner input; #5, #6, #8, #10 remain `pi:blocked` awaiting
-owner input (secrets/access to local `.env` only). None of these block M2.
+issues: #9 (tz/locale/quiet-hours/license) was unblocked to `pi:ready` after
+owner input. #7 (Telegram bot) received owner input but it was invalid (the
+BOT_TOKEN was posted in a public comment and must be rotated; the provided
+`TELEGRAM_USER_ID` was a bot username, not the numeric DM id) — the Engineer
+re-routed it to owner and it remains `pi:blocked` until the owner rotates the
+token, provides the numeric user id, and confirms polling. #5, #6, #8, #10
+remain `pi:blocked` awaiting owner input (secrets/access to local `.env` only).
+None of these block M2.
 
 ## What's here
 
@@ -34,7 +39,7 @@ M2 — Core domain (current batch, pi:ready):
 - [ ] #M2-T3 — Event CRUD + summary endpoint + seed data (pi:ready, p3).
 
 M1 (owner-in-the-loop):
-- [x] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (pi:ready; owner provided input — token was posted publicly, rotate + confirm numeric user id).
+- [ ] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (pi:blocked; owner input invalid — token leaked publicly, needs rotation via @BotFather + numeric user id + polling OK; re-routed to owner).
 - [x] #9 — tz / locale / quiet hours / license (MIT?) (pi:ready; owner confirmed defaults).
 - [ ] #5 — natalies-corner access / local path (pi:blocked, p1).
 - [ ] #6 — JoinGonka LLM_BASE_URL / LLM_MODEL / API key (pi:blocked, p1).
