@@ -23,6 +23,15 @@ def _bool_env(name: str, default: bool) -> bool:
     return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _optional_env(name: str) -> str | None:
+    """Return the env value, or None when unset/blank (no quiet hours)."""
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    stripped = raw.strip()
+    return stripped or None
+
+
 @dataclass(frozen=True)
 class Settings:
     """Runtime settings for the timeline API."""
@@ -43,6 +52,18 @@ class Settings:
     port: int = field(default_factory=lambda: int(os.getenv("TIMELINE_PORT", "8123")))
     #: Enable SQLite WAL mode (durable + concurrent readers).
     wal_enabled: bool = field(default_factory=lambda: _bool_env("TIMELINE_WAL", True))
+    #: IANA timezone used for event parsing/display ("now + tz").
+    tz: str = field(default_factory=lambda: os.getenv("TZ", "UTC"))
+    #: Locale used for date formatting (e.g. en-US).
+    locale: str = field(default_factory=lambda: os.getenv("LOCALE", "en-US"))
+    #: Quiet-hours start (HH:MM, 24h) or None when quiet hours are disabled.
+    quiet_hours_start: str | None = field(
+        default_factory=lambda: _optional_env("QUIET_START")
+    )
+    #: Quiet-hours end (HH:MM, 24h) or None when quiet hours are disabled.
+    quiet_hours_end: str | None = field(
+        default_factory=lambda: _optional_env("QUIET_END")
+    )
 
     @property
     def database_url(self) -> str:
