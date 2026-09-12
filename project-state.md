@@ -21,7 +21,8 @@ work is now planned and in flight.
 M1 — Public repo, scaffolding, Omarchy baseline:
 - [ ] #M1-T1 — Set up monorepo structure + backend skeleton + tooling gates (pi:ready, p1).
 - [ ] #M1-T2 — Add local run paths: docker-compose + systemd service example (pi:ready, p2).
-- [ ] #M1-T3 — File need-owner access issues (#1-#7) for owner-in-the-loop inputs (pi:ready, p1).
+- [x] #M1-T3 — File need-owner access issues (#1-#7) for owner-in-the-loop inputs (pi:ready, p1).
+  Filed GitHub #5–#10 (`need-owner` + `pi:blocked`).
 
 Further milestones (M2 core domain, M3 web UI, M4 reminder engine, M5 Telegram
 inbound/STT/AI, M6 hardening/backups, M7 polish/docs) will be planned on later
