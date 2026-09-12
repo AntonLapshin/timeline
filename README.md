@@ -2,6 +2,48 @@
 
 # Timeline — Project Plan (v2, clarified)
 
+## Repository layout (monorepo)
+
+```
+apps/web/          # Web UI — React + TypeScript + Tailwind (Vite). src/core (pure, 100% Vitest coverage) + src/ui (thin views).
+apps/api/          # Backend — FastAPI + SQLAlchemy 2.0 + Pydantic v2 + Alembic. SQLite (WAL) under ./data (gitignored).
+packages/shared/   # Shared contracts — event JSON schema v1 + enums used by web and API.
+```
+
+### Web (apps/web)
+
+```bash
+npm ci
+npm run dev          # Vite dev server
+npm run lint         # eslint --max-warnings 0
+npm test             # Vitest (all workspaces)
+npm run test:coverage  # Vitest coverage gate: 100% on src/core/**/*.ts
+npm run build        # tsc + vite build
+```
+
+### API (apps/api)
+
+```bash
+cd apps/api
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+make lint            # ruff
+make typecheck       # mypy
+make test            # pytest
+make migrate         # alembic upgrade head (creates ./data/timeline.db)
+make dev             # uvicorn on 127.0.0.1:8123
+```
+
+Health probe: `GET http://127.0.0.1:8123/healthz` → `{"status": "ok"}`.
+
+### Secrets & data (public repo hygiene)
+
+- Copy `.env.example` → `.env` and fill local values; `.env` is gitignored.
+- `./data/`, `./backups/`, `*.db*`, audio and logs are gitignored.
+- Pre-commit hooks (ruff, mypy, eslint, gitleaks) via `.pre-commit-config.yaml`.
+
+---
+
 **Repo:** `ws/timeline` → **public** GitHub repo (code only, no data, no secrets — see §7)
 **Vision:** A personal, local-first global schedule that remembers everything: one-time future events (e.g. “Season 2 of X comes out June next year”), recurrent obligations (e.g. “Pay HRA every quarter”, check-ups), with timeline + calendar views, monthly summaries, and configurable Telegram / Email reminders. New events via Web UI or Telegram (text or voice, natural language → AI extraction).
 

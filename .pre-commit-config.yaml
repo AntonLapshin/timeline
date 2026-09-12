@@ -1,0 +1,60 @@
+# Pre-commit hooks for timeline.
+#
+# Install once with:  pre-commit install
+# Run on all files with: pre-commit run --all-files
+#
+# gitleaks scans for secrets before anything can be committed to the public
+# repo. ruff/mypy/pytest keep the Python backend clean; eslint keeps the web app
+# warning-free (max-warnings 0).
+
+repos:
+  # Secret scan (public repo hygiene).
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # General hygiene.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  # Python backend: ruff + mypy + pytest.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^apps/api/
+      - id: ruff-format
+        files: ^apps/api/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.1
+    hooks:
+      - id: mypy
+        files: ^apps/api/
+        additional_dependencies:
+          - sqlalchemy>=2.0
+          - fastapi>=0.115
+          - pydantic>=2.7
+          - alembic>=1.13
+        args: [--config-file, apps/api/pyproject.toml, apps/api/app]
+
+  # Web app: eslint (max-warnings 0) + vitest coverage gate.
+  - repo: local
+    hooks:
+      - id: web-lint
+        name: web lint (eslint max-warnings 0)
+        entry: npm run lint --workspace apps/web
+        language: system
+        pass_filenames: false
+      - id: web-test-coverage
+        name: web test coverage (core 100%)
+        entry: npm run test:coverage --workspace apps/web
+        language: system
+        pass_filenames: false

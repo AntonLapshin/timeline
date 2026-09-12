@@ -13,3 +13,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core/UI separation with `src/core` (business logic) and `src/ui` (thin views).
 - Vitest setup enforcing 100% coverage on `src/core/**/*.ts`.
 - Initial demo panel rendering project name / status / demo info.
+
+### Changed
+
+- **Monorepo layout (issue #1):** moved the web app to `apps/web`, added
+  `apps/api` (FastAPI + SQLAlchemy 2.0 + Pydantic v2 + Alembic) and
+  `packages/shared` (event JSON schema v1), with npm workspaces at the root.
+- **Backend skeleton:** `apps/api` boots a minimal FastAPI app with a `/healthz`
+  endpoint, SQLite (WAL) wiring, and an initial Alembic migration creating the
+  `app_config` table.
+- **Shared contracts:** `packages/shared` holds the event JSON schema v1 plus
+  the enum constants shared by web and API.
+- **Tooling gates:** ruff, mypy, pytest for `apps/api`; eslint `max-warnings 0`;
+  pre-commit + gitleaks; Vitest coverage gate enforcing 100% on
+  `src/core/**/*.ts`; CI runs backend + web checks and a gitleaks secret scan.
+- **Hygiene:** `.gitignore` covers `.env`, `data/`, `backups/`, `*.db*`, audio
+  and logs; `.env.example` added with placeholders only (no secrets).

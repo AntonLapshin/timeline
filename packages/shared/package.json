@@ -1,0 +1,15 @@
+{
+  "name": "@timeline/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared contracts between the timeline web app and API: event JSON schema v1.",
+  "main": "src/eventSchema.ts",
+  "exports": {
+    ".": "./src/eventSchema.ts",
+    "./schemas/event.schema.v1.json": "./schemas/event.schema.v1.json"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}
