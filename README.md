@@ -42,6 +42,43 @@ Health probe: `GET http://127.0.0.1:8123/healthz` → `{"status": "ok"}`.
 - `./data/`, `./backups/`, `*.db*`, audio and logs are gitignored.
 - Pre-commit hooks (ruff, mypy, eslint, gitleaks) via `.pre-commit-config.yaml`.
 
+### Local run paths
+
+Two ways to run timeline locally, both bound to loopback only
+(`127.0.0.1`, **no `0.0.0.0`**) because the app has no auth:
+
+**1. Docker Compose (recommended for dev).** One command starts web + api and
+keeps the SQLite database in a named volume:
+
+```bash
+cp .env.example .env   # fill local values (secrets stay local)
+docker compose up --build
+# Web:  http://127.0.0.1:8123
+# API:  http://127.0.0.1:8124/healthz  →  {"status": "ok"}
+```
+
+`scheduler` / `bot` services will be added to the compose stack in later
+milestones. `docker compose down` stops the stack; data persists in the
+`timeline-data` volume (`docker compose down -v` removes it).
+
+**2. systemd --user service (daily driver).** Native run that autostarts on
+login and restarts on failure. The example unit runs the API bound to
+`127.0.0.1:8123`:
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/timeline.service ~/.config/systemd/user/
+# edit the paths (USER, clone location, venv) in the copied unit
+systemctl --user daemon-reload
+systemctl --user enable --now timeline.service
+systemctl --user status timeline        # status
+curl http://127.0.0.1:8123/healthz      # health probe
+```
+
+Both paths read secrets from the local `.env` (gitignored) — never from
+committed files. See `systemd/timeline.service` and `docker-compose.yml` for
+details.
+
 ---
 
 **Repo:** `ws/timeline` → **public** GitHub repo (code only, no data, no secrets — see §7)

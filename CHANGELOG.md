@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core/UI separation with `src/core` (business logic) and `src/ui` (thin views).
 - Vitest setup enforcing 100% coverage on `src/core/**/*.ts`.
 - Initial demo panel rendering project name / status / demo info.
+- **Local run paths (issue #2):** `docker-compose.yml` (web + api, loopback
+  only, SQLite volume) for dev, `systemd/timeline.service` example unit
+  (systemd --user daily driver, `Restart=on-failure`, bound to
+  `127.0.0.1:8123`), plus `apps/web/Dockerfile` and `apps/api/Dockerfile`.
+  README documents both paths and the one-command start; no secrets in any
+  committed file (env comes from local `.env` / `.env.example`).
 
 ### Changed
 

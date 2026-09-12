@@ -1,0 +1,49 @@
+# Timeline — local development / daily-driver compose stack.
+#
+# Runs the web app and the API for local development. Both services bind to
+# loopback only (127.0.0.1) because the app has no auth — never expose them to
+# the LAN or internet.
+#
+#   docker compose up --build
+#
+# Then open http://127.0.0.1:8123 (web) and check http://127.0.0.1:8124/healthz
+# (API). The SQLite database persists in the `timeline-data` volume.
+#
+# Secrets come from a local `.env` file (copy `.env.example` → `.env`); nothing
+# secret is ever committed. See README "Local run paths".
+
+name: timeline
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: timeline-web
+    # Loopback bind only — no auth. Never change to 0.0.0.0.
+    ports:
+      - "127.0.0.1:8123:8123"
+    depends_on:
+      - api
+    restart: on-failure
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: timeline-api
+    # Loopback bind only — no auth. Never change to 0.0.0.0.
+    ports:
+      - "127.0.0.1:8124:8124"
+    env_file:
+      - .env
+    environment:
+      TIMELINE_HOST: 127.0.0.1
+      TIMELINE_PORT: 8124
+      TIMELINE_DATA_DIR: /data
+    volumes:
+      - timeline-data:/data
+    restart: on-failure
+
+volumes:
+  timeline-data:
