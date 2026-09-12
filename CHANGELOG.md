@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **tz / locale / quiet hours / license (issue #9):** owner-confirmed defaults
+  (UTC timezone, `en-US` locale, no quiet hours, MIT license) are now
+  documented and wired into the API settings. `apps/api/app/config.py` gains
+  `tz`, `locale`, `quiet_hours_start` and `quiet_hours_end` fields (defaults
+  `UTC` / `en-US` / disabled), read from `TZ`, `LOCALE`, `QUIET_START` and
+  `QUIET_END` env vars; `.env.example` documents all four. A new `LICENSE`
+  (MIT) file is added for the public repo. pytest covers the settings defaults,
+  env overrides and blank-as-disabled quiet-hours handling; ruff + mypy pass.
 - **Domain models + migrations (issue #13):** full SQLAlchemy domain model in
   `apps/api` — `Event` (one_time/recurrent, tz, all-day, priority, tags, source,
   status, rrule), `Reminder` (channels, offsets, remind_time_of_day,
