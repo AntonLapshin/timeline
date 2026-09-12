@@ -1,0 +1,70 @@
+{
+  "$comment": "auto-pi default project configuration. Copied to {project}/.pi/config.json at seed time (M5), with the project section filled in. No secrets live here.",
+  "project": {
+    "name": "timeline",
+    "repo": "timeline",
+    "owner": "AntonLapshin",
+    "ownerEmail": "",
+    "defaultBranch": "main",
+    "demoUrl": "https://AntonLapshin.github.io/timeline/"
+  },
+  "pi": {
+    "model": "",
+    "provider": "",
+    "contextMaxTokens": 0,
+    "maxRetries": 2,
+    "retryBaseDelayMs": 5000,
+    "retryMaxDelayMs": 30000
+  },
+  "loop": {
+    "intervalSeconds": 60,
+    "stopOnBudgetExceeded": true,
+    "maxConsecutiveFailures": 3,
+    "personaInactivityMs": 600000,
+    "personaTimeoutMs": 3600000
+  },
+  "limits": {
+    "maxBatchIssues": 3,
+    "maxIssueAttempts": 3,
+    "maxTokensPerCycle": 0,
+    "maxTokensPerDay": 0,
+    "maxCostPerDayUsd": 0,
+    "maxPromptTokensPerPersona": 0,
+    "maxOutputTokensPerPersona": 0
+  },
+  "github": {
+    "autoCreateRepo": true,
+    "repoVisibility": "public"
+  },
+  "stack": {
+    "framework": "react",
+    "typescript": true,
+    "tailwind": true,
+    "testRunner": "vitest"
+  },
+  "quality": {
+    "coreCoveragePercent": 100,
+    "featureBranches": true
+  },
+  "review": {
+    "reviewerCanPushTestCommits": false
+  },
+  "pages": {
+    "enabled": true,
+    "deployBranch": "gh-pages"
+  },
+  "notifications": {
+    "telegram": {
+      "enabled": false,
+      "botTokenEnv": "TELEGRAM_BOT_TOKEN",
+      "chatIdEnv": "TELEGRAM_CHAT_ID",
+      "notifyOnDone": true,
+      "notifyOnStopped": true,
+      "notifyOnNeedsHuman": true
+    }
+  },
+  "logging": {
+    "maxFileSizeMb": 10,
+    "rotate": true
+  }
+}

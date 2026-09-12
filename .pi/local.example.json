@@ -1,0 +1,13 @@
+{
+  "$comment": "auto-pi local secrets & overrides. Copy this file to .pi/local.json — it is git-ignored and never committed. Values are read from environment variables at runtime; do not hardcode secrets here.",
+  "notifications": {
+    "telegram": {
+      "enabled": false,
+      "botTokenEnv": "TELEGRAM_BOT_TOKEN",
+      "chatIdEnv": "TELEGRAM_CHAT_ID",
+      "notifyOnDone": true,
+      "notifyOnStopped": true,
+      "notifyOnNeedsHuman": true
+    }
+  }
+}

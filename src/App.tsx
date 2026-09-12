@@ -1,6 +1,20 @@
-# timeline
+import { DemoPanel } from "./ui/components/DemoPanel";
 
-# Timeline — Project Plan (v2, clarified)
+/**
+ * App root.
+ *
+ * Just composes the (dumb) demo panel, passing the project identity down from
+ * the scaffold context. No business logic here — that lives in `src/core`.
+ */
+export default function App() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+      <div className="w-full">
+        <DemoPanel
+          projectName="timeline"
+          owner="AntonLapshin"
+          repo="timeline"
+          description="# Timeline — Project Plan (v2, clarified)
 
 **Repo:** `ws/timeline` → **public** GitHub repo (code only, no data, no secrets — see §7)
 **Vision:** A personal, local-first global schedule that remembers everything: one-time future events (e.g. “Season 2 of X comes out June next year”), recurrent obligations (e.g. “Pay HRA every quarter”, check-ups), with timeline + calendar views, monthly summaries, and configurable Telegram / Email reminders. New events via Web UI or Telegram (text or voice, natural language → AI extraction).
@@ -235,68 +249,9 @@ API sketch (localhost only, no auth):
 ## 9. Immediate Next Steps
 1. Owner: confirm license (MIT?) + grant `natalies-corner` access / local path (Issue #2) so web + JoinGonka mirror your pattern exactly.
 2. Owner: JoinGonka base URL + model ID + key → local `.env` (Issue #3); Telegram bot token + user id → `.env` (Issue #4); email decision (Issue #5); tz/locale/quiet-hours (Issue #6); voxtype present? (Issue #7).
-3. Agent: scaffold M0 (public repo layout + Showcase + atomic + context + FastAPI + Compose + systemd + gitleaks) with defaults where unblocked, then M1→M6 via PRs + localhost screenshots + Telegram voice→event demo.
-
-> Generated and maintained by [auto-pi](https://github.com/AntonLapshin/auto-pi) — an
-> autonomous engineering team harness for Pi.
-
-## Demo
-
-Live demo: **[https://AntonLapshin.github.io/timeline/](https://AntonLapshin.github.io/timeline/)**
-
-## Stack
-
-- [Vite](https://vitejs.dev/) + [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- [Tailwind CSS](https://tailwindcss.com/) for styling
-- [Vitest](https://vitest.dev/) for unit tests, with 100% coverage enforced on `src/core/**/*.ts`
-
-## Getting started
-
-```bash
-npm install     # install dependencies
-npm run dev     # start the dev server
-```
-
-## Scripts
-
-| Script              | Purpose                                    |
-|---------------------|--------------------------------------------|
-| `npm run dev`       | Start the Vite dev server                  |
-| `npm run build`     | Type-check (`tsc`) then build for production |
-| `npm run preview`   | Preview the production build locally       |
-| `npm run lint`      | Run ESLint                                 |
-| `npm test`          | Run unit tests (Vitest)                    |
-| `npm run test:coverage` | Run tests and enforce 100% core coverage |
-
-## Architecture
-
-The project enforces a strict **core / UI split** (plan.md §19.1):
-
-- `src/core/**` — pure business logic, no React, no DOM. **100% test coverage is
-  required here.**
-- `src/ui/**` — thin, dumb view layer (components + view models). Contains no
-  business logic; it only renders what `src/core` provides.
-
-## Project documents
-
-- [`manifest.md`](manifest.md) — project charter / intent (purpose, goals, milestones)
-- [`project-state.md`](project-state.md) — current state and progress
-- [`CHANGELOG.md`](CHANGELOG.md) — versioned change log
-
-
-## Shaping decisions (from /loop-seed)
-
-
-- **This is a fully elaborated v2 plan. Should I treat it as the authoritative spec (all sections fixed) and only ask about the remaining open points, or do you want to re-open any section (e.g. scope, stack, or non-goals) for revision?** — Treat v2 plan as authoritative spec; only resolve open points *(assumed)*
-
-- **For local STT, what is your preference given the plan's 'reuse voxtype if present' default?** — Reuse existing voxtype/whisper.cpp if present, else install via Omarchy dictation *(assumed)*
-
-- **Email reminders are optional for v1. Do you want email in the initial release, or keep it as a flagged/skipped feature until after core Telegram flow is proven?** — Skip email in v1 (feature-flag only; Telegram-first) *(assumed)*
-
-- **The plan defers the calendar view decision to M2: custom month grid vs FullCalendar. Which should the scaffold target?** — Custom month/week/agenda grid (Tailwind-controlled) *(assumed)*
-
-- **Both Docker Compose (dev) and systemd --user (daily) are planned. Which should be the default daily-driver path that gets priority in M0/M5?** — systemd --user (native) as daily driver; Compose for dev *(assumed)*
-
-- **Several items are listed as non-goals/v2-stretch (Google Calendar sync, /ask over history, PWA, multi-user). Should any of these be pulled into the v1 scope, or confirmed as out-of-scope for this build?** — All confirmed out-of-scope for v1 (ROADMAP.md only) *(assumed)*
-
-
+3. Agent: scaffold M0 (public repo layout + Showcase + atomic + context + FastAPI + Compose + systemd + gitleaks) with defaults where unblocked, then M1→M6 via PRs + localhost screenshots + Telegram voice→event demo."
+        />
+      </div>
+    </main>
+  );
+}
