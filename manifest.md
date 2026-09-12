@@ -109,3 +109,46 @@ A personal, local-first global schedule that remembers everything: capture one-t
   - Empty/loading/error states, humanized dates ('in 3 weeks'), print month view, Showcase polish.
   - README: Omarchy quickstart, env table (JoinGonka/Telegram/STT), voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2 (Google Calendar sync, /ask over history, PWA, stats).
   - Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders in the test window; need-owner issues closed.
+
+## Backlog — planned sub-issues (tracked by PM)
+
+> Tracks the concrete, issue-sized slices the PM has planned against the
+> milestones above. Checked `[x]` = implemented + merged. This section is the
+> authoritative backlog the loop uses to decide whether the project is done.
+
+### M1 — Public repo, scaffolding, Omarchy baseline
+- [ ] M1-T1 — Monorepo structure + backend skeleton (apps/api FastAPI+SQLAlchemy+Alembic, packages/shared schema v1) + tooling gates (ruff, mypy, pytest, eslint max-warnings 0, pre-commit + gitleaks, Vitest 100% core).
+- [ ] M1-T2 — Local run paths: docker-compose.yml (dev) + systemd/timeline.service example bound to 127.0.0.1:8123.
+- [ ] M1-T3 — File need-owner issues #1-#7 (natalies-corner, JoinGonka, Telegram, email, tz/license, voxtype); secrets to local .env only.
+
+### M2 — Core domain: events, recurrence, local API, SQLite
+- [ ] M2-T1 — Models (AppConfig, Event, Reminder, DeliveryLog, TelegramInbound) + Alembic migrations on SQLite WAL.
+- [ ] M2-T2 — dateutil.rrule occurrence expansion (daily/weekly/monthly/quarterly/yearly/custom) + tz/all-day handling; next_occurrences(n) materialized on read with caching.
+- [ ] M2-T3 — CRUD endpoints + GET /api/summary?month=YYYY-MM; seed data (HRA quarterly, series next June, check-up); pytest DST/leap/quarterly-drift cases.
+
+### M3 — Web UI: timeline, calendar, wizard, smart-input
+- [ ] M3-T1 — App shell (no login), Timeline view (grouped by month/week, infinite scroll, priority/tag color+icon, recurrence badge), Calendar view (custom Tailwind month/week/agenda grid + day drawer).
+- [ ] M3-T2 — Summary bar (events this month by priority, next 7 days, overdue highlight) + event drawer with next occurrences and reminder preview.
+- [ ] M3-T3 — 3-step create/edit wizard (What/When → Recurrence → Priority & Reminders) + smart-input box calling /parse + search/filter + dark/light + responsive + keyboard shortcuts (c=create, /=search).
+- [ ] M3-T4 — Atomic folders (atoms/molecules/organisms/templates/pages) with services (apiClient, llmParse, dateFmt) injected via Context; every organism has a Showcase file; Vitest 100% src/core + Playwright smoke on 127.0.0.1.
+
+### M4 — Reminder engine + Telegram outbound
+- [ ] M4-T1 — APScheduler persistent jobstore on SQLite; dedupe key (event_id, occurrence_id, offset); at-least-once delivery; queue survives restart.
+- [ ] M4-T2 — Telegram outbound sender (python-telegram-bot v21, polling): priority card + Acknowledge/Snooze 1d/Delete buttons; single-user allowlist TELEGRAM_USER_ID.
+- [ ] M4-T3 — Per-event reminder config (channels, offsets, remind_time_of_day, repeat_until_ack, snooze_allowed, quiet_hours → morning digest); low priority sends nothing; email sender behind feature flag; reminder preview + delivery log UI; tests (T-1m test offset with Ack/Snooze).
+
+### M5 — Telegram inbound + local STT + AI parsing
+- [ ] M5-T1 — Bot polling, DM-only, single-user allowlist; commands /add, /today, /upcoming [7d|30d], /low, /ask; ignores group/channel noise.
+- [ ] M5-T2 — Local STT: Telegram voice.ogg → ffmpeg → wav 16k → whisper.cpp (reuse voxtype install/model if present) with 2-min cap; no audio leaves the machine.
+- [ ] M5-T3 — POST /api/events/parse: thin direct JoinGonka OpenAI-compatible fetch (configurable base/model/key, JSON mode, now+tz injection, multi-event, needs_clarification follow-up); default medium if uncertain, low on maybe/series/idea, never silently save critical financial events.
+- [ ] M5-T4 — Draft Save/Edit/Discard flow via Telegram buttons; web smart-input reuses endpoint; eval set of 20 samples; redacted logs by default.
+
+### M6 — Omarchy hardening, autostart, local backups
+- [ ] M6-T1 — Enforce 127.0.0.1 bind + startup guard refusing 0.0.0.0; systemd --user enable + restart-on-failure; log rotation; /healthz endpoint.
+- [ ] M6-T2 — Nightly SQLite dump + ./backups rotation (keep ~30d) + one-command restore; README runbook (start/stop/logs/backup/restore/update).
+- [ ] M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no Telegram IDs/keys/emails in docs; README privacy disclosure.
+
+### M7 — Polish, docs, handover
+- [ ] M7-T1 — Empty/loading/error states, humanized dates ('in 3 weeks'), print month view, Showcase polish.
+- [ ] M7-T2 — README: Omarchy quickstart, env table, voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2.
+- [ ] M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders; need-owner issues closed.
