@@ -239,6 +239,29 @@ describe("CalendarView", () => {
     );
   });
 
+  it("shows a no-matches message in the agenda when a filter excludes all events", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "HRA", priority: "critical" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(
+      services,
+      <CalendarView
+        filter={{ text: "", priority: "low", tag: null, month: null }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Agenda"));
+    await waitFor(() => expect(screen.getByText("No matches.")).toBeInTheDocument());
+  });
+
   it("calls onEventClick with the occurrence when a day-drawer row is clicked", async () => {
     const getOccurrences = vi.fn().mockResolvedValue([
       makeOccurrence({ event_id: 1, title: "HRA", start_at: "2026-09-05T10:00:00" }),

@@ -1,5 +1,6 @@
 import { useTimeline } from "../viewModels/useTimeline";
 import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
+import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventRead } from "../../core/eventTypes";
 
 /**
@@ -99,10 +100,12 @@ export function MonthGroupView({
  */
 export function TimelineView({
   onEventClick,
+  filter,
 }: {
   onEventClick?: (event: EventRead) => void;
+  filter?: EventFilter;
 }) {
-  const { groups, hasMore, loading, error, loadMore } = useTimeline();
+  const { groups, hasMore, loading, error, loadMore } = useTimeline(filter);
 
   if (loading) {
     return <p className="text-sm text-slate-500">Loading events…</p>;
@@ -113,7 +116,11 @@ export function TimelineView({
   }
 
   if (groups.length === 0) {
-    return <p className="text-sm text-slate-500">No events yet.</p>;
+    return (
+      <p className="text-sm text-slate-500">
+        {filter && isFiltering(filter) ? "No matches." : "No events yet."}
+      </p>
+    );
   }
 
   return (

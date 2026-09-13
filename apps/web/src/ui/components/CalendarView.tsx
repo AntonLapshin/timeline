@@ -6,6 +6,7 @@ import {
   type AgendaRow,
   type CalendarDay,
 } from "../../core/calendar";
+import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventOccurrence } from "../../core/eventTypes";
 
 /** Weekday column headers (Sunday-first, matching the grid). */
@@ -270,8 +271,10 @@ export function AgendaList({
  */
 export function CalendarView({
   onEventClick,
+  filter,
 }: {
   onEventClick?: (event: EventOccurrence) => void;
+  filter?: EventFilter;
 }) {
   const {
     mode,
@@ -290,7 +293,7 @@ export function CalendarView({
     nextWeek,
     selectDay,
     closeDrawer,
-  } = useCalendar();
+  } = useCalendar(filter);
 
   const navigation =
     mode === "week"
@@ -368,9 +371,12 @@ export function CalendarView({
         <WeekGrid week={week} onEventClick={onEventClick} />
       )}
 
-      {!loading && !error && mode === "agenda" && agenda && (
-        <AgendaList rows={agenda} onEventClick={onEventClick} />
-      )}
+      {!loading && !error && mode === "agenda" && agenda &&
+        (agenda.length === 0 && filter && isFiltering(filter) ? (
+          <p className="text-sm text-slate-500">No matches.</p>
+        ) : (
+          <AgendaList rows={agenda} onEventClick={onEventClick} />
+        ))}
 
       {selectedDay && (
         <div

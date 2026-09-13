@@ -89,6 +89,20 @@ describe("TimelineView", () => {
     await waitFor(() => expect(screen.getByText("No events yet.")).toBeInTheDocument());
   });
 
+  it("shows a no-matches message when a filter excludes all events", async () => {
+    const listEvents = vi.fn().mockResolvedValue([
+      makeEvent({ id: 1, title: "HRA", priority: "critical" }),
+    ]);
+    const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
+
+    renderWithServices(
+      services,
+      <TimelineView filter={{ text: "", priority: "low", tag: null, month: null }} />,
+    );
+
+    await waitFor(() => expect(screen.getByText("No matches.")).toBeInTheDocument());
+  });
+
   it("reveals more events on 'Load more'", async () => {
     const events = Array.from({ length: 12 }, (_, i) =>
       makeEvent({ id: i + 1, title: `Event ${i + 1}` }),
