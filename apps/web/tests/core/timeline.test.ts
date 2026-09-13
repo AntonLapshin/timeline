@@ -195,14 +195,14 @@ describe("timeline core module", () => {
   describe("paginate", () => {
     const events = [1, 2, 3, 4, 5].map((id) => makeEvent({ id }));
 
-    it("returns the page slice", () => {
+    it("returns a cumulative slice that accumulates across pages", () => {
       expect(paginate(events, 2, 0).map((e) => e.id)).toEqual([1, 2]);
-      expect(paginate(events, 2, 1).map((e) => e.id)).toEqual([3, 4]);
-      expect(paginate(events, 2, 2).map((e) => e.id)).toEqual([5]);
+      expect(paginate(events, 2, 1).map((e) => e.id)).toEqual([1, 2, 3, 4]);
+      expect(paginate(events, 2, 2).map((e) => e.id)).toEqual([1, 2, 3, 4, 5]);
     });
 
-    it("returns an empty slice past the end", () => {
-      expect(paginate(events, 2, 99)).toEqual([]);
+    it("returns the full list past the end", () => {
+      expect(paginate(events, 2, 99).map((e) => e.id)).toEqual([1, 2, 3, 4, 5]);
     });
 
     it("clamps a zero page size to 1", () => {

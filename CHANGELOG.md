@@ -21,7 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `weekInMonth`, `eventTimeLabel`, `priorityStyle`, `tagStyle`, `toEventRow`,
   `paginate`, `hasMore`) which is 100% Vitest-covered; the view model
   (`useTimeline`) is thin and consumes services via `useServices()` context
-  injection; the components are dumb.
+  injection; the components are dumb. `paginate` implements **cumulative**
+  infinite-scroll semantics: clicking "Load more" appends the next page to the
+  previously visible events (`events.slice(0, (page+1)*size)`) rather than
+  replacing them, and the tests assert prior events persist after loading more.
 
 - **Web UI foundation (issue #20):** the React web app now has a pure,
   fully-covered `src/core` foundation plus injected services and the atomic

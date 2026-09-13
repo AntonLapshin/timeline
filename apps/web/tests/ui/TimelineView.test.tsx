@@ -103,5 +103,8 @@ describe("TimelineView", () => {
 
     fireEvent.click(screen.getByText("Load more"));
     await waitFor(() => expect(screen.getByText("Event 11")).toBeInTheDocument());
+    // Cumulative infinite-scroll: previously visible events must persist.
+    expect(screen.getByText("Event 1")).toBeInTheDocument();
+    expect(screen.getByText("Event 10")).toBeInTheDocument();
   });
 });

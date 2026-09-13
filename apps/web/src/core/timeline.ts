@@ -203,7 +203,10 @@ export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
 /**
  * Slice a chronologically sorted event list for "load more" pagination.
  *
- * Returns the events in `[page * pageSize, (page + 1) * pageSize)`.
+ * Returns a **cumulative** slice — everything revealed so far, i.e.
+ * `[0, (page + 1) * pageSize)`. This is the infinite-scroll contract the
+ * Timeline view relies on: clicking "Load more" appends the next page to the
+ * previously visible events instead of replacing them.
  */
 export function paginate(
   events: readonly EventRead[],
@@ -211,8 +214,8 @@ export function paginate(
   page: number,
 ): EventRead[] {
   const size = Math.max(1, Math.floor(pageSize));
-  const start = Math.max(0, Math.floor(page)) * size;
-  return events.slice(start, start + size);
+  const end = (Math.max(0, Math.floor(page)) + 1) * size;
+  return events.slice(0, end);
 }
 
 /** Whether more events remain beyond the given page. */
