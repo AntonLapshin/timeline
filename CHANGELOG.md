@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **App shell + Timeline view (issue #21):** the web app now has a no-login
+  localhost app shell (`AppShell`) with a top-level layout, a header that hosts
+  the summary-bar slot (wired in a later issue), and a Timeline / Calendar view
+  switcher. The primary Timeline view lists events grouped by month (and week
+  within month) sorted chronologically, with an infinite-scroll / "load more"
+  pagination over `GET /api/events`. Each event row shows title, a derived time
+  label, a priority color + icon, a tag color + icon, and a recurrence badge
+  (formatted via `src/core/recurrence-format`) when the event recurs. All
+  derivation lives in a new pure `src/core/timeline` module (`groupByMonth`,
+  `weekInMonth`, `eventTimeLabel`, `priorityStyle`, `tagStyle`, `toEventRow`,
+  `paginate`, `hasMore`) which is 100% Vitest-covered; the view model
+  (`useTimeline`) is thin and consumes services via `useServices()` context
+  injection; the components are dumb.
+
 - **Web UI foundation (issue #20):** the React web app now has a pure,
   fully-covered `src/core` foundation plus injected services and the atomic
   folder scaffold the M3 UI builds on. Pure core modules: `recurrenceFormat`
