@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Web UI foundation (issue #20):** the React web app now has a pure,
+  fully-covered `src/core` foundation plus injected services and the atomic
+  folder scaffold the M3 UI builds on. Pure core modules: `recurrenceFormat`
+  (formats an RFC 5545 rrule into a human label — daily/weekly/monthly/
+  quarterly/yearly/custom, "every quarter", "every 2 weeks"); `summaryCounts`
+  (derives "events this month by priority" and "next 7 days" counts from
+  `GET /api/summary` payloads with overdue highlight logic); `parseGuards`
+  (validates/normalizes a parsed event draft and decides a safe-default
+  priority — medium when uncertain, low on maybe/series/idea, and never
+  auto-downgrades a critical financial event); `dateFmt` (ISO ↔ local,
+  humanized "in 3 weeks", month labels); and `eventTypes` (shared wire types).
+  A pure service layer (`apiClient` typed fetch wrappers for
+  `GET/POST /api/events` and `GET /api/summary?month=YYYY-MM`; `llmParse`
+  calling `POST /api/events/parse`) is injected via a single React
+  `ServicesProvider` + `useServices()` hook — components consume services from
+  context and never instantiate them directly. The atomic folder scaffold
+  (`src/ui/atoms|molecules|organisms|templates|pages`) is created for later
+  milestones. `src/core/**` is 100% Vitest-covered (lines/branches/functions/
+  statements); `npm run lint`, `npm test`, `npm run test:coverage`, and
+  `npm run build` all pass.
 - **Event CRUD + summary + seed (issue #15):** the API now exposes event CRUD
   (`POST`/`GET`/`PATCH`/`DELETE /api/events` and `GET /api/events/{id}`) with
   Pydantic validation mirroring the shared event schema v1 (title length,
