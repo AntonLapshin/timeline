@@ -116,6 +116,16 @@ def test_next_occurrence_points_past_the_month() -> None:
     assert occs[0].next_occurrence == datetime(2026, 2, 15, 10, 0, tzinfo=UTC)
 
 
+def test_next_occurrence_rolls_over_into_next_year() -> None:
+    """December's next occurrence rolls into the following January."""
+    # Monthly on the 15th; asking for December 2026 gives the January 2027
+    # occurrence, exercising the ``month == 12`` year-rollover branch.
+    event = _event(rrule="FREQ=MONTHLY;BYMONTHDAY=15")
+    occs = occurrences_for_month([event], 2026, 12)
+    assert len(occs) == 1
+    assert occs[0].next_occurrence == datetime(2027, 1, 15, 10, 0, tzinfo=UTC)
+
+
 def test_next_occurrence_none_when_event_ended() -> None:
     """An event that ends within the month has no next occurrence."""
     event = _event(
@@ -231,6 +241,29 @@ def test_occurrences_endpoint_ignores_archived(client: TestClient) -> None:
         },
     )
     assert client.get("/api/events/occurrences?month=2026-01").json() == []
+
+
+def test_occurrences_endpoint_december_rollover(client: TestClient) -> None:
+    """A December query returns the next occurrence in the following year."""
+    client.post(
+        "/api/events",
+        json={
+            "title": "Monthly review",
+            "type": "recurrent",
+            "start_at": "2026-01-15T10:00:00+00:00",
+            "tz": "UTC",
+            "rrule": "FREQ=MONTHLY;BYMONTHDAY=15",
+            "priority": "medium",
+            "source": "web",
+            "status": "active",
+        },
+    )
+    resp = client.get("/api/events/occurrences?month=2026-12")
+    body = resp.json()
+    assert resp.status_code == 200
+    assert len(body) == 1
+    assert body[0]["start_at"].startswith("2026-12-15")
+    assert body[0]["next_occurrence"].startswith("2027-01-15")
 
 
 def test_occurrences_endpoint_invalid_month(client: TestClient) -> None:

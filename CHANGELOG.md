@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Missing tests for occurrences December rollover (issue #31):** adds
+  boundary tests for the `month == 12` year-rollover branch of
+  `_next_after_month` in `apps/api/app/occurrences.py`. A new pure test in
+  `apps/api/tests/test_occurrences.py` verifies a monthly event queried for
+  `month=2026-12` returns a `next_occurrence` of `datetime(2027, 1, 15, ...)`
+  (rolling into the following January), and a new endpoint-level test verifies
+  `GET /api/events/occurrences?month=2026-12` returns a `next_occurrence` in
+  2027-01. Previously all `next_occurrence` tests used `month=1`, leaving the
+  December branch untested.
+
 - **Missing tests for AppShell view-switcher + summary slot (issue #26):**
   adds a component test suite in `apps/web/tests/ui/AppShell.test.tsx` covering
   the app-shell acceptance criteria from issue #21: clicking the 'Calendar'
