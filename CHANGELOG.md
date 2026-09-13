@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Summary bar: events this month by priority, next 7 days, overdue highlight
+  (issue #37):** renders a summary bar in the `AppShell` header `summarySlot`
+  fed by `GET /api/summary?month=YYYY-MM`. The bar shows the current month's
+  total occurrences plus a per-priority (critical / medium / low) breakdown
+  via the existing `src/core/summaryCounts` `monthlyCounts`, and a "next 7
+  days" tally with an overdue highlighted state via `nextSevenDays`.
+  A new pure `summaryBar` derivation in `src/core/summaryCounts` combines both
+  counts into one renderable model (100% Vitest-covered). A thin `useSummary`
+  view model fetches the current month's summary through `apiClient.getSummary`
+  via `useServices()`, and a dumb `SummaryBar` component renders the result
+  (wired into `App.tsx`'s `summarySlot`). Empty/zero state renders cleanly with
+  no misleading counts.
+
 - **Missing tests for occurrences December rollover (issue #31):** adds
   boundary tests for the `month == 12` year-rollover branch of
   `_next_after_month` in `apps/api/app/occurrences.py`. A new pure test in

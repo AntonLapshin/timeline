@@ -6,6 +6,7 @@ import {
   isCurrentMonth,
   toPriorityCounts,
   emptyPriorityCounts,
+  summaryBar,
 } from "../../src/core/summaryCounts";
 import type { SummaryResponse } from "../../src/core/eventTypes";
 
@@ -82,5 +83,31 @@ describe("summaryCounts core module", () => {
     const today = new Date(2026, 8, 15);
     const result = nextSevenDays(summary({ month: "2026-08" }), today);
     expect(result).toEqual({ total: 0, overdue: 0, hasOverdue: false });
+  });
+
+  it("combines monthly and next-7-days into a summary bar model", () => {
+    const today = new Date(2026, 8, 15);
+    const model = summaryBar(summary(), today);
+    expect(model.monthly).toEqual(monthlyCounts(summary()));
+    expect(model.nextSevenDays).toEqual(nextSevenDays(summary(), today));
+  });
+
+  it("summary bar reflects an empty/zero summary cleanly", () => {
+    const today = new Date(2026, 8, 1);
+    const model = summaryBar(
+      summary({ total: 0, by_priority: {} }),
+      today,
+    );
+    expect(model.monthly.total).toBe(0);
+    expect(model.monthly.byPriority).toEqual({
+      critical: 0,
+      medium: 0,
+      low: 0,
+    });
+    expect(model.nextSevenDays).toEqual({
+      total: 0,
+      overdue: 0,
+      hasOverdue: false,
+    });
   });
 });
