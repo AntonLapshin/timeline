@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Missing tests for AppShell view-switcher + summary slot (issue #26):**
+  adds a component test suite in `apps/web/tests/ui/AppShell.test.tsx` covering
+  the app-shell acceptance criteria from issue #21: clicking the 'Calendar'
+  tab calls `onViewChange('calendar')` and clicking 'Timeline' calls
+  `onViewChange('timeline')`; the active tab sets `aria-pressed` accordingly;
+  and the `summarySlot` content is rendered in the header slot.
+
 - **Missing tests for apiClient network-rejection path (issue #24):** adds a
   Vitest case in `apps/web/tests/core/apiClient.test.ts` covering the
   network-rejection (fetch throws) error path of `createApiClient`'s
