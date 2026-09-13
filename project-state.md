@@ -38,10 +38,11 @@ username). None of these block M3.
 
 ## Next steps (planned issues)
 
-M3 — Web UI (current batch, pi:ready):
-- [ ] #20 #M3-CORE — Web UI foundation: core logic + services + context injection + atomic scaffold (pi:ready, p1).
+M3 — Web UI (current batch):
+- [x] #20 #M3-CORE — Web UI foundation: core logic + services + context injection + atomic scaffold (merged via #23).
 - [ ] #21 #M3-T1A — App shell + Timeline view (grouped month/week, infinite scroll, priority/tag styling, recurrence badge) (pi:ready, p1).
 - [ ] #22 #M3-T1B — Calendar view: custom Tailwind month/week/agenda grid + day drawer (pi:ready, p2).
+- [ ] #24 — Add missing tests for PR #23 (apiClient network-rejection path) (pi:ready, type:test).
 
 Remaining M3 slices (planned on later PM turns): summary bar + event drawer
 (M3-T2), 3-step wizard + smart-input + search/filter + dark/light + keyboard
