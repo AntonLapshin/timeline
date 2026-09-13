@@ -226,4 +226,30 @@ describe("App", () => {
     fireEvent.keyDown(window, { key: "/" });
     expect(document.activeElement).not.toBe(input);
   });
+
+  it("suppresses the `c` shortcut while typing inside an input (typing guard)", () => {
+    const openCreate = vi.fn();
+    useEventWizardMock.mockReturnValue(wizardState({ openCreate, open: false }));
+    render(<App />);
+    const input = screen.getByLabelText("Search events");
+    input.focus();
+
+    // `c` while typing must NOT open the create wizard.
+    fireEvent.keyDown(input, { key: "c" });
+    expect(openCreate).not.toHaveBeenCalled();
+  });
+
+  it("suppresses the `/` shortcut while typing inside an input (typing guard)", () => {
+    useEventWizardMock.mockReturnValue(wizardState({ open: false }));
+    render(<App />);
+    const input = screen.getByLabelText("Search events");
+    const focusSpy = vi.spyOn(input, "focus");
+    input.focus();
+    focusSpy.mockClear();
+
+    // `/` while typing must NOT re-trigger the search-box focus logic.
+    fireEvent.keyDown(input, { key: "/" });
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
+  });
 });

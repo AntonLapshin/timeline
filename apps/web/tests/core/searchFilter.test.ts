@@ -271,6 +271,40 @@ describe("filterOccurrences", () => {
       ),
     ).toEqual([2]);
   });
+
+  it("combines text and priority with AND semantics", () => {
+    expect(
+      filterOccurrences(occurrences, {
+        ...EMPTY_FILTER,
+        text: "health",
+        priority: "low",
+      }),
+    ).toEqual([]);
+    expect(
+      filterOccurrences(occurrences, {
+        ...EMPTY_FILTER,
+        text: "health",
+        priority: "critical",
+      }).map((o) => o.event_id),
+    ).toEqual([1]);
+  });
+
+  it("combines text and tag with AND semantics", () => {
+    expect(
+      filterOccurrences(occurrences, {
+        ...EMPTY_FILTER,
+        text: "lunch",
+        tag: "health",
+      }),
+    ).toEqual([]);
+    expect(
+      filterOccurrences(occurrences, {
+        ...EMPTY_FILTER,
+        text: "lunch",
+        tag: "social",
+      }).map((o) => o.event_id),
+    ).toEqual([2]);
+  });
 });
 
 describe("allTags", () => {

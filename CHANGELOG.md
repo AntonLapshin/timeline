@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Add missing tests for PR #50 (issue #51):** closes two non-blocking test
+  gaps flagged by the Review Engineer on the search/filter work (#46/#50). Adds
+  an `App.test.tsx` typing-guard case that fires `keyDown` with `/` and `c`
+  while focus is inside an INPUT and asserts the search box is not re-focused
+  and `openCreate` is not called; and adds `filterOccurrences` AND-combination
+  tests (text+priority and text+tag) mirroring the existing `filterEvents` AND
+  test. Core coverage stays at 100%.
+
 - **Dark/light theme toggle + responsive polish (issue #48):** adds a theme
   toggle in the app-shell header that switches the whole app between light and
   dark, persisted in `localStorage` and applied across all views (Timeline,
