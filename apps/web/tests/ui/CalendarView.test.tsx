@@ -263,6 +263,35 @@ describe("CalendarView", () => {
     );
   });
 
+  it("calls onEventClick with the occurrence when a week-grid chip is clicked", async () => {
+    // Place the occurrence on today's date so it always falls in the current
+    // week (and the fetched current month), regardless of when the suite runs.
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "HRA", start_at: `${todayIso}T10:00:00` }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+    const onEventClick = vi.fn();
+
+    renderWithServices(services, <CalendarView onEventClick={onEventClick} />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Week"));
+    await waitFor(() => expect(screen.getByText("HRA")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("HRA"));
+
+    expect(onEventClick).toHaveBeenCalledTimes(1);
+    expect(onEventClick).toHaveBeenCalledWith(
+      expect.objectContaining({ event_id: 1, title: "HRA" }),
+    );
+  });
+
   it("calls onEventClick with the occurrence when an agenda row is clicked", async () => {
     // Use a future date so the occurrence appears in the upcoming agenda.
     const future = new Date();

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Week-grid chip click test (issue #44):** adds a `CalendarView` test that
+  switches to the Week mode, clicks a week-grid `WeekChip`, and asserts the
+  `onEventClick` callback is invoked with the matching occurrence — closing the
+  last uncovered AC1 wiring path from PR #43.
+
 - **Event drawer with next occurrences + reminder preview (issue #38):** adds a
   read-only event drawer that opens when an event is clicked (from the Timeline
   or the Calendar's day drawer / agenda). It shows the event's title, priority,
