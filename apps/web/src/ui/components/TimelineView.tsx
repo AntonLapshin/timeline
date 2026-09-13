@@ -1,5 +1,6 @@
 import { useTimeline } from "../viewModels/useTimeline";
 import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
+import type { EventRead } from "../../core/eventTypes";
 
 /**
  * A single event row in the timeline.
@@ -8,9 +9,21 @@ import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
  * color/icon, recurrence badge, time label) passed in from the view model. No
  * business logic — all derivation lives in `src/core`.
  */
-export function EventRowView({ row }: { row: EventRow }) {
+export function EventRowView({
+  row,
+  onEventClick,
+}: {
+  row: EventRow;
+  /** Optional callback fired when the row is clicked (opens edit). */
+  onEventClick?: (event: EventRead) => void;
+}) {
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <li
+      className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
+        onEventClick ? "cursor-pointer hover:bg-slate-50" : ""
+      }`}
+      onClick={onEventClick ? () => onEventClick(row.event) : undefined}
+    >
       <span
         aria-hidden
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${row.priorityColor}`}
@@ -45,7 +58,13 @@ export function EventRowView({ row }: { row: EventRow }) {
 }
 
 /** A month group with its week buckets. */
-export function MonthGroupView({ group }: { group: MonthGroup }) {
+export function MonthGroupView({
+  group,
+  onEventClick,
+}: {
+  group: MonthGroup;
+  onEventClick?: (event: EventRead) => void;
+}) {
   return (
     <section>
       <h2 className="mb-2 text-lg font-semibold text-slate-900">
@@ -58,7 +77,11 @@ export function MonthGroupView({ group }: { group: MonthGroup }) {
           </h3>
           <ul className="space-y-2">
             {week.rows.map((row) => (
-              <EventRowView key={row.event.id} row={row} />
+              <EventRowView
+                key={row.event.id}
+                row={row}
+                onEventClick={onEventClick}
+              />
             ))}
           </ul>
         </div>
@@ -74,7 +97,11 @@ export function MonthGroupView({ group }: { group: MonthGroup }) {
  * renders the grouped rows plus a "load more" control. No business logic lives
  * here.
  */
-export function TimelineView() {
+export function TimelineView({
+  onEventClick,
+}: {
+  onEventClick?: (event: EventRead) => void;
+}) {
   const { groups, hasMore, loading, error, loadMore } = useTimeline();
 
   if (loading) {
@@ -92,7 +119,7 @@ export function TimelineView() {
   return (
     <div className="space-y-6">
       {groups.map((group) => (
-        <MonthGroupView key={group.key} group={group} />
+        <MonthGroupView key={group.key} group={group} onEventClick={onEventClick} />
       ))}
       {hasMore && (
         <button

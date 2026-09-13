@@ -88,6 +88,15 @@ export interface EventCreate {
   status?: EventStatus;
 }
 
+/**
+ * Partial payload for updating an event via `PATCH /api/events/{id}`.
+ *
+ * Every field is optional; `undefined` means "leave unchanged". Nullable
+ * fields (e.g. `rrule`, `end_at`) must be sent explicitly as `null` to clear
+ * them, mirroring the API's `EventUpdate` schema.
+ */
+export type EventUpdate = Partial<EventCreate>;
+
 /** Counts of event occurrences in a month, as returned by `GET /api/summary`. */
 export interface SummaryResponse {
   month: string;

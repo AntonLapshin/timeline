@@ -63,4 +63,17 @@ describe("AppShell", () => {
     );
     expect(screen.getByText("Summary bar")).toBeInTheDocument();
   });
+
+  it("renders the actions slot in the header", () => {
+    render(
+      <AppShell
+        view="timeline"
+        onViewChange={() => {}}
+        actions={<button>+ New</button>}
+      >
+        <p>content</p>
+      </AppShell>,
+    );
+    expect(screen.getByRole("button", { name: "+ New" })).toBeInTheDocument();
+  });
 });

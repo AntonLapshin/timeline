@@ -107,4 +107,20 @@ describe("TimelineView", () => {
     expect(screen.getByText("Event 1")).toBeInTheDocument();
     expect(screen.getByText("Event 10")).toBeInTheDocument();
   });
+
+  it("calls onEventClick with the event when a row is clicked", async () => {
+    const event = makeEvent({ id: 1, title: "HRA" });
+    const listEvents = vi.fn().mockResolvedValue([event]);
+    const onEventClick = vi.fn();
+    const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
+
+    renderWithServices(
+      services,
+      <TimelineView onEventClick={onEventClick} />,
+    );
+
+    await waitFor(() => expect(screen.getByText("HRA")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("HRA"));
+    expect(onEventClick).toHaveBeenCalledWith(event);
+  });
 });
