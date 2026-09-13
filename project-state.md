@@ -7,11 +7,13 @@
 **In progress (M3 — Web UI: timeline, calendar, wizard, smart-input).**
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain: models+migrations, recurrence expansion, CRUD+summary+seed), M3-T1
-(app shell + Timeline + Calendar month/week/agenda views), and M3-T2 (summary
-bar + event drawer) are fully implemented and merged. The M3-T3A 3-step
-create/edit wizard (incl. `c` keyboard shortcut) is also merged. The next M3
-slice (search/filter + smart-input + dark/light/responsive — #46/#47/#48) is
-now `pi:ready` and in flight.
+(app shell + Timeline + Calendar month/week/agenda views), M3-T2 (summary
+bar + event drawer), and M3-T3 (3-step wizard + smart-input /parse +
+search/filter + dark/light + responsive + keyboard shortcuts — merged via
+#42/#50/#52/#53) are fully implemented and merged. The `Deploy to GitHub
+Pages` CI workflow still fails (Pages not enabled — need-owner #49); the `CI`
+workflow passes independently. The next planned slice is M3-T4 (component
+Showcase files + Playwright smoke) plus the start of M4 (reminder engine).
 
 The `Deploy to GitHub Pages` CI workflow is **failing** because GitHub Pages is
 not enabled on the repo — documented as need-owner issue #49 (`pi:needs-human`).
@@ -60,13 +62,19 @@ M3 — next batch (merged this cycle):
 - [x] #38 #M3-T2B — Event drawer: next occurrences + reminder preview (merged via #43).
 - [x] #39 #M3-T3A — 3-step create/edit wizard: What/When → Recurrence → Priority & Reminders (merged via #42; incl. `c` shortcut + wizard tests).
 
-M3 — current batch (planned this turn, `pi:ready`):
-- [ ] #46 #M3-T3B — Search/filter events + `/=search` shortcut (pi:ready, p1).
-- [ ] #47 #M3-T3C — Smart-input box calling /parse (pi:ready, p2).
-- [ ] #48 #M3-T3D — Dark/light theme toggle + responsive polish (pi:ready, p3).
+M3 — current batch (merged this cycle):
+- [x] #46 #M3-T3B — Search/filter events + `/=search` shortcut (merged via #50).
+- [x] #47 #M3-T3C — Smart-input box calling /parse (merged via #52).
+- [x] #48 #M3-T3D — Dark/light theme toggle + responsive polish (merged via #53).
+- [x] #51 — Add missing tests for PR #50 (merged via #54).
 
-Remaining M3 slices (planned on later PM turns): atomic Showcase files + Playwright
-smoke (M3-T4).
+M3 — remaining slice (planned this turn, `pi:ready`):
+- [ ] #56 #M3-T4 — Component Showcase files + Playwright smoke test (pi:ready, p3).
+
+M4 — reminder engine (planned this turn, `pi:ready`):
+- [ ] #57 #M4-T1 — APScheduler persistent jobstore + at-least-once scheduling (pi:ready, p1).
+- [ ] #55 #M4-T2 — Telegram outbound reminder sender with Ack/Snooze/Delete buttons (pi:ready, p2).
+- [ ] M4-T3 — Per-event reminder config + email flag + delivery-log UI + tests (planned on a later PM turn).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).
