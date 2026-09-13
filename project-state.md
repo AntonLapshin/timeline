@@ -6,10 +6,16 @@
 
 **In progress (M3 — Web UI: timeline, calendar, wizard, smart-input).**
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
-domain: models+migrations, recurrence expansion, CRUD+summary+seed), and M3-T1
-(app shell + Timeline + Calendar month/week/agenda views) are fully
-implemented and merged. The M3 next batch (summary bar + event drawer +
-create/edit wizard) is now `pi:ready` and in flight.
+domain: models+migrations, recurrence expansion, CRUD+summary+seed), M3-T1
+(app shell + Timeline + Calendar month/week/agenda views), and M3-T2 (summary
+bar + event drawer) are fully implemented and merged. The M3-T3A 3-step
+create/edit wizard (incl. `c` keyboard shortcut) is also merged. The next M3
+slice (search/filter + smart-input + dark/light/responsive — #46/#47/#48) is
+now `pi:ready` and in flight.
+
+The `Deploy to GitHub Pages` CI workflow is **failing** because GitHub Pages is
+not enabled on the repo — documented as need-owner issue #49 (`pi:needs-human`).
+The `CI` workflow (build/lint/test/coverage) passes independently.
 Owner-gated need-owner issues: #5 (natalies-corner access) and #10 (voxtype)
 are **resolved and closed** — the owner cloned natalies-corner to
 `/home/monarch/ws/natalies-corner` (local reference), and voxtype 1.0.1 is
@@ -49,13 +55,17 @@ M3 — Web UI (current batch):
 - [x] #26 — Add missing tests for PR #25 (AppShell view-switcher + summary slot) (merged via #35).
 - [x] #31 — Add missing tests for PR #30 (occurrences December rollover) (merged via #36).
 
-M3 — next batch (planned this turn):
-- [ ] #37 #M3-T2 — Summary bar: events this month by priority, next 7 days, overdue highlight (pi:ready, p1).
-- [ ] #38 #M3-T2B — Event drawer: next occurrences + reminder preview (pi:ready, p2).
-- [ ] #39 #M3-T3A — 3-step create/edit wizard: What/When → Recurrence → Priority & Reminders (pi:ready, p1).
+M3 — next batch (merged this cycle):
+- [x] #37 #M3-T2 — Summary bar: events this month by priority, next 7 days, overdue highlight (merged via #40).
+- [x] #38 #M3-T2B — Event drawer: next occurrences + reminder preview (merged via #43).
+- [x] #39 #M3-T3A — 3-step create/edit wizard: What/When → Recurrence → Priority & Reminders (merged via #42; incl. `c` shortcut + wizard tests).
 
-Remaining M3 slices (planned on later PM turns): smart-input + search/filter +
-dark/light + keyboard shortcuts (M3-T3 rest), atomic Showcase files + Playwright
+M3 — current batch (planned this turn, `pi:ready`):
+- [ ] #46 #M3-T3B — Search/filter events + `/=search` shortcut (pi:ready, p1).
+- [ ] #47 #M3-T3C — Smart-input box calling /parse (pi:ready, p2).
+- [ ] #48 #M3-T3D — Dark/light theme toggle + responsive polish (pi:ready, p3).
+
+Remaining M3 slices (planned on later PM turns): atomic Showcase files + Playwright
 smoke (M3-T4).
 
 M1 (owner-in-the-loop):
@@ -65,6 +75,9 @@ M1 (owner-in-the-loop):
 - [x] #9 — tz / locale / quiet hours / license (MIT?) (pi:ready; owner confirmed defaults).
 - [ ] #6 — JoinGonka LLM_BASE_URL / LLM_MODEL / API key (pi:blocked, p1).
 - [ ] #8 — Email decision for v1 (SMTP/Resend or skip) (pi:blocked, p2).
+
+Need-owner (blocked on owner input; do not block M3/M4 code work):
+- [ ] #49 — Enable GitHub Pages (Actions source) so the demo URL goes live (pi:needs-human; CI deploy workflow fails until enabled).
 
 Further milestones (M4 reminder engine, M5 Telegram inbound/STT/AI, M6
 hardening/backups, M7 polish/docs) will be planned on later PM turns.

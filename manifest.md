@@ -128,7 +128,7 @@ A personal, local-first global schedule that remembers everything: capture one-t
 
 ### M3 — Web UI: timeline, calendar, wizard, smart-input
 - [x] M3-T1 — App shell (no login), Timeline view (grouped by month/week, infinite scroll, priority/tag color+icon, recurrence badge), Calendar view (custom Tailwind month/week/agenda grid + day drawer). (merged via #23/#25/#32/#33)
-- [ ] M3-T2 — Summary bar (events this month by priority, next 7 days, overdue highlight) + event drawer with next occurrences and reminder preview.
+- [x] M3-T2 — Summary bar (events this month by priority, next 7 days, overdue highlight) + event drawer with next occurrences and reminder preview. (merged via #40/#43)
 - [ ] M3-T3 — 3-step create/edit wizard (What/When → Recurrence → Priority & Reminders) + smart-input box calling /parse + search/filter + dark/light + responsive + keyboard shortcuts (c=create, /=search).
 - [ ] M3-T4 — Atomic folders (atoms/molecules/organisms/templates/pages) with services (apiClient, llmParse, dateFmt) injected via Context; every organism has a Showcase file; Vitest 100% src/core + Playwright smoke on 127.0.0.1.
 
