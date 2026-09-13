@@ -137,3 +137,22 @@ class SummaryResponse(BaseModel):
     month: str
     total: int
     by_priority: dict[str, int]
+
+
+class EventOccurrenceRead(BaseModel):
+    """A single concrete event occurrence within a month (issue #27).
+
+    Mirrors the shared event schema v1 fields the calendar grid needs to place
+    a (possibly recurrent) event on the grid, plus ``next_occurrence`` for the
+    day drawer.
+    """
+
+    event_id: int
+    title: str
+    priority: str
+    tag: str | None = None
+    rrule: str | None = None
+    start_at: datetime
+    all_day: bool = False
+    tz: str = "UTC"
+    next_occurrence: datetime | None = None

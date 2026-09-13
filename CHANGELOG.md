@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-occurrence API endpoint (issue #27):** the API now exposes
+  `GET /api/events/occurrences?month=YYYY-MM`, which returns each active
+  event's concrete occurrences falling in that month (interpreted in each
+  event's timezone) so the calendar grid can place recurrent events without
+  porting the recurrence engine to TypeScript. Each entry carries `event_id`,
+  `title`, `priority`, `tag` (first tag, for the tag badge), `rrule` (for the
+  recurrence badge), `start_at`, `all_day`, `tz`, and `next_occurrence` (the
+  next occurrence at/after the month, for the day drawer). One-time events
+  contribute a single occurrence; recurrent events contribute one entry per
+  occurrence in the month (reusing `occurrences_in_month`). Invalid months
+  return 422; empty months return an empty list. The logic lives in a new pure
+  `apps/api/app/occurrences.py` module (`occurrences_for_month`, 100%
+  pytest-covered) with a thin handler wired in `routes.py` and a Pydantic
+  response schema (`EventOccurrenceRead`) mirroring the shared event schema v1.
+
 - **App shell + Timeline view (issue #21):** the web app now has a no-login
   localhost app shell (`AppShell`) with a top-level layout, a header that hosts
   the summary-bar slot (wired in a later issue), and a Timeline / Calendar view
