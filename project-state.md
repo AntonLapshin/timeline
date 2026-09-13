@@ -5,17 +5,17 @@
 ## Status
 
 **In progress (M3 — Web UI: timeline, calendar, wizard, smart-input).**
-M1 (repo/scaffolding/tooling/local run paths/need-owner issues) and M2 (core
-domain: models+migrations, recurrence expansion, CRUD+summary+seed) are fully
-implemented and merged. The M3 web-UI milestone is now being planned; the first
-batch (foundation + Timeline view + Calendar view) is `pi:ready` and in flight.
+M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
+domain: models+migrations, recurrence expansion, CRUD+summary+seed), and M3-T1
+(app shell + Timeline + Calendar month/week/agenda views) are fully
+implemented and merged. The M3 next batch (summary bar + event drawer +
+create/edit wizard) is now `pi:ready` and in flight.
 Owner-gated need-owner issues: #5 (natalies-corner access) and #10 (voxtype)
 are **resolved and closed** — the owner cloned natalies-corner to
 `/home/monarch/ws/natalies-corner` (local reference), and voxtype 1.0.1 is
-confirmed installed with the whisper.cpp base-en model present. #6 (JoinGonka)
-and #8 (email) still await owner input; #7 (Telegram) awaits a rotated token +
-numeric user id (the posted token was leaked publicly and the user id was a bot
-username). None of these block M3.
+confirmed installed with the whisper.cpp base-en model present. #6 (JoinGonka),
+#7 (Telegram), and #8 (email) still await owner input (secrets/decisions) and
+are `pi:blocked` need-owner issues. None of these block M3.
 
 ## What's here
 
@@ -43,14 +43,20 @@ M3 — Web UI (current batch):
 - [x] #21 #M3-T1A — App shell + Timeline view (grouped month/week, infinite scroll, priority/tag styling, recurrence badge) (merged via #25).
 - [x] #22 #M3-T1B — Calendar view (split by PM note into #27/#28/#29; closed).
 - [x] #27 #M3-T1B-1 — API per-occurrence endpoint GET /api/events/occurrences?month=YYYY-MM (merged via #30).
-- [ ] #28 #M3-T1B-2 — Calendar core + month grid + day drawer (pi:ready, p1).
-- [ ] #29 #M3-T1B-3 — Calendar week grid + agenda list (pi:ready, p2).
-- [ ] #24 — Add missing tests for PR #23 (apiClient network-rejection path) (pi:ready, type:test).
-- [ ] #26 — Add missing tests for PR #25 (AppShell view-switcher + summary slot) (pi:ready, type:test).
+- [x] #28 #M3-T1B-2 — Calendar core + month grid + day drawer (merged via #32).
+- [x] #29 #M3-T1B-3 — Calendar week grid + agenda list (merged via #33).
+- [x] #24 — Add missing tests for PR #23 (apiClient network-rejection path) (merged via #34).
+- [x] #26 — Add missing tests for PR #25 (AppShell view-switcher + summary slot) (merged via #35).
+- [x] #31 — Add missing tests for PR #30 (occurrences December rollover) (merged via #36).
 
-Remaining M3 slices (planned on later PM turns): summary bar + event drawer
-(M3-T2), 3-step wizard + smart-input + search/filter + dark/light + keyboard
-shortcuts (M3-T3), atomic Showcase files + Playwright smoke (M3-T4).
+M3 — next batch (planned this turn):
+- [ ] #37 #M3-T2 — Summary bar: events this month by priority, next 7 days, overdue highlight (pi:ready, p1).
+- [ ] #38 #M3-T2B — Event drawer: next occurrences + reminder preview (pi:ready, p2).
+- [ ] #39 #M3-T3A — 3-step create/edit wizard: What/When → Recurrence → Priority & Reminders (pi:ready, p1).
+
+Remaining M3 slices (planned on later PM turns): smart-input + search/filter +
+dark/light + keyboard shortcuts (M3-T3 rest), atomic Showcase files + Playwright
+smoke (M3-T4).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).

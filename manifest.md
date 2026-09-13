@@ -117,17 +117,17 @@ A personal, local-first global schedule that remembers everything: capture one-t
 > authoritative backlog the loop uses to decide whether the project is done.
 
 ### M1 — Public repo, scaffolding, Omarchy baseline
-- [ ] M1-T1 — Monorepo structure + backend skeleton (apps/api FastAPI+SQLAlchemy+Alembic, packages/shared schema v1) + tooling gates (ruff, mypy, pytest, eslint max-warnings 0, pre-commit + gitleaks, Vitest 100% core).
-- [ ] M1-T2 — Local run paths: docker-compose.yml (dev) + systemd/timeline.service example bound to 127.0.0.1:8123.
-- [ ] M1-T3 — File need-owner issues #1-#7 (natalies-corner, JoinGonka, Telegram, email, tz/license, voxtype); secrets to local .env only.
+- [x] M1-T1 — Monorepo structure + backend skeleton (apps/api FastAPI+SQLAlchemy+Alembic, packages/shared schema v1) + tooling gates (ruff, mypy, pytest, eslint max-warnings 0, pre-commit + gitleaks, Vitest 100% core). (merged via #4)
+- [x] M1-T2 — Local run paths: docker-compose.yml (dev) + systemd/timeline.service example bound to 127.0.0.1:8123. (merged via #12)
+- [x] M1-T3 — File need-owner issues #1-#7 (natalies-corner, JoinGonka, Telegram, email, tz/license, voxtype); secrets to local .env only. (merged via #11)
 
 ### M2 — Core domain: events, recurrence, local API, SQLite
-- [ ] M2-T1 — Models (AppConfig, Event, Reminder, DeliveryLog, TelegramInbound) + Alembic migrations on SQLite WAL.
-- [ ] M2-T2 — dateutil.rrule occurrence expansion (daily/weekly/monthly/quarterly/yearly/custom) + tz/all-day handling; next_occurrences(n) materialized on read with caching.
-- [ ] M2-T3 — CRUD endpoints + GET /api/summary?month=YYYY-MM; seed data (HRA quarterly, series next June, check-up); pytest DST/leap/quarterly-drift cases.
+- [x] M2-T1 — Models (AppConfig, Event, Reminder, DeliveryLog, TelegramInbound) + Alembic migrations on SQLite WAL. (merged via #16)
+- [x] M2-T2 — dateutil.rrule occurrence expansion (daily/weekly/monthly/quarterly/yearly/custom) + tz/all-day handling; next_occurrences(n) materialized on read with caching. (merged via #18)
+- [x] M2-T3 — CRUD endpoints + GET /api/summary?month=YYYY-MM; seed data (HRA quarterly, series next June, check-up); pytest DST/leap/quarterly-drift cases. (merged via #19)
 
 ### M3 — Web UI: timeline, calendar, wizard, smart-input
-- [ ] M3-T1 — App shell (no login), Timeline view (grouped by month/week, infinite scroll, priority/tag color+icon, recurrence badge), Calendar view (custom Tailwind month/week/agenda grid + day drawer).
+- [x] M3-T1 — App shell (no login), Timeline view (grouped by month/week, infinite scroll, priority/tag color+icon, recurrence badge), Calendar view (custom Tailwind month/week/agenda grid + day drawer). (merged via #23/#25/#32/#33)
 - [ ] M3-T2 — Summary bar (events this month by priority, next 7 days, overdue highlight) + event drawer with next occurrences and reminder preview.
 - [ ] M3-T3 — 3-step create/edit wizard (What/When → Recurrence → Priority & Reminders) + smart-input box calling /parse + search/filter + dark/light + responsive + keyboard shortcuts (c=create, /=search).
 - [ ] M3-T4 — Atomic folders (atoms/molecules/organisms/templates/pages) with services (apiClient, llmParse, dateFmt) injected via Context; every organism has a Showcase file; Vitest 100% src/core + Playwright smoke on 127.0.0.1.
