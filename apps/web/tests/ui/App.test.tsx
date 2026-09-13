@@ -2,15 +2,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import App from "../../src/App";
 import type { EventWizardState } from "../../src/ui/viewModels/useEventWizard";
+import type { EventDrawerState } from "../../src/ui/viewModels/useEventDrawer";
 
 // Isolate the App-level keyboard-shortcut behavior: mock the wizard view model
 // (so we can assert openCreate is invoked) and stub the child components so the
 // test doesn't depend on real I/O or the services provider.
-const { useEventWizardMock } = vi.hoisted(() => ({
+const { useEventWizardMock, useEventDrawerMock } = vi.hoisted(() => ({
   useEventWizardMock: vi.fn(),
+  useEventDrawerMock: vi.fn(),
 }));
 vi.mock("../../src/ui/viewModels/useEventWizard", () => ({
   useEventWizard: useEventWizardMock,
+}));
+vi.mock("../../src/ui/viewModels/useEventDrawer", () => ({
+  useEventDrawer: useEventDrawerMock,
 }));
 vi.mock("../../src/ui/components/SummaryBar", () => ({
   SummaryBar: () => <div data-testid="summary-bar" />,
@@ -23,6 +28,9 @@ vi.mock("../../src/ui/components/CalendarView", () => ({
 }));
 vi.mock("../../src/ui/components/EventWizard", () => ({
   EventWizard: () => <div data-testid="event-wizard" />,
+}));
+vi.mock("../../src/ui/components/EventDrawer", () => ({
+  EventDrawer: () => <div data-testid="event-drawer" />,
 }));
 vi.mock("../../src/ui/services/ServicesProvider", () => ({
   ServicesProvider: ({ children }: { children: React.ReactNode }) => (
@@ -64,9 +72,25 @@ function wizardState(overrides: Partial<EventWizardState> = {}): EventWizardStat
   };
 }
 
+function drawerState(overrides: Partial<EventDrawerState> = {}): EventDrawerState {
+  return {
+    event: null,
+    open: false,
+    loading: false,
+    error: null,
+    preview: null,
+    occurrences: [],
+    openDrawer: vi.fn(),
+    openFromOccurrence: vi.fn(),
+    close: vi.fn(),
+    ...overrides,
+  };
+}
+
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useEventDrawerMock.mockReturnValue(drawerState());
   });
 
   it("opens the create wizard when the `c` key is pressed", () => {
@@ -120,5 +144,19 @@ describe("App", () => {
 
     fireEvent.keyDown(window, { key: "c" });
     expect(openCreate).not.toHaveBeenCalled();
+  });
+
+  it("renders the event drawer when an event is selected", () => {
+    useEventDrawerMock.mockReturnValue(
+      drawerState({ event: { id: 3 } as never, open: true }),
+    );
+    render(<App />);
+    expect(screen.getByTestId("event-drawer")).toBeInTheDocument();
+  });
+
+  it("does not render the event drawer when no event is selected", () => {
+    useEventDrawerMock.mockReturnValue(drawerState());
+    render(<App />);
+    expect(screen.queryByTestId("event-drawer")).not.toBeInTheDocument();
   });
 });

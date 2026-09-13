@@ -6,6 +6,7 @@ import {
   type AgendaRow,
   type CalendarDay,
 } from "../../core/calendar";
+import type { EventOccurrence } from "../../core/eventTypes";
 
 /** Weekday column headers (Sunday-first, matching the grid). */
 const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -66,7 +67,13 @@ export function DayCell({
 }
 
 /** A single occurrence row inside the day drawer. */
-export function OccurrenceRowView({ day }: { day: CalendarDay }) {
+export function OccurrenceRowView({
+  day,
+  onEventClick,
+}: {
+  day: CalendarDay;
+  onEventClick?: (event: EventOccurrence) => void;
+}) {
   return (
     <ul className="space-y-2">
       {day.occurrences.map((o) => {
@@ -74,7 +81,10 @@ export function OccurrenceRowView({ day }: { day: CalendarDay }) {
         return (
           <li
             key={`${o.event_id}-${o.start_at}`}
-            className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
+            className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
+              onEventClick ? "cursor-pointer hover:bg-slate-50" : ""
+            }`}
+            onClick={onEventClick ? () => onEventClick(o) : undefined}
           >
             <span
               aria-hidden
@@ -115,11 +125,20 @@ export function OccurrenceRowView({ day }: { day: CalendarDay }) {
 }
 
 /** A single occurrence chip inside a week-grid day column. */
-export function WeekChip({ row }: { row: ReturnType<typeof toOccurrenceRow> }) {
+export function WeekChip({
+  row,
+  onEventClick,
+}: {
+  row: ReturnType<typeof toOccurrenceRow>;
+  onEventClick?: (event: EventOccurrence) => void;
+}) {
   return (
     <div
-      className={`w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight ${row.priorityColor}`}
+      className={`w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight ${row.priorityColor} ${
+        onEventClick ? "cursor-pointer hover:brightness-95" : ""
+      }`}
       title={row.occurrence.title}
+      onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
     >
       {!row.occurrence.all_day && <span className="font-medium">{row.timeLabel} </span>}
       {row.occurrence.title}
@@ -128,7 +147,13 @@ export function WeekChip({ row }: { row: ReturnType<typeof toOccurrenceRow> }) {
 }
 
 /** The week grid: 7 day columns with all-day/timed event chips. */
-export function WeekGrid({ week }: { week: ReturnType<typeof weekGrid> }) {
+export function WeekGrid({
+  week,
+  onEventClick,
+}: {
+  week: ReturnType<typeof weekGrid>;
+  onEventClick?: (event: EventOccurrence) => void;
+}) {
   return (
     <div className="grid grid-cols-7 gap-1">
       {week.days.map((day) => {
@@ -143,10 +168,10 @@ export function WeekGrid({ week }: { week: ReturnType<typeof weekGrid> }) {
             </div>
             <div className="mt-1 space-y-1">
               {allDay.map((o) => (
-                <WeekChip key={`${o.event_id}-${o.start_at}`} row={toOccurrenceRow(o)} />
+                <WeekChip key={`${o.event_id}-${o.start_at}`} row={toOccurrenceRow(o)} onEventClick={onEventClick} />
               ))}
               {timed.map((o) => (
-                <WeekChip key={`${o.event_id}-${o.start_at}`} row={toOccurrenceRow(o)} />
+                <WeekChip key={`${o.event_id}-${o.start_at}`} row={toOccurrenceRow(o)} onEventClick={onEventClick} />
               ))}
             </div>
           </div>
@@ -157,9 +182,20 @@ export function WeekGrid({ week }: { week: ReturnType<typeof weekGrid> }) {
 }
 
 /** A single agenda row: date, title, time, priority, recurrence badge. */
-export function AgendaRowView({ row }: { row: AgendaRow }) {
+export function AgendaRowView({
+  row,
+  onEventClick,
+}: {
+  row: AgendaRow;
+  onEventClick?: (event: EventOccurrence) => void;
+}) {
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+    <li
+      className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
+        onEventClick ? "cursor-pointer hover:bg-slate-50" : ""
+      }`}
+      onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
+    >
       <span
         aria-hidden
         className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${row.priorityColor}`}
@@ -195,7 +231,13 @@ export function AgendaRowView({ row }: { row: AgendaRow }) {
 }
 
 /** The agenda list with a clear empty state. */
-export function AgendaList({ rows }: { rows: AgendaRow[] }) {
+export function AgendaList({
+  rows,
+  onEventClick,
+}: {
+  rows: AgendaRow[];
+  onEventClick?: (event: EventOccurrence) => void;
+}) {
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
@@ -208,7 +250,11 @@ export function AgendaList({ rows }: { rows: AgendaRow[] }) {
   return (
     <ul className="space-y-2">
       {rows.map((row) => (
-        <AgendaRowView key={`${row.occurrence.event_id}-${row.occurrence.start_at}`} row={row} />
+        <AgendaRowView
+          key={`${row.occurrence.event_id}-${row.occurrence.start_at}`}
+          row={row}
+          onEventClick={onEventClick}
+        />
       ))}
     </ul>
   );
@@ -222,7 +268,11 @@ export function AgendaList({ rows }: { rows: AgendaRow[] }) {
  * content, and the day drawer for the selected day. No business logic lives
  * here.
  */
-export function CalendarView() {
+export function CalendarView({
+  onEventClick,
+}: {
+  onEventClick?: (event: EventOccurrence) => void;
+}) {
   const {
     mode,
     setMode,
@@ -314,9 +364,13 @@ export function CalendarView() {
         </>
       )}
 
-      {!loading && !error && mode === "week" && week && <WeekGrid week={week} />}
+      {!loading && !error && mode === "week" && week && (
+        <WeekGrid week={week} onEventClick={onEventClick} />
+      )}
 
-      {!loading && !error && mode === "agenda" && agenda && <AgendaList rows={agenda} />}
+      {!loading && !error && mode === "agenda" && agenda && (
+        <AgendaList rows={agenda} onEventClick={onEventClick} />
+      )}
 
       {selectedDay && (
         <div
@@ -340,7 +394,7 @@ export function CalendarView() {
           {selectedDay.count === 0 ? (
             <p className="text-sm text-slate-500">No events this day.</p>
           ) : (
-            <OccurrenceRowView day={selectedDay} />
+            <OccurrenceRowView day={selectedDay} onEventClick={onEventClick} />
           )}
         </div>
       )}
