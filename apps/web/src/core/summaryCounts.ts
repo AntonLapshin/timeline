@@ -107,3 +107,23 @@ export function nextSevenDays(
   const overdue = Math.min(total, Math.max(0, dayOfMonth - 1));
   return { total, overdue, hasOverdue: overdue > 0 };
 }
+
+/**
+ * Derive the full summary-bar model for a given summary payload and date.
+ *
+ * Combines the monthly per-priority breakdown (via `monthlyCounts`) with the
+ * "next 7 days" tally and overdue highlight (via `nextSevenDays`) into one
+ * shape the UI renders. Pure — no React, no browser APIs.
+ */
+export function summaryBar(
+  summary: SummaryResponse,
+  today: Date,
+): {
+  monthly: MonthlyCounts;
+  nextSevenDays: NextSevenDays;
+} {
+  return {
+    monthly: monthlyCounts(summary),
+    nextSevenDays: nextSevenDays(summary, today),
+  };
+}

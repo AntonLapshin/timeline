@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AppShell, type AppView } from "./ui/components/AppShell";
 import { TimelineView } from "./ui/components/TimelineView";
 import { CalendarView } from "./ui/components/CalendarView";
+import { SummaryBar } from "./ui/components/SummaryBar";
 import { ServicesProvider } from "./ui/services/ServicesProvider";
 
 /**
@@ -16,7 +17,11 @@ export default function App() {
 
   return (
     <ServicesProvider>
-      <AppShell view={view} onViewChange={setView}>
+      <AppShell
+        view={view}
+        onViewChange={setView}
+        summarySlot={<SummaryBar />}
+      >
         {view === "timeline" ? <TimelineView /> : <CalendarView />}
       </AppShell>
     </ServicesProvider>
