@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { CalendarView } from "../../src/ui/components/CalendarView";
 import { ServicesContext, type Services } from "../../src/ui/services/context";
+import { weekGrid, weekStart } from "../../src/core/calendar";
 import type { EventOccurrence } from "../../src/core/eventTypes";
 
 function makeOccurrence(overrides: Partial<EventOccurrence>): EventOccurrence {
@@ -168,9 +169,13 @@ describe("CalendarView", () => {
   });
 
   it("switches to the week grid and places events by day", async () => {
+    // Place occurrences on today's date so they always fall in the current
+    // week and the fetched (current) month, regardless of when the suite runs.
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     const getOccurrences = vi.fn().mockResolvedValue([
-      makeOccurrence({ event_id: 1, title: "HRA", start_at: "2026-09-07T10:00:00" }),
-      makeOccurrence({ event_id: 2, title: "AllDay", start_at: "2026-09-08T00:00:00", all_day: true }),
+      makeOccurrence({ event_id: 1, title: "HRA", start_at: `${todayIso}T10:00:00` }),
+      makeOccurrence({ event_id: 2, title: "AllDay", start_at: `${todayIso}T00:00:00`, all_day: true }),
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
@@ -183,8 +188,11 @@ describe("CalendarView", () => {
       expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByText("Week"));
+    // The week label reflects the week containing today (the view model's
+    // week cursor starts at the current week).
+    const expectedLabel = weekGrid(weekStart(new Date())).label;
     await waitFor(() =>
-      expect(screen.getByText(/Sep 6 – Sep 12, 2026/)).toBeInTheDocument(),
+      expect(screen.getByText(expectedLabel)).toBeInTheDocument(),
     );
     expect(screen.getByText("HRA")).toBeInTheDocument();
     expect(screen.getByText("AllDay")).toBeInTheDocument();
@@ -192,8 +200,8 @@ describe("CalendarView", () => {
 
   it("switches to the agenda list with chronological rows", async () => {
     const getOccurrences = vi.fn().mockResolvedValue([
-      makeOccurrence({ event_id: 1, title: "Later", start_at: "2026-09-21T10:00:00" }),
-      makeOccurrence({ event_id: 2, title: "Sooner", start_at: "2026-09-20T09:00:00" }),
+      makeOccurrence({ event_id: 1, title: "Later", start_at: "2026-09-29T10:00:00" }),
+      makeOccurrence({ event_id: 2, title: "Sooner", start_at: "2026-09-28T09:00:00" }),
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
