@@ -51,6 +51,9 @@ vi.mock("../../src/ui/components/EventDrawer", () => ({
 vi.mock("../../src/ui/components/SmartInputBox", () => ({
   SmartInputBox: () => <div data-testid="smart-input" />,
 }));
+vi.mock("../../src/ui/components/ThemeToggle", () => ({
+  ThemeToggle: () => <div data-testid="theme-toggle" />,
+}));
 vi.mock("../../src/ui/services/ServicesProvider", () => ({
   ServicesProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>

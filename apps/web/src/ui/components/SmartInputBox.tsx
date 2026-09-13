@@ -34,7 +34,7 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
         onChange={(e) => setText(e.target.value)}
         placeholder='Add event… e.g. "dentist next Tuesday 3pm"'
         aria-label="Add event"
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500"
       />
       <button
         type="submit"
@@ -46,7 +46,7 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
       {(error || unavailable) && (
         <p
           role="alert"
-          className="w-full text-xs text-red-600"
+          className="w-full text-xs text-red-600 dark:text-red-400"
         >
           {error}
         </p>

@@ -40,11 +40,11 @@ export function DayCell({
       aria-label={`${day.isoDate}, ${day.count} event${day.count === 1 ? "" : "s"}`}
       className={`flex h-16 flex-col items-center justify-start rounded-lg border p-1 text-sm transition-colors ${
         day.inMonth
-          ? "border-slate-200 bg-white hover:bg-slate-50"
-          : "border-transparent bg-slate-50 text-slate-300"
+          ? "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+          : "border-transparent bg-slate-50 text-slate-300 dark:bg-slate-800/40 dark:text-slate-600"
       }`}
     >
-      <span className={`font-medium ${day.inMonth ? "text-slate-700" : ""}`}>
+      <span className={`font-medium ${day.inMonth ? "text-slate-700 dark:text-slate-200" : ""}`}>
         {day.dayOfMonth}
       </span>
       {day.count > 0 && (
@@ -83,8 +83,8 @@ export function OccurrenceRowView({
           <li
             key={`${o.event_id}-${o.start_at}`}
             className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
-              onEventClick ? "cursor-pointer hover:bg-slate-50" : ""
-            }`}
+              onEventClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700" : ""
+            } dark:border-slate-700 dark:bg-slate-800`}
             onClick={onEventClick ? () => onEventClick(o) : undefined}
           >
             <span
@@ -95,19 +95,19 @@ export function OccurrenceRowView({
             </span>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="truncate font-medium text-slate-900">
+                <span className="truncate font-medium text-slate-900 dark:text-slate-100">
                   {row.occurrence.title}
                 </span>
                 {row.recurrenceBadge && (
-                  <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200">
+                  <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
                     ↻ {row.recurrenceBadge}
                   </span>
                 )}
               </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+              <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span>{row.timeLabel}</span>
                 {row.nextOccurrenceLabel && (
-                  <span className="text-slate-400">{row.nextOccurrenceLabel}</span>
+                  <span className="text-slate-400 dark:text-slate-500">{row.nextOccurrenceLabel}</span>
                 )}
               </div>
             </div>
@@ -162,9 +162,9 @@ export function WeekGrid({
         return (
           <div
             key={day.isoDate}
-            className="min-h-24 rounded-lg border border-slate-200 bg-white p-1"
+            className="min-h-24 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-800"
           >
-            <div className="text-center text-xs font-medium text-slate-400">
+            <div className="text-center text-xs font-medium text-slate-400 dark:text-slate-500">
               {day.dayOfMonth}
             </div>
             <div className="mt-1 space-y-1">
@@ -193,8 +193,8 @@ export function AgendaRowView({
   return (
     <li
       className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
-        onEventClick ? "cursor-pointer hover:bg-slate-50" : ""
-      }`}
+        onEventClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700" : ""
+      } dark:border-slate-700 dark:bg-slate-800`}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
     >
       <span
@@ -205,16 +205,16 @@ export function AgendaRowView({
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate font-medium text-slate-900">
+          <span className="truncate font-medium text-slate-900 dark:text-slate-100">
             {row.occurrence.title}
           </span>
           {row.recurrenceBadge && (
-            <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200">
+            <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
               ↻ {row.recurrenceBadge}
             </span>
           )}
         </div>
-        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
           <span>{row.dateLabel}</span>
           <span>·</span>
           <span>{row.timeLabel}</span>
@@ -241,8 +241,8 @@ export function AgendaList({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
-        <p className="text-sm text-slate-500">
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-600 dark:bg-slate-800">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           No upcoming events. Enjoy the calm!
         </p>
       </div>
@@ -311,8 +311,8 @@ export function CalendarView({
             onClick={() => setMode(tab.id)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
               mode === tab.id
-                ? "bg-slate-900 text-white"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-300"
+                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             }`}
           >
             {tab.label}
@@ -325,23 +325,23 @@ export function CalendarView({
           type="button"
           onClick={navigation.prev}
           aria-label="Previous"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           ←
         </button>
-        <h2 className="text-lg font-semibold text-slate-900">{navigation.title}</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{navigation.title}</h2>
         <button
           type="button"
           onClick={navigation.next}
           aria-label="Next"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           →
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {loading && <p className="text-sm text-slate-500">Loading calendar…</p>}
+      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {loading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading calendar…</p>}
 
       {!loading && !error && mode === "month" && (
         <>
@@ -349,7 +349,7 @@ export function CalendarView({
             {WEEKDAY_HEADERS.map((day) => (
               <div
                 key={day}
-                className="text-center text-xs font-medium uppercase tracking-wide text-slate-400"
+                className="text-center text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500"
               >
                 {day}
               </div>
@@ -373,32 +373,32 @@ export function CalendarView({
 
       {!loading && !error && mode === "agenda" && agenda &&
         (agenda.length === 0 && filter && isFiltering(filter) ? (
-          <p className="text-sm text-slate-500">No matches.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No matches.</p>
         ) : (
           <AgendaList rows={agenda} onEventClick={onEventClick} />
         ))}
 
       {selectedDay && (
         <div
-          className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
           role="dialog"
           aria-label={`Events on ${selectedDay.isoDate}`}
         >
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-900">
+            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
               {selectedDay.isoDate}
             </h3>
             <button
               type="button"
               onClick={closeDrawer}
               aria-label="Close"
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
             >
               ✕
             </button>
           </div>
           {selectedDay.count === 0 ? (
-            <p className="text-sm text-slate-500">No events this day.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">No events this day.</p>
           ) : (
             <OccurrenceRowView day={selectedDay} onEventClick={onEventClick} />
           )}

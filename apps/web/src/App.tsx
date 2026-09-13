@@ -7,6 +7,7 @@ import { EventWizard } from "./ui/components/EventWizard";
 import { EventDrawer } from "./ui/components/EventDrawer";
 import { SearchFilterBar } from "./ui/components/SearchFilterBar";
 import { SmartInputBox } from "./ui/components/SmartInputBox";
+import { ThemeToggle } from "./ui/components/ThemeToggle";
 import { useServices } from "./ui/services/useServices";
 import { useEventWizard } from "./ui/viewModels/useEventWizard";
 import { useEventDrawer } from "./ui/viewModels/useEventDrawer";
@@ -98,11 +99,12 @@ export default function App() {
           />
         }
         smartInputSlot={<SmartInputBox smartInput={smartInput} />}
+        themeToggleSlot={<ThemeToggle />}
         actions={
           <button
             type="button"
             onClick={wizard.openCreate}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700"
+            className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
           >
             + New
           </button>

@@ -22,10 +22,10 @@ export function SummaryBar() {
   const { model, loading, error } = useSummary();
 
   if (loading) {
-    return <p className="text-sm text-slate-500">Loading summary…</p>;
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Loading summary…</p>;
   }
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
   }
   if (!model) {
     return null;
@@ -37,11 +37,11 @@ export function SummaryBar() {
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
       <div className="flex items-center gap-2">
-        <span className="font-medium text-slate-900">
+        <span className="font-medium text-slate-900 dark:text-slate-100">
           {monthly.total} event{monthly.total === 1 ? "" : "s"} this month
         </span>
         {hasCounts && (
-          <span className="flex items-center gap-2 text-slate-500">
+          <span className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
             {PRIORITY_ORDER.map((priority) => {
               const style = priorityStyle(priority);
               const count = monthly.byPriority[priority];
@@ -62,8 +62,8 @@ export function SummaryBar() {
       <span
         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
           nextSevenDays.hasOverdue
-            ? "bg-red-50 text-red-700 ring-1 ring-red-200"
-            : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+            ? "bg-red-50 text-red-700 ring-1 ring-red-200 dark:bg-red-950 dark:text-red-300 dark:ring-red-800"
+            : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-800"
         }`}
       >
         {nextSevenDays.hasOverdue
