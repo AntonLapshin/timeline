@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Smart-input "Add event…" box calling `/parse` (issue #47):** adds a
+  free-text smart-input box in the app-shell header that accepts natural
+  language (e.g. "dentist next Tuesday 3pm") and calls the `/parse` endpoint
+  through the injected `llmParser` service. On a successful parse, the returned
+  draft is guarded and pre-fills the 3-step create wizard (What/When →
+  Recurrence → Priority & Reminders) for confirmation before saving. On parse
+  failure or an empty/unusable result, a clear inline error is shown and no
+  draft is created. When the LLM key is absent (HTTP 503) or a network/API
+  error occurs, the user is told parsing is unavailable and can still use the
+  wizard manually via the + New action. All parsing/guarding and draft
+  conversion logic lives in a pure `src/core/llmParse`/`parseGuards` extension
+  (`draftFromParsed`/`parsedToWizardDraft`, 100% Vitest-covered); a thin
+  `useSmartInput` view model holds the text/parse/error state and a dumb
+  `SmartInputBox` component renders it.
+
 - **Search/filter events + `/` shortcut (issue #46):** adds an app-wide search
   box in the app-shell header plus priority/tag/month filter controls that
   narrow the events shown in both the Timeline and Calendar views. Free-text

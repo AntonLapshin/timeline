@@ -76,4 +76,17 @@ describe("AppShell", () => {
     );
     expect(screen.getByRole("button", { name: "+ New" })).toBeInTheDocument();
   });
+
+  it("renders the smartInputSlot content in the header", () => {
+    render(
+      <AppShell
+        view="timeline"
+        onViewChange={() => {}}
+        smartInputSlot={<span>Smart input</span>}
+      >
+        <p>content</p>
+      </AppShell>,
+    );
+    expect(screen.getByText("Smart input")).toBeInTheDocument();
+  });
 });

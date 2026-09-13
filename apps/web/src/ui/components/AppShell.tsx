@@ -15,6 +15,8 @@ export interface AppShellProps {
   summarySlot?: ReactNode;
   /** Optional search/filter bar content rendered in the header slot. */
   searchSlot?: ReactNode;
+  /** Optional smart-input box content rendered in the header slot. */
+  smartInputSlot?: ReactNode;
   /** Optional header actions (e.g. a New-event button). */
   actions?: ReactNode;
 }
@@ -33,6 +35,7 @@ export function AppShell({
   children,
   summarySlot,
   searchSlot,
+  smartInputSlot,
   actions,
 }: AppShellProps) {
   const tabs: Array<{ id: AppView; label: string }> = [
@@ -70,6 +73,9 @@ export function AppShell({
         </div>
         {searchSlot && (
           <div className="mx-auto max-w-3xl px-4 pb-3">{searchSlot}</div>
+        )}
+        {smartInputSlot && (
+          <div className="mx-auto max-w-3xl px-4 pb-3">{smartInputSlot}</div>
         )}
         {summarySlot && (
           <div className="mx-auto max-w-3xl px-4 pb-3">{summarySlot}</div>

@@ -3,15 +3,22 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import App from "../../src/App";
 import type { EventWizardState } from "../../src/ui/viewModels/useEventWizard";
 import type { EventDrawerState } from "../../src/ui/viewModels/useEventDrawer";
+import type { SmartInputState } from "../../src/ui/viewModels/useSmartInput";
 
 // Isolate the App-level keyboard-shortcut behavior: mock the wizard view model
 // (so we can assert openCreate is invoked) and stub the child components so the
 // test doesn't depend on real I/O or the services provider.
-const { useEventWizardMock, useEventDrawerMock, useServicesMock } = vi.hoisted(
+const {
+  useEventWizardMock,
+  useEventDrawerMock,
+  useServicesMock,
+  useSmartInputMock,
+} = vi.hoisted(
   () => ({
     useEventWizardMock: vi.fn(),
     useEventDrawerMock: vi.fn(),
     useServicesMock: vi.fn(),
+    useSmartInputMock: vi.fn(),
   }),
 );
 vi.mock("../../src/ui/viewModels/useEventWizard", () => ({
@@ -19,6 +26,9 @@ vi.mock("../../src/ui/viewModels/useEventWizard", () => ({
 }));
 vi.mock("../../src/ui/viewModels/useEventDrawer", () => ({
   useEventDrawer: useEventDrawerMock,
+}));
+vi.mock("../../src/ui/viewModels/useSmartInput", () => ({
+  useSmartInput: useSmartInputMock,
 }));
 vi.mock("../../src/ui/services/useServices", () => ({
   useServices: useServicesMock,
@@ -37,6 +47,9 @@ vi.mock("../../src/ui/components/EventWizard", () => ({
 }));
 vi.mock("../../src/ui/components/EventDrawer", () => ({
   EventDrawer: () => <div data-testid="event-drawer" />,
+}));
+vi.mock("../../src/ui/components/SmartInputBox", () => ({
+  SmartInputBox: () => <div data-testid="smart-input" />,
 }));
 vi.mock("../../src/ui/services/ServicesProvider", () => ({
   ServicesProvider: ({ children }: { children: React.ReactNode }) => (
@@ -68,12 +81,28 @@ function wizardState(overrides: Partial<EventWizardState> = {}): EventWizardStat
     error: null,
     saved: false,
     openCreate: vi.fn(),
+    openCreateWithDraft: vi.fn(),
     openEdit: vi.fn(),
     close: vi.fn(),
     next: vi.fn(),
     back: vi.fn(),
     update: vi.fn(),
     save: vi.fn(),
+    ...overrides,
+  };
+}
+
+function smartInputState(
+  overrides: Partial<SmartInputState> = {},
+): SmartInputState {
+  return {
+    text: "",
+    parsing: false,
+    error: null,
+    unavailable: false,
+    setText: vi.fn(),
+    submit: vi.fn(),
+    clear: vi.fn(),
     ...overrides,
   };
 }
@@ -97,6 +126,7 @@ describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useEventDrawerMock.mockReturnValue(drawerState());
+    useSmartInputMock.mockReturnValue(smartInputState());
     useServicesMock.mockReturnValue({
       apiClient: { listEvents: vi.fn().mockResolvedValue([]) },
       llmParser: {},
@@ -178,6 +208,11 @@ describe("App", () => {
 
     fireEvent.keyDown(window, { key: "/" });
     expect(document.activeElement).toBe(input);
+  });
+
+  it("renders the smart input box in the header", () => {
+    render(<App />);
+    expect(screen.getByTestId("smart-input")).toBeInTheDocument();
   });
 
   it("does not focus the search box on the `/` key when the wizard is open", () => {

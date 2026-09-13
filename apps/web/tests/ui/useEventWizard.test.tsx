@@ -82,6 +82,30 @@ describe("useEventWizard", () => {
     expect(result.current.draft.recurrence).toBe("quarterly");
   });
 
+  it("openCreateWithDraft opens the wizard pre-filled from a parsed draft", () => {
+    const { result } = renderHook(() => useEventWizard());
+    act(() =>
+      result.current.openCreateWithDraft({
+        title: "Dentist",
+        notes: "",
+        allDay: false,
+        date: "2026-09-22",
+        time: "15:00",
+        tz: "UTC",
+        recurrence: "none",
+        customRrule: "",
+        priority: "medium",
+        channels: ["telegram"],
+        reminderOffsets: [],
+      }),
+    );
+    expect(result.current.open).toBe(true);
+    expect(result.current.editingEvent).toBeNull();
+    expect(result.current.draft.title).toBe("Dentist");
+    expect(result.current.draft.date).toBe("2026-09-22");
+    expect(result.current.draft.priority).toBe("medium");
+  });
+
   it("close closes the wizard and clears saved/error", () => {
     const { result } = renderHook(() => useEventWizard());
     act(() => result.current.openCreate());
