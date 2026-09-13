@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Event CRUD + summary + seed (issue #15):** the API now exposes event CRUD
+  (`POST`/`GET`/`PATCH`/`DELETE /api/events` and `GET /api/events/{id}`) with
+  Pydantic validation mirroring the shared event schema v1 (title length,
+  priority/channel enums, reminder-offset pattern), plus
+  `GET /api/summary?month=YYYY-MM` which counts active event occurrences in a
+  month grouped by priority using recurrence expansion. A pure
+  `apps/api/app/summary.py` module computes the counts (month interpreted in
+  each event's timezone; recurrent events contribute one count per occurrence);
+  thin `apps/api/app/routes.py` handlers wire it to the DB-I/O layer
+  (`apps/api/app/crud.py`). Seed data (HRA quarterly, a one-time 'series next
+  June', and a check-up) is provided by `apps/api/app/seed.py`, inserted on
+  first run via the app lifespan (configurable with `TIMELINE_SEED`, default
+  on) or via `python -m app.seed` / `make seed`; seeding is idempotent. Data
+  still lands in `./data/` (gitignored), loopback-only, no auth. pytest covers
+  CRUD, summary counts, and seed; ruff + mypy pass.
 - **Recurrence expansion (issue #14):** a pure `apps/api/app/recurrence.py`
   module expands the next `n` concrete occurrences of an event via
   `dateutil.rrule` (daily/weekly/monthly/quarterly/yearly/custom RFC 5545
