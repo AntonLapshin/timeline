@@ -83,6 +83,15 @@ describe("apiClient core module", () => {
     await expect(client.getOccurrences("2026-09")).resolves.toEqual(occurrences);
   });
 
+  it("propagates a fetch rejection (network error) from request()", async () => {
+    const networkError = new Error("fetch failed");
+    const fetchImpl = mockFetch(() => {
+      throw networkError;
+    });
+    const client = createApiClient("http://127.0.0.1:8123", fetchImpl);
+    await expect(client.listEvents()).rejects.toBe(networkError);
+  });
+
   it("throws ApiError with the status on a failed response", async () => {
     const fetchImpl = mockFetch(() => ({
       ok: false,
