@@ -14,10 +14,16 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
-from . import crud, summary
+from . import crud, occurrences, summary
 from .enums import EventStatus
 from .models import Event
-from .schemas import EventCreate, EventRead, EventUpdate, SummaryResponse
+from .schemas import (
+    EventCreate,
+    EventOccurrenceRead,
+    EventRead,
+    EventUpdate,
+    SummaryResponse,
+)
 
 router = APIRouter(prefix="/api", tags=["events"])
 
@@ -69,6 +75,35 @@ def create_event(
 def list_events(db: SessionDep) -> list[Event]:
     """List all events ordered by start time."""
     return crud.list_events(db)
+
+
+@router.get("/events/occurrences", response_model=list[EventOccurrenceRead])
+def get_occurrences(
+    month: Annotated[str, Query(..., description="Month in YYYY-MM format")],
+    db: SessionDep,
+) -> list[EventOccurrenceRead]:
+    """Return each active event's concrete occurrences in a month.
+
+    Recurrent events contribute one entry per occurrence in the month; one-time
+    events contribute a single occurrence. Logic stays in the pure
+    ``app.occurrences`` module.
+    """
+    year, month_num = _parse_month(month)
+    events = [e for e in crud.list_events(db) if e.status == EventStatus.ACTIVE]
+    return [
+        EventOccurrenceRead(
+            event_id=o.event_id,
+            title=o.title,
+            priority=o.priority,
+            tag=o.tag,
+            rrule=o.rrule,
+            start_at=o.start_at,
+            all_day=o.all_day,
+            tz=o.tz,
+            next_occurrence=o.next_occurrence,
+        )
+        for o in occurrences.occurrences_for_month(events, year, month_num)
+    ]
 
 
 @router.get("/events/{event_id}", response_model=EventRead)
