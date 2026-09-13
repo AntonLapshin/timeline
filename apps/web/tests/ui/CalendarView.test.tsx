@@ -143,11 +143,11 @@ describe("CalendarView", () => {
     await waitFor(() =>
       expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByLabelText("Next month"));
+    fireEvent.click(screen.getByLabelText("Next"));
     await waitFor(() =>
       expect(screen.getByText(/October 2026/)).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByLabelText("Previous month"));
+    fireEvent.click(screen.getByLabelText("Previous"));
     await waitFor(() =>
       expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
     );
@@ -164,6 +164,70 @@ describe("CalendarView", () => {
 
     await waitFor(() =>
       expect(screen.getByText("Failed to load occurrences")).toBeInTheDocument(),
+    );
+  });
+
+  it("switches to the week grid and places events by day", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "HRA", start_at: "2026-09-07T10:00:00" }),
+      makeOccurrence({ event_id: 2, title: "AllDay", start_at: "2026-09-08T00:00:00", all_day: true }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Week"));
+    await waitFor(() =>
+      expect(screen.getByText(/Sep 6 – Sep 12, 2026/)).toBeInTheDocument(),
+    );
+    expect(screen.getByText("HRA")).toBeInTheDocument();
+    expect(screen.getByText("AllDay")).toBeInTheDocument();
+  });
+
+  it("switches to the agenda list with chronological rows", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "Later", start_at: "2026-09-21T10:00:00" }),
+      makeOccurrence({ event_id: 2, title: "Sooner", start_at: "2026-09-20T09:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Agenda"));
+    await waitFor(() => expect(screen.getByText("Sooner")).toBeInTheDocument());
+    expect(screen.getByText("Later")).toBeInTheDocument();
+    expect(screen.getByText("9:00 AM")).toBeInTheDocument();
+  });
+
+  it("shows an empty state for the agenda with no upcoming events", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "Past", start_at: "2026-09-01T10:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Agenda"));
+    await waitFor(() =>
+      expect(screen.getByText(/No upcoming events/)).toBeInTheDocument(),
     );
   });
 });

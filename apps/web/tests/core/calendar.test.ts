@@ -7,8 +7,19 @@ import {
   dayOccurrences,
   withOccurrences,
   toOccurrenceRow,
+  weekStart,
+  weekDays,
+  weekLabel,
+  weekGrid,
+  navigateWeek,
+  withWeekOccurrences,
+  daySlots,
+  timeLabel,
+  upcomingAgenda,
+  toAgendaRow,
   type CalendarDay,
 } from "../../src/core/calendar";
+import { toLocalDate } from "../../src/core/dateFmt";
 import type { EventOccurrence } from "../../src/core/eventTypes";
 
 function makeOccurrence(overrides: Partial<EventOccurrence>): EventOccurrence {
@@ -284,6 +295,295 @@ describe("calendar core module", () => {
       );
       expect(row.timeLabel).toBe("not-a-date");
       expect(row.nextOccurrenceLabel).toBe("also-bad");
+    });
+  });
+
+  describe("weekStart", () => {
+    it("returns the Sunday that starts the week", () => {
+      // 2026-09-05 is a Saturday; the week started on Sunday 2026-08-30.
+      const start = weekStart(new Date(2026, 8, 5));
+      expect(toLocalDate(start)).toBe("2026-08-30");
+    });
+
+    it("returns the day itself when it is a Sunday", () => {
+      const start = weekStart(new Date(2026, 8, 6));
+      expect(toLocalDate(start)).toBe("2026-09-06");
+    });
+
+    it("normalizes to local midnight", () => {
+      const start = weekStart(new Date(2026, 8, 5, 14, 30));
+      expect(start.getHours()).toBe(0);
+    });
+  });
+
+  describe("weekDays", () => {
+    it("produces 7 consecutive Sunday-first day cells", () => {
+      const days = weekDays(new Date(2026, 8, 6));
+      expect(days).toHaveLength(7);
+      expect(days.map((d) => d.isoDate)).toEqual([
+        "2026-09-06",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10",
+        "2026-09-11",
+        "2026-09-12",
+      ]);
+    });
+
+    it("starts each day cell empty", () => {
+      const days = weekDays(new Date(2026, 8, 6));
+      for (const d of days) {
+        expect(d.occurrences).toEqual([]);
+        expect(d.count).toBe(0);
+      }
+    });
+  });
+
+  describe("weekLabel", () => {
+    it("labels a week within one year", () => {
+      expect(weekLabel(new Date(2026, 8, 6))).toBe("Sep 6 – Sep 12, 2026");
+    });
+
+    it("labels a week that crosses a year boundary", () => {
+      // Week starting Sunday 2026-12-27 ends Saturday 2027-01-02.
+      expect(weekLabel(new Date(2026, 11, 27))).toBe(
+        "Dec 27, 2026 – Jan 2, 2027",
+      );
+    });
+  });
+
+  describe("weekGrid", () => {
+    it("builds a week grid with key, start, label and 7 days", () => {
+      const week = weekGrid(new Date(2026, 8, 6));
+      expect(week.key).toBe("2026-09-06");
+      expect(toLocalDate(week.start)).toBe("2026-09-06");
+      expect(week.label).toBe("Sep 6 – Sep 12, 2026");
+      expect(week.days).toHaveLength(7);
+    });
+  });
+
+  describe("navigateWeek", () => {
+    it("moves forward by a week", () => {
+      const next = navigateWeek(new Date(2026, 8, 6), 1);
+      expect(toLocalDate(next)).toBe("2026-09-13");
+    });
+
+    it("moves backward by a week", () => {
+      const prev = navigateWeek(new Date(2026, 8, 6), -1);
+      expect(toLocalDate(prev)).toBe("2026-08-30");
+    });
+
+    it("is a no-op for a zero delta", () => {
+      const same = navigateWeek(new Date(2026, 8, 6), 0);
+      expect(toLocalDate(same)).toBe("2026-09-06");
+    });
+  });
+
+  describe("withWeekOccurrences", () => {
+    it("fills each day column from the payload", () => {
+      const week = weekGrid(new Date(2026, 8, 6));
+      const filled = withWeekOccurrences(week, [
+        makeOccurrence({ event_id: 1, start_at: "2026-09-07T10:00:00" }),
+        makeOccurrence({ event_id: 2, start_at: "2026-09-07T14:00:00" }),
+        makeOccurrence({ event_id: 3, start_at: "2026-09-12T09:00:00" }),
+      ]);
+      const mon = filled.days.find((d) => d.isoDate === "2026-09-07")!;
+      const sat = filled.days.find((d) => d.isoDate === "2026-09-12")!;
+      const sun = filled.days.find((d) => d.isoDate === "2026-09-06")!;
+      expect(mon.count).toBe(2);
+      expect(mon.occurrences).toHaveLength(2);
+      expect(sat.count).toBe(1);
+      expect(sun.count).toBe(0);
+    });
+
+    it("does not mutate the input week grid", () => {
+      const week = weekGrid(new Date(2026, 8, 6));
+      withWeekOccurrences(week, [
+        makeOccurrence({ event_id: 1, start_at: "2026-09-07T10:00:00" }),
+      ]);
+      expect(week.days[1].count).toBe(0);
+    });
+
+    it("drops occurrences with an unparseable start", () => {
+      const week = weekGrid(new Date(2026, 8, 6));
+      const filled = withWeekOccurrences(week, [
+        makeOccurrence({ event_id: 1, start_at: "not-a-date" }),
+      ]);
+      expect(filled.days[1].count).toBe(0);
+    });
+  });
+
+  describe("daySlots", () => {
+    it("splits all-day and timed occurrences, sorted by start", () => {
+      const day: CalendarDay = {
+        date: new Date(2026, 8, 7),
+        isoDate: "2026-09-07",
+        dayOfMonth: 7,
+        inMonth: true,
+        occurrences: [
+          makeOccurrence({ event_id: 1, start_at: "2026-09-07T14:00:00", all_day: false }),
+          makeOccurrence({ event_id: 2, start_at: "2026-09-07T00:00:00", all_day: true }),
+          makeOccurrence({ event_id: 3, start_at: "2026-09-07T09:00:00", all_day: false }),
+        ],
+        count: 3,
+      };
+      const { allDay, timed } = daySlots(day);
+      expect(allDay.map((o) => o.event_id)).toEqual([2]);
+      expect(timed.map((o) => o.event_id)).toEqual([3, 1]);
+    });
+
+    it("handles a day with no occurrences", () => {
+      const day: CalendarDay = {
+        date: new Date(2026, 8, 7),
+        isoDate: "2026-09-07",
+        dayOfMonth: 7,
+        inMonth: true,
+        occurrences: [],
+        count: 0,
+      };
+      const { allDay, timed } = daySlots(day);
+      expect(allDay).toEqual([]);
+      expect(timed).toEqual([]);
+    });
+  });
+
+  describe("timeLabel", () => {
+    it("formats a morning time", () => {
+      expect(timeLabel(makeOccurrence({ start_at: "2026-09-07T09:00:00" }))).toBe(
+        "9:00 AM",
+      );
+    });
+
+    it("formats an afternoon time", () => {
+      expect(timeLabel(makeOccurrence({ start_at: "2026-09-07T14:30:00" }))).toBe(
+        "2:30 PM",
+      );
+    });
+
+    it("formats midnight as 12:00 AM", () => {
+      expect(timeLabel(makeOccurrence({ start_at: "2026-09-07T00:00:00" }))).toBe(
+        "12:00 AM",
+      );
+    });
+
+    it("returns an empty string for an unparseable start", () => {
+      expect(timeLabel(makeOccurrence({ start_at: "not-a-date" }))).toBe("");
+    });
+  });
+
+  describe("upcomingAgenda", () => {
+    it("lists future occurrences chronologically with derived rows", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [
+          makeOccurrence({
+            event_id: 1,
+            title: "Later",
+            priority: "critical",
+            start_at: "2026-09-07T10:00:00",
+            tag: "health",
+            rrule: "FREQ=MONTHLY;INTERVAL=3",
+          }),
+          makeOccurrence({
+            event_id: 2,
+            title: "Sooner",
+            start_at: "2026-09-06T09:00:00",
+          }),
+        ],
+        now,
+      );
+      expect(rows).toHaveLength(2);
+      expect(rows[0].occurrence.title).toBe("Sooner");
+      expect(rows[1].occurrence.title).toBe("Later");
+      expect(rows[1].dateLabel).toBe("Mon, Sep 7");
+      expect(rows[1].timeLabel).toBe("10:00 AM");
+      expect(rows[1].priorityColor).toContain("red");
+      expect(rows[1].priorityIcon).toBe("!");
+      expect(rows[1].tagColor).toContain("border-");
+      expect(rows[1].tagIcon).toBe("#");
+      expect(rows[1].recurrenceBadge).toBe("every quarter");
+    });
+
+    it("excludes occurrences before now", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [
+          makeOccurrence({ event_id: 1, start_at: "2026-09-05T10:00:00" }),
+          makeOccurrence({ event_id: 2, start_at: "2026-09-06T10:00:00" }),
+        ],
+        now,
+      );
+      expect(rows.map((r) => r.occurrence.event_id)).toEqual([2]);
+    });
+
+    it("includes an occurrence exactly at now", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [makeOccurrence({ event_id: 1, start_at: "2026-09-05T12:00:00" })],
+        now,
+      );
+      expect(rows).toHaveLength(1);
+    });
+
+    it("returns an empty list for no future events (empty state)", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [makeOccurrence({ event_id: 1, start_at: "2026-09-04T10:00:00" })],
+        now,
+      );
+      expect(rows).toEqual([]);
+    });
+
+    it("drops occurrences with an unparseable start", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [makeOccurrence({ event_id: 1, start_at: "not-a-date" })],
+        now,
+      );
+      expect(rows).toEqual([]);
+    });
+
+    it("labels an all-day occurrence as All day", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [
+          makeOccurrence({ event_id: 1, start_at: "2026-09-06T00:00:00", all_day: true }),
+        ],
+        now,
+      );
+      expect(rows[0].timeLabel).toBe("All day");
+    });
+
+    it("hides the recurrence badge for a one-time occurrence", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [makeOccurrence({ event_id: 1, start_at: "2026-09-06T10:00:00", rrule: null })],
+        now,
+      );
+      expect(rows[0].recurrenceBadge).toBeNull();
+    });
+
+    it("falls back to the raw start for an unparseable date label", () => {
+      const now = new Date(2026, 8, 5, 12, 0, 0);
+      const rows = upcomingAgenda(
+        [
+          makeOccurrence({
+            event_id: 1,
+            start_at: "2026-09-06T10:00:00",
+            all_day: true,
+          }),
+        ],
+        now,
+      );
+      expect(rows[0].dateLabel).toBe("Sun, Sep 6");
+    });
+  });
+
+  describe("toAgendaRow", () => {
+    it("falls back to the raw start for an unparseable date label", () => {
+      const row = toAgendaRow(makeOccurrence({ start_at: "not-a-date" }));
+      expect(row.dateLabel).toBe("not-a-date");
     });
   });
 });

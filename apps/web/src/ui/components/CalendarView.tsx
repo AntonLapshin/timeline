@@ -1,8 +1,21 @@
-import { useCalendar } from "../viewModels/useCalendar";
-import { toOccurrenceRow, type CalendarDay } from "../../core/calendar";
+import { useCalendar, type CalendarMode } from "../viewModels/useCalendar";
+import {
+  daySlots,
+  toOccurrenceRow,
+  weekGrid,
+  type AgendaRow,
+  type CalendarDay,
+} from "../../core/calendar";
 
 /** Weekday column headers (Sunday-first, matching the grid). */
 const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** The three Calendar sub-mode tabs. */
+const MODES: Array<{ id: CalendarMode; label: string }> = [
+  { id: "month", label: "Month" },
+  { id: "week", label: "Week" },
+  { id: "agenda", label: "Agenda" },
+];
 
 /**
  * A single day cell in the month grid.
@@ -101,43 +114,173 @@ export function OccurrenceRowView({ day }: { day: CalendarDay }) {
   );
 }
 
+/** A single occurrence chip inside a week-grid day column. */
+export function WeekChip({ row }: { row: ReturnType<typeof toOccurrenceRow> }) {
+  return (
+    <div
+      className={`w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight ${row.priorityColor}`}
+      title={row.occurrence.title}
+    >
+      {!row.occurrence.all_day && <span className="font-medium">{row.timeLabel} </span>}
+      {row.occurrence.title}
+    </div>
+  );
+}
+
+/** The week grid: 7 day columns with all-day/timed event chips. */
+export function WeekGrid({ week }: { week: ReturnType<typeof weekGrid> }) {
+  return (
+    <div className="grid grid-cols-7 gap-1">
+      {week.days.map((day) => {
+        const { allDay, timed } = daySlots(day);
+        return (
+          <div
+            key={day.isoDate}
+            className="min-h-24 rounded-lg border border-slate-200 bg-white p-1"
+          >
+            <div className="text-center text-xs font-medium text-slate-400">
+              {day.dayOfMonth}
+            </div>
+            <div className="mt-1 space-y-1">
+              {allDay.map((o) => (
+                <WeekChip key={`${o.event_id}-${o.start_at}`} row={toOccurrenceRow(o)} />
+              ))}
+              {timed.map((o) => (
+                <WeekChip key={`${o.event_id}-${o.start_at}`} row={toOccurrenceRow(o)} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A single agenda row: date, title, time, priority, recurrence badge. */
+export function AgendaRowView({ row }: { row: AgendaRow }) {
+  return (
+    <li className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <span
+        aria-hidden
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${row.priorityColor}`}
+      >
+        {row.priorityIcon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium text-slate-900">
+            {row.occurrence.title}
+          </span>
+          {row.recurrenceBadge && (
+            <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200">
+              ↻ {row.recurrenceBadge}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+          <span>{row.dateLabel}</span>
+          <span>·</span>
+          <span>{row.timeLabel}</span>
+        </div>
+      </div>
+      {row.occurrence.tag && (
+        <span
+          className={`shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium ${row.tagColor}`}
+        >
+          {row.tagIcon} {row.occurrence.tag}
+        </span>
+      )}
+    </li>
+  );
+}
+
+/** The agenda list with a clear empty state. */
+export function AgendaList({ rows }: { rows: AgendaRow[] }) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+        <p className="text-sm text-slate-500">
+          No upcoming events. Enjoy the calm!
+        </p>
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {rows.map((row) => (
+        <AgendaRowView key={`${row.occurrence.event_id}-${row.occurrence.start_at}`} row={row} />
+      ))}
+    </ul>
+  );
+}
+
 /**
- * The Calendar view (month grid + day drawer).
+ * The Calendar view (month/week/agenda sub-modes + day drawer).
  *
  * A thin, dumb view: it calls the `useCalendar` view model for state and
- * renders the month navigation header, the weekday header, the clickable day
- * cells, and the day drawer for the selected day. No business logic lives
+ * renders the sub-mode switcher, the mode-appropriate navigation header and
+ * content, and the day drawer for the selected day. No business logic lives
  * here.
  */
 export function CalendarView() {
   const {
+    mode,
+    setMode,
     grid,
+    week,
+    agenda,
     monthLabel: label,
+    weekLabel,
     selectedDay,
     loading,
     error,
     prevMonth,
     nextMonth,
+    prevWeek,
+    nextWeek,
     selectDay,
     closeDrawer,
   } = useCalendar();
 
+  const navigation =
+    mode === "week"
+      ? { prev: prevWeek, next: nextWeek, title: weekLabel }
+      : { prev: prevMonth, next: nextMonth, title: label };
+
   return (
     <div className="space-y-4">
+      <div className="flex gap-1">
+        {MODES.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            aria-pressed={mode === tab.id}
+            onClick={() => setMode(tab.id)}
+            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+              mode === tab.id
+                ? "bg-slate-900 text-white"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-300"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between">
         <button
           type="button"
-          onClick={prevMonth}
-          aria-label="Previous month"
+          onClick={navigation.prev}
+          aria-label="Previous"
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           ←
         </button>
-        <h2 className="text-lg font-semibold text-slate-900">{label}</h2>
+        <h2 className="text-lg font-semibold text-slate-900">{navigation.title}</h2>
         <button
           type="button"
-          onClick={nextMonth}
-          aria-label="Next month"
+          onClick={navigation.next}
+          aria-label="Next"
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           →
@@ -147,7 +290,7 @@ export function CalendarView() {
       {error && <p className="text-sm text-red-600">{error}</p>}
       {loading && <p className="text-sm text-slate-500">Loading calendar…</p>}
 
-      {!loading && !error && (
+      {!loading && !error && mode === "month" && (
         <>
           <div className="grid grid-cols-7 gap-1">
             {WEEKDAY_HEADERS.map((day) => (
@@ -160,9 +303,9 @@ export function CalendarView() {
             ))}
           </div>
           <div className="space-y-1">
-            {grid.weeks.map((week) => (
-              <div key={week.key} className="grid grid-cols-7 gap-1">
-                {week.days.map((day) => (
+            {grid.weeks.map((weekRow) => (
+              <div key={weekRow.key} className="grid grid-cols-7 gap-1">
+                {weekRow.days.map((day) => (
                   <DayCell key={day.isoDate} day={day} onSelect={selectDay} />
                 ))}
               </div>
@@ -170,6 +313,10 @@ export function CalendarView() {
           </div>
         </>
       )}
+
+      {!loading && !error && mode === "week" && week && <WeekGrid week={week} />}
+
+      {!loading && !error && mode === "agenda" && agenda && <AgendaList rows={agenda} />}
 
       {selectedDay && (
         <div

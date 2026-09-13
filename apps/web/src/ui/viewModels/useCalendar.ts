@@ -5,19 +5,39 @@ import {
   monthKey,
   monthLabel,
   navigateMonth,
+  navigateWeek,
+  upcomingAgenda,
+  weekGrid,
+  weekStart,
   withOccurrences,
+  withWeekOccurrences,
+  type AgendaRow,
   type CalendarDay,
   type CalendarGrid,
+  type CalendarWeekGrid,
   type YearMonth,
 } from "../../core/calendar";
 import type { EventOccurrence } from "../../core/eventTypes";
 
+/** The three Calendar sub-modes. */
+export type CalendarMode = "month" | "week" | "agenda";
+
 /** State shape produced by the calendar view model. */
 export interface CalendarState {
+  /** The currently active sub-mode. */
+  mode: CalendarMode;
+  /** Switch the active sub-mode. */
+  setMode: (mode: CalendarMode) => void;
   /** The filled month grid (weeks × days with per-day counts). */
   grid: CalendarGrid;
+  /** The filled week grid (7 day columns), or null when not in week mode. */
+  week: CalendarWeekGrid | null;
+  /** The derived agenda rows, or null when not in agenda mode. */
+  agenda: AgendaRow[] | null;
   /** Human label for the displayed month, e.g. "September 2026". */
   monthLabel: string;
+  /** Human label for the displayed week, e.g. "Sep 6 – Sep 12, 2026". */
+  weekLabel: string;
   /** The currently selected day (for the drawer), or null. */
   selectedDay: CalendarDay | null;
   /** Whether the current month's occurrences are still loading. */
@@ -28,6 +48,10 @@ export interface CalendarState {
   prevMonth: () => void;
   /** Go to the next month. */
   nextMonth: () => void;
+  /** Go to the previous week. */
+  prevWeek: () => void;
+  /** Go to the next week. */
+  nextWeek: () => void;
   /** Open the day drawer for a given day. */
   selectDay: (day: CalendarDay) => void;
   /** Close the day drawer. */
@@ -49,6 +73,8 @@ export function useCalendar(): CalendarState {
     year: today.getFullYear(),
     month: today.getMonth() + 1,
   });
+  const [weekCursor, setWeekCursor] = useState<Date>(() => weekStart(today));
+  const [mode, setMode] = useState<CalendarMode>("month");
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,10 +109,20 @@ export function useCalendar(): CalendarState {
     [cursor, occurrences],
   );
 
+  const week = useMemo(
+    () => withWeekOccurrences(weekGrid(weekCursor), occurrences),
+    [weekCursor, occurrences],
+  );
+
+  const agenda = useMemo(
+    () => upcomingAgenda(occurrences, new Date()),
+    [occurrences],
+  );
+
   const selectedDay = useMemo(() => {
     if (!selectedIso) return null;
-    for (const week of grid.weeks) {
-      const found = week.days.find((d) => d.isoDate === selectedIso);
+    for (const weekRow of grid.weeks) {
+      const found = weekRow.days.find((d) => d.isoDate === selectedIso);
       if (found) return found;
     }
     return null;
@@ -100,17 +136,32 @@ export function useCalendar(): CalendarState {
     () => setCursor((c) => navigateMonth(c.year, c.month, 1)),
     [],
   );
+  const prevWeek = useCallback(
+    () => setWeekCursor((w) => navigateWeek(w, -1)),
+    [],
+  );
+  const nextWeek = useCallback(
+    () => setWeekCursor((w) => navigateWeek(w, 1)),
+    [],
+  );
   const selectDay = useCallback((day: CalendarDay) => setSelectedIso(day.isoDate), []);
   const closeDrawer = useCallback(() => setSelectedIso(null), []);
 
   return {
+    mode,
+    setMode,
     grid,
+    week,
+    agenda,
     monthLabel: monthLabel(cursor.year, cursor.month),
+    weekLabel: week.label,
     selectedDay,
     loading,
     error,
     prevMonth,
     nextMonth,
+    prevWeek,
+    nextWeek,
     selectDay,
     closeDrawer,
   };
