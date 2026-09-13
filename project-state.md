@@ -41,8 +41,12 @@ username). None of these block M3.
 M3 — Web UI (current batch):
 - [x] #20 #M3-CORE — Web UI foundation: core logic + services + context injection + atomic scaffold (merged via #23).
 - [x] #21 #M3-T1A — App shell + Timeline view (grouped month/week, infinite scroll, priority/tag styling, recurrence badge) (merged via #25).
-- [ ] #22 #M3-T1B — Calendar view: custom Tailwind month/week/agenda grid + day drawer (pi:ready, p2).
+- [x] #22 #M3-T1B — Calendar view (split by PM note into #27/#28/#29; closed).
+- [ ] #27 #M3-T1B-1 — API per-occurrence endpoint GET /api/events/occurrences?month=YYYY-MM (pi:ready, p1).
+- [ ] #28 #M3-T1B-2 — Calendar core + month grid + day drawer (pi:ready, p1).
+- [ ] #29 #M3-T1B-3 — Calendar week grid + agenda list (pi:ready, p2).
 - [ ] #24 — Add missing tests for PR #23 (apiClient network-rejection path) (pi:ready, type:test).
+- [ ] #26 — Add missing tests for PR #25 (AppShell view-switcher + summary slot) (pi:ready, type:test).
 
 Remaining M3 slices (planned on later PM turns): summary bar + event drawer
 (M3-T2), 3-step wizard + smart-input + search/filter + dark/light + keyboard
