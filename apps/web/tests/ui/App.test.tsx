@@ -7,15 +7,21 @@ import type { EventDrawerState } from "../../src/ui/viewModels/useEventDrawer";
 // Isolate the App-level keyboard-shortcut behavior: mock the wizard view model
 // (so we can assert openCreate is invoked) and stub the child components so the
 // test doesn't depend on real I/O or the services provider.
-const { useEventWizardMock, useEventDrawerMock } = vi.hoisted(() => ({
-  useEventWizardMock: vi.fn(),
-  useEventDrawerMock: vi.fn(),
-}));
+const { useEventWizardMock, useEventDrawerMock, useServicesMock } = vi.hoisted(
+  () => ({
+    useEventWizardMock: vi.fn(),
+    useEventDrawerMock: vi.fn(),
+    useServicesMock: vi.fn(),
+  }),
+);
 vi.mock("../../src/ui/viewModels/useEventWizard", () => ({
   useEventWizard: useEventWizardMock,
 }));
 vi.mock("../../src/ui/viewModels/useEventDrawer", () => ({
   useEventDrawer: useEventDrawerMock,
+}));
+vi.mock("../../src/ui/services/useServices", () => ({
+  useServices: useServicesMock,
 }));
 vi.mock("../../src/ui/components/SummaryBar", () => ({
   SummaryBar: () => <div data-testid="summary-bar" />,
@@ -91,6 +97,10 @@ describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useEventDrawerMock.mockReturnValue(drawerState());
+    useServicesMock.mockReturnValue({
+      apiClient: { listEvents: vi.fn().mockResolvedValue([]) },
+      llmParser: {},
+    });
   });
 
   it("opens the create wizard when the `c` key is pressed", () => {
@@ -158,5 +168,24 @@ describe("App", () => {
     useEventDrawerMock.mockReturnValue(drawerState());
     render(<App />);
     expect(screen.queryByTestId("event-drawer")).not.toBeInTheDocument();
+  });
+
+  it("focuses the search box when the `/` key is pressed", () => {
+    useEventWizardMock.mockReturnValue(wizardState({ open: false }));
+    render(<App />);
+    const input = screen.getByLabelText("Search events");
+    expect(document.activeElement).not.toBe(input);
+
+    fireEvent.keyDown(window, { key: "/" });
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("does not focus the search box on the `/` key when the wizard is open", () => {
+    useEventWizardMock.mockReturnValue(wizardState({ open: true }));
+    render(<App />);
+    const input = screen.getByLabelText("Search events");
+
+    fireEvent.keyDown(window, { key: "/" });
+    expect(document.activeElement).not.toBe(input);
   });
 });

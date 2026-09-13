@@ -17,6 +17,11 @@ import {
   type CalendarWeekGrid,
   type YearMonth,
 } from "../../core/calendar";
+import {
+  EMPTY_FILTER,
+  filterOccurrences,
+  type EventFilter,
+} from "../../core/searchFilter";
 import type { EventOccurrence } from "../../core/eventTypes";
 
 /** The three Calendar sub-modes. */
@@ -66,7 +71,7 @@ export interface CalendarState {
  * delegates all grid/count/drawer derivation to the pure `src/core/calendar`
  * module. The component renders the resulting state.
  */
-export function useCalendar(): CalendarState {
+export function useCalendar(filter?: EventFilter): CalendarState {
   const { apiClient } = useServices();
   const today = new Date();
   const [cursor, setCursor] = useState<YearMonth>({
@@ -104,19 +109,24 @@ export function useCalendar(): CalendarState {
     };
   }, [apiClient, key]);
 
+  const filtered = useMemo(
+    () => filterOccurrences(occurrences, filter ?? EMPTY_FILTER),
+    [occurrences, filter],
+  );
+
   const grid = useMemo(
-    () => withOccurrences(monthGrid(cursor.year, cursor.month), occurrences),
-    [cursor, occurrences],
+    () => withOccurrences(monthGrid(cursor.year, cursor.month), filtered),
+    [cursor, filtered],
   );
 
   const week = useMemo(
-    () => withWeekOccurrences(weekGrid(weekCursor), occurrences),
-    [weekCursor, occurrences],
+    () => withWeekOccurrences(weekGrid(weekCursor), filtered),
+    [weekCursor, filtered],
   );
 
   const agenda = useMemo(
-    () => upcomingAgenda(occurrences, new Date()),
-    [occurrences],
+    () => upcomingAgenda(filtered, new Date()),
+    [filtered],
   );
 
   const selectedDay = useMemo(() => {

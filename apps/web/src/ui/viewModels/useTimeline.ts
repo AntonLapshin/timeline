@@ -6,6 +6,11 @@ import {
   hasMore,
   type MonthGroup,
 } from "../../core/timeline";
+import {
+  EMPTY_FILTER,
+  filterEvents,
+  type EventFilter,
+} from "../../core/searchFilter";
 import type { EventRead } from "../../core/eventTypes";
 
 /** Number of events revealed per "load more" page. */
@@ -34,7 +39,7 @@ export interface TimelineState {
  * `apiClient`, then delegates all grouping/styling/pagination derivation to the
  * pure `src/core/timeline` module. The component renders the resulting state.
  */
-export function useTimeline(): TimelineState {
+export function useTimeline(filter?: EventFilter): TimelineState {
   const { apiClient } = useServices();
   const [events, setEvents] = useState<EventRead[]>([]);
   const [page, setPage] = useState(0);
@@ -67,16 +72,21 @@ export function useTimeline(): TimelineState {
     setPage((p) => p + 1);
   }, []);
 
+  const filtered = useMemo(
+    () => filterEvents(events, filter ?? EMPTY_FILTER),
+    [events, filter],
+  );
+
   const visible = useMemo(
-    () => paginate(events, TIMELINE_PAGE_SIZE, page),
-    [events, page],
+    () => paginate(filtered, TIMELINE_PAGE_SIZE, page),
+    [filtered, page],
   );
 
   const groups = useMemo(() => groupByMonth(visible), [visible]);
 
   const more = useMemo(
-    () => hasMore(events, TIMELINE_PAGE_SIZE, page),
-    [events, page],
+    () => hasMore(filtered, TIMELINE_PAGE_SIZE, page),
+    [filtered, page],
   );
 
   return {

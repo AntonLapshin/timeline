@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Search/filter events + `/` shortcut (issue #46):** adds an app-wide search
+  box in the app-shell header plus priority/tag/month filter controls that
+  narrow the events shown in both the Timeline and Calendar views. Free-text
+  matching is case-insensitive and spans title, notes and tags; the filters
+  combine with AND semantics. The tag and month dropdown options are derived
+  from the loaded events. Pressing `/` focuses the search box (no conflict with
+  the existing `c` create shortcut), and Esc in the search box clears the
+  filters and blurs. An active filter that excludes everything shows a clear
+  "No matches." empty state. All matching/filtering logic lives in a new pure
+  `src/core/searchFilter` module (100% Vitest-covered); a thin `useSearchFilter`
+  view model holds the filter state and a dumb `SearchFilterBar` component
+  renders the controls.
+
 - **Week-grid chip click test (issue #44):** adds a `CalendarView` test that
   switches to the Week mode, clicks a week-grid `WeekChip`, and asserts the
   `onEventClick` callback is invoked with the matching occurrence — closing the

@@ -13,6 +13,8 @@ export interface AppShellProps {
   children: ReactNode;
   /** Optional summary bar content rendered in the header slot. */
   summarySlot?: ReactNode;
+  /** Optional search/filter bar content rendered in the header slot. */
+  searchSlot?: ReactNode;
   /** Optional header actions (e.g. a New-event button). */
   actions?: ReactNode;
 }
@@ -30,6 +32,7 @@ export function AppShell({
   onViewChange,
   children,
   summarySlot,
+  searchSlot,
   actions,
 }: AppShellProps) {
   const tabs: Array<{ id: AppView; label: string }> = [
@@ -65,6 +68,9 @@ export function AppShell({
             )}
           </nav>
         </div>
+        {searchSlot && (
+          <div className="mx-auto max-w-3xl px-4 pb-3">{searchSlot}</div>
+        )}
         {summarySlot && (
           <div className="mx-auto max-w-3xl px-4 pb-3">{summarySlot}</div>
         )}
