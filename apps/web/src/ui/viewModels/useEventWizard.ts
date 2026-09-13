@@ -38,6 +38,8 @@ export interface EventWizardState {
   saved: boolean;
   /** Open the wizard to create a new event. */
   openCreate: () => void;
+  /** Open the wizard to create a new event pre-filled from a parsed draft. */
+  openCreateWithDraft: (draft: EventDraft) => void;
   /** Open the wizard to edit an existing event (pre-filled). */
   openEdit: (event: EventRead) => void;
   /** Close the wizard. */
@@ -72,6 +74,15 @@ export function useEventWizard(): EventWizardState {
 
   const openCreate = useCallback(() => {
     setDraft(emptyDraft());
+    setEditingEvent(null);
+    setStep(1);
+    setError(null);
+    setSaved(false);
+    setOpen(true);
+  }, []);
+
+  const openCreateWithDraft = useCallback((draft: EventDraft) => {
+    setDraft(draft);
     setEditingEvent(null);
     setStep(1);
     setError(null);
@@ -144,6 +155,7 @@ export function useEventWizard(): EventWizardState {
     error,
     saved,
     openCreate,
+    openCreateWithDraft,
     openEdit,
     close,
     next,

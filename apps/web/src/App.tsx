@@ -6,10 +6,12 @@ import { SummaryBar } from "./ui/components/SummaryBar";
 import { EventWizard } from "./ui/components/EventWizard";
 import { EventDrawer } from "./ui/components/EventDrawer";
 import { SearchFilterBar } from "./ui/components/SearchFilterBar";
+import { SmartInputBox } from "./ui/components/SmartInputBox";
 import { useServices } from "./ui/services/useServices";
 import { useEventWizard } from "./ui/viewModels/useEventWizard";
 import { useEventDrawer } from "./ui/viewModels/useEventDrawer";
 import { useSearchFilter } from "./ui/viewModels/useSearchFilter";
+import { useSmartInput } from "./ui/viewModels/useSmartInput";
 import { allMonths, allTags } from "./core/searchFilter";
 import type { EventRead } from "./core/eventTypes";
 
@@ -27,6 +29,7 @@ export default function App() {
   const wizard = useEventWizard();
   const drawer = useEventDrawer();
   const search = useSearchFilter();
+  const smartInput = useSmartInput(wizard.openCreateWithDraft);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [events, setEvents] = useState<EventRead[]>([]);
 
@@ -94,6 +97,7 @@ export default function App() {
             onClear={search.clear}
           />
         }
+        smartInputSlot={<SmartInputBox smartInput={smartInput} />}
         actions={
           <button
             type="button"

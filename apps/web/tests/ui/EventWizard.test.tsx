@@ -41,6 +41,7 @@ function wizardState(overrides: Partial<EventWizardState> = {}): EventWizardStat
     error: null,
     saved: false,
     openCreate: vi.fn(),
+    openCreateWithDraft: vi.fn(),
     openEdit: vi.fn(),
     close: vi.fn(),
     next: vi.fn(),
