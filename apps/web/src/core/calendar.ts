@@ -10,7 +10,7 @@
  */
 
 import type { EventOccurrence } from "./eventTypes";
-import { parseIso, toLocalDate, weekdayShort } from "./dateFmt";
+import { parseIso, startOfDay, toLocalDate, weekdayShort } from "./dateFmt";
 import { formatRecurrence } from "./recurrenceFormat";
 import { priorityStyle, tagStyle } from "./timeline";
 
@@ -134,6 +134,22 @@ export function dayOccurrences(
   });
 }
 
+/** Group occurrences by their local calendar date (YYYY-MM-DD). */
+function groupByDate(
+  occurrences: readonly EventOccurrence[],
+): Map<string, EventOccurrence[]> {
+  const byDay = new Map<string, EventOccurrence[]>();
+  for (const o of occurrences) {
+    const date = parseIso(o.start_at);
+    if (!date) continue;
+    const key = toLocalDate(date);
+    const list = byDay.get(key);
+    if (list) list.push(o);
+    else byDay.set(key, [o]);
+  }
+  return byDay;
+}
+
 /**
  * Fill a month grid with occurrences, deriving each day's event count/dots.
  *
@@ -145,15 +161,7 @@ export function withOccurrences(
   grid: CalendarGrid,
   occurrences: readonly EventOccurrence[],
 ): CalendarGrid {
-  const byDay = new Map<string, EventOccurrence[]>();
-  for (const o of occurrences) {
-    const date = parseIso(o.start_at);
-    if (!date) continue;
-    const key = toLocalDate(date);
-    const list = byDay.get(key);
-    if (list) list.push(o);
-    else byDay.set(key, [o]);
-  }
+  const byDay = groupByDate(occurrences);
   return {
     ...grid,
     weeks: grid.weeks.map((week) => ({
@@ -239,4 +247,189 @@ export function toOccurrenceRow(o: EventOccurrence): OccurrenceRow {
     timeLabel: occurrenceTimeLabel(o),
     nextOccurrenceLabel: nextOccurrenceLabel(o.next_occurrence),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Week grid (issue #29)
+// ---------------------------------------------------------------------------
+
+/** The Sunday that starts the week containing `date`. */
+export function weekStart(date: Date): Date {
+  return startOfDay(new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay()));
+}
+
+/** The 7 day cells of the week starting at `start` (its Sunday). */
+export function weekDays(start: Date): CalendarDay[] {
+  const days: CalendarDay[] = [];
+  for (let i = 0; i < 7; i += 1) {
+    const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    days.push({
+      date,
+      isoDate: toLocalDate(date),
+      dayOfMonth: date.getDate(),
+      inMonth: true,
+      occurrences: [],
+      count: 0,
+    });
+  }
+  return days;
+}
+
+/** A human label for a week, e.g. "Sep 6 – Sep 12, 2026". */
+export function weekLabel(start: Date): string {
+  const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+  const monthDay = (d: Date) =>
+    `${d.toLocaleString("en-US", { month: "short" })} ${d.getDate()}`;
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${monthDay(start)} – ${monthDay(end)}, ${start.getFullYear()}`;
+  }
+  return `${monthDay(start)}, ${start.getFullYear()} – ${monthDay(end)}, ${end.getFullYear()}`;
+}
+
+/** A week grid: 7 consecutive day columns (Sunday-first). */
+export interface CalendarWeekGrid {
+  /** Stable key, e.g. "2026-09-06". */
+  key: string;
+  /** The Sunday that starts the week. */
+  start: Date;
+  /** Human label, e.g. "Sep 6 – Sep 12, 2026". */
+  label: string;
+  /** The 7 day columns. */
+  days: CalendarDay[];
+}
+
+/** Build the week grid for the week starting at `start` (its Sunday). */
+export function weekGrid(start: Date): CalendarWeekGrid {
+  return {
+    key: toLocalDate(start),
+    start,
+    label: weekLabel(start),
+    days: weekDays(start),
+  };
+}
+
+/** Navigate a week start by a signed number of weeks. */
+export function navigateWeek(start: Date, delta: number): Date {
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + delta * 7);
+}
+
+/**
+ * Fill a week grid's day columns with occurrences.
+ *
+ * Returns a new week grid (the input is not mutated) where every day column
+ * has its `occurrences` list and `count` populated from the payload.
+ */
+export function withWeekOccurrences(
+  week: CalendarWeekGrid,
+  occurrences: readonly EventOccurrence[],
+): CalendarWeekGrid {
+  const byDay = groupByDate(occurrences);
+  return {
+    ...week,
+    days: week.days.map((day) => {
+      const list = byDay.get(day.isoDate) ?? [];
+      return { ...day, occurrences: list, count: list.length };
+    }),
+  };
+}
+
+/** A day's occurrences split into all-day and timed groups, sorted by start. */
+export interface DaySlots {
+  /** All-day occurrences, sorted by start. */
+  allDay: EventOccurrence[];
+  /** Timed occurrences, sorted by start. */
+  timed: EventOccurrence[];
+}
+
+/** Compare two occurrences by their start timestamp. */
+function byStart(a: EventOccurrence, b: EventOccurrence): number {
+  return a.start_at.localeCompare(b.start_at);
+}
+
+/**
+ * Split a day's occurrences into all-day and timed groups, each sorted by
+ * start time, so the week grid can place them (all-day on top, timed below).
+ */
+export function daySlots(day: CalendarDay): DaySlots {
+  const allDay = day.occurrences.filter((o) => o.all_day).sort(byStart);
+  const timed = day.occurrences.filter((o) => !o.all_day).sort(byStart);
+  return { allDay, timed };
+}
+
+/** A short time-of-day label for an occurrence, e.g. "10:00 AM". */
+export function timeLabel(o: EventOccurrence): string {
+  const parsed = parseIso(o.start_at);
+  if (!parsed) {
+    return "";
+  }
+  const hour = parsed.getHours();
+  const minute = String(parsed.getMinutes()).padStart(2, "0");
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hour12}:${minute} ${period}`;
+}
+
+// ---------------------------------------------------------------------------
+// Agenda list (issue #29)
+// ---------------------------------------------------------------------------
+
+/** A fully derived row for the agenda list. */
+export interface AgendaRow {
+  /** The underlying occurrence. */
+  occurrence: EventOccurrence;
+  /** Human date label, e.g. "Sat, Sep 5". */
+  dateLabel: string;
+  /** Human time label, e.g. "10:00 AM" or "All day". */
+  timeLabel: string;
+  /** Derived priority color class. */
+  priorityColor: string;
+  /** Derived priority icon glyph. */
+  priorityIcon: string;
+  /** Derived tag color class. */
+  tagColor: string;
+  /** Derived tag icon glyph. */
+  tagIcon: string;
+  /** Human recurrence badge, or null for a one-time event. */
+  recurrenceBadge: string | null;
+}
+
+/** Derive a single agenda row from an occurrence. */
+export function toAgendaRow(o: EventOccurrence): AgendaRow {
+  const priority = priorityStyle(o.priority);
+  const tag = o.tag ? tagStyle(o.tag) : null;
+  const badge = formatRecurrence(o.rrule);
+  const parsed = parseIso(o.start_at);
+  return {
+    occurrence: o,
+    dateLabel: parsed
+      ? `${weekdayShort(parsed)}, ${parsed.toLocaleString("en-US", { month: "short" })} ${parsed.getDate()}`
+      : o.start_at,
+    timeLabel: o.all_day ? "All day" : timeLabel(o),
+    priorityColor: priority.color,
+    priorityIcon: priority.icon,
+    tagColor: tag?.color ?? "text-slate-500 bg-transparent border-transparent",
+    tagIcon: tag?.icon ?? "#",
+    recurrenceBadge: badge.known ? badge.label : null,
+  };
+}
+
+/**
+ * Derive the upcoming agenda rows from a set of occurrences.
+ *
+ * Filters to occurrences starting at/after `now`, sorts them chronologically
+ * by start, and derives each row's display styling. Occurrences with an
+ * unparseable `start_at` are dropped. The empty list is the agenda's empty
+ * state (rendered by the component).
+ */
+export function upcomingAgenda(
+  occurrences: readonly EventOccurrence[],
+  now: Date,
+): AgendaRow[] {
+  return occurrences
+    .filter((o) => {
+      const date = parseIso(o.start_at);
+      return date !== null && date.getTime() >= now.getTime();
+    })
+    .sort((a, b) => a.start_at.localeCompare(b.start_at))
+    .map(toAgendaRow);
 }

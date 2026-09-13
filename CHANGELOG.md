@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Calendar view: week grid + agenda list (issue #29):** the web app's
+  Calendar view now has three switchable sub-modes (Month / Week / Agenda),
+  completing the Calendar view split out of #22. The **week grid** renders
+  seven day columns (Sunday-first) with each day's occurrences placed as
+  chips — all-day events on top, timed events below, each with a time label
+  and priority styling — and is navigable week-by-week with a human week
+  label (e.g. "Sep 6 – Sep 12, 2026") that handles year boundaries. The
+  **agenda list** shows upcoming occurrences chronologically (date, title,
+  time or "All day", priority color/icon, tag badge, recurrence badge) with
+  a clear empty state. All derivation lives in new pure functions in
+  `src/core/calendar` (`weekStart`, `weekDays`, `weekLabel`, `weekGrid`,
+  `navigateWeek`, `withWeekOccurrences`, `daySlots`, `timeLabel`,
+  `upcomingAgenda`, `toAgendaRow`) which are 100% Vitest-covered; the
+  `useCalendar` view model stays thin (it only adds a mode cursor + week
+  cursor and consumes services via `useServices()`); the components remain
+  dumb. The `AppShell` view switcher still routes to the Calendar view.
+
 - **Calendar view: month grid + day drawer (issue #28):** the web app's
   Calendar view now renders a custom Tailwind month grid (no third-party
   calendar lib) with per-day event dots/counts, prev/next month navigation and

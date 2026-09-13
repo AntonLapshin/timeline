@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { CalendarView } from "../../src/ui/components/CalendarView";
 import { ServicesContext, type Services } from "../../src/ui/services/context";
+import { weekGrid, weekStart } from "../../src/core/calendar";
 import type { EventOccurrence } from "../../src/core/eventTypes";
 
 function makeOccurrence(overrides: Partial<EventOccurrence>): EventOccurrence {
@@ -143,11 +144,11 @@ describe("CalendarView", () => {
     await waitFor(() =>
       expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByLabelText("Next month"));
+    fireEvent.click(screen.getByLabelText("Next"));
     await waitFor(() =>
       expect(screen.getByText(/October 2026/)).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByLabelText("Previous month"));
+    fireEvent.click(screen.getByLabelText("Previous"));
     await waitFor(() =>
       expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
     );
@@ -164,6 +165,77 @@ describe("CalendarView", () => {
 
     await waitFor(() =>
       expect(screen.getByText("Failed to load occurrences")).toBeInTheDocument(),
+    );
+  });
+
+  it("switches to the week grid and places events by day", async () => {
+    // Place occurrences on today's date so they always fall in the current
+    // week and the fetched (current) month, regardless of when the suite runs.
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "HRA", start_at: `${todayIso}T10:00:00` }),
+      makeOccurrence({ event_id: 2, title: "AllDay", start_at: `${todayIso}T00:00:00`, all_day: true }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Week"));
+    // The week label reflects the week containing today (the view model's
+    // week cursor starts at the current week).
+    const expectedLabel = weekGrid(weekStart(new Date())).label;
+    await waitFor(() =>
+      expect(screen.getByText(expectedLabel)).toBeInTheDocument(),
+    );
+    expect(screen.getByText("HRA")).toBeInTheDocument();
+    expect(screen.getByText("AllDay")).toBeInTheDocument();
+  });
+
+  it("switches to the agenda list with chronological rows", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "Later", start_at: "2026-09-29T10:00:00" }),
+      makeOccurrence({ event_id: 2, title: "Sooner", start_at: "2026-09-28T09:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Agenda"));
+    await waitFor(() => expect(screen.getByText("Sooner")).toBeInTheDocument());
+    expect(screen.getByText("Later")).toBeInTheDocument();
+    expect(screen.getByText("9:00 AM")).toBeInTheDocument();
+  });
+
+  it("shows an empty state for the agenda with no upcoming events", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "Past", start_at: "2026-09-01T10:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByText("Agenda"));
+    await waitFor(() =>
+      expect(screen.getByText(/No upcoming events/)).toBeInTheDocument(),
     );
   });
 });
