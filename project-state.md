@@ -9,8 +9,13 @@ M1 (repo/scaffolding/tooling/local run paths/need-owner issues) and M2 (core
 domain: models+migrations, recurrence expansion, CRUD+summary+seed) are fully
 implemented and merged. The M3 web-UI milestone is now being planned; the first
 batch (foundation + Timeline view + Calendar view) is `pi:ready` and in flight.
-All need-owner issues (#5, #6, #7, #8, #10) are classified `pi:blocked` awaiting
-owner input (secrets/access to local `.env` only) — none block M3.
+Owner-gated need-owner issues: #5 (natalies-corner access) and #10 (voxtype)
+are **resolved and closed** — the owner cloned natalies-corner to
+`/home/monarch/ws/natalies-corner` (local reference), and voxtype 1.0.1 is
+confirmed installed with the whisper.cpp base-en model present. #6 (JoinGonka)
+and #8 (email) still await owner input; #7 (Telegram) awaits a rotated token +
+numeric user id (the posted token was leaked publicly and the user id was a bot
+username). None of these block M3.
 
 ## What's here
 
@@ -42,13 +47,13 @@ Remaining M3 slices (planned on later PM turns): summary bar + event drawer
 (M3-T2), 3-step wizard + smart-input + search/filter + dark/light + keyboard
 shortcuts (M3-T3), atomic Showcase files + Playwright smoke (M3-T4).
 
-M1 (owner-in-the-loop, all pi:blocked awaiting owner input):
+M1 (owner-in-the-loop):
+- [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).
+- [x] #10 — voxtype install / confirm (resolved & closed; voxtype 1.0.1 + base-en model present).
 - [ ] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (pi:blocked; owner input invalid — token leaked publicly, needs rotation via @BotFather + numeric user id + polling OK; re-routed to owner).
 - [x] #9 — tz / locale / quiet hours / license (MIT?) (pi:ready; owner confirmed defaults).
-- [ ] #5 — natalies-corner access / local path (pi:blocked, p1).
 - [ ] #6 — JoinGonka LLM_BASE_URL / LLM_MODEL / API key (pi:blocked, p1).
 - [ ] #8 — Email decision for v1 (SMTP/Resend or skip) (pi:blocked, p2).
-- [ ] #10 — Confirm voxtype installed / install via Omarchy (pi:blocked, p2).
 
 Further milestones (M4 reminder engine, M5 Telegram inbound/STT/AI, M6
 hardening/backups, M7 polish/docs) will be planned on later PM turns.
