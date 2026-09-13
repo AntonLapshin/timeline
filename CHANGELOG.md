@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Missing tests for apiClient network-rejection path (issue #24):** adds a
+  Vitest case in `apps/web/tests/core/apiClient.test.ts` covering the
+  network-rejection (fetch throws) error path of `createApiClient`'s
+  `request()` helper, which previously only had success and non-2xx
+  (`ok:false`) paths tested. Verifies the raw fetch rejection propagates
+  unchanged (not wrapped in an `ApiError`), matching the existing behavior.
+
 - **Calendar view: week grid + agenda list (issue #29):** the web app's
   Calendar view now has three switchable sub-modes (Month / Week / Agenda),
   completing the Calendar view split out of #22. The **week grid** renders
