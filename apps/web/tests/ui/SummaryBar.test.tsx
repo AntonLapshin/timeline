@@ -5,10 +5,16 @@ import type { SummaryState } from "../../src/ui/viewModels/useSummary";
 
 // Mock the view model so the component's rendering branches can be exercised
 // deterministically, regardless of the date the suite runs on.
-const useSummaryMock = vi.fn<() => SummaryState>();
+const { useSummaryMock } = vi.hoisted(() => ({
+  useSummaryMock: vi.fn(),
+}));
 vi.mock("../../src/ui/viewModels/useSummary", () => ({
   useSummary: useSummaryMock,
 }));
+
+function useSummaryAs(state: SummaryState) {
+  useSummaryMock.mockReturnValue(state);
+}
 
 function renderSummaryBar() {
   return render(<SummaryBar />);
@@ -35,7 +41,7 @@ describe("SummaryBar", () => {
   });
 
   it("renders the month total and per-priority breakdown", () => {
-    useSummaryMock.mockReturnValue(loadedState());
+    useSummaryAs(loadedState());
     renderSummaryBar();
 
     expect(screen.getByText(/12 events this month/)).toBeInTheDocument();
@@ -45,7 +51,7 @@ describe("SummaryBar", () => {
   });
 
   it("renders the next-7-days tally with an overdue highlight when hasOverdue is true", () => {
-    useSummaryMock.mockReturnValue(
+    useSummaryAs(
       loadedState({
         model: {
           monthly: { month: "2026-03", total: 12, byPriority: { critical: 2, medium: 5, low: 5 } },
@@ -59,7 +65,7 @@ describe("SummaryBar", () => {
   });
 
   it("renders the next-7-days tally without overdue when hasOverdue is false", () => {
-    useSummaryMock.mockReturnValue(
+    useSummaryAs(
       loadedState({
         model: {
           monthly: { month: "2026-03", total: 12, byPriority: { critical: 2, medium: 5, low: 5 } },
@@ -74,7 +80,7 @@ describe("SummaryBar", () => {
   });
 
   it("renders a loading state while the summary is being fetched", () => {
-    useSummaryMock.mockReturnValue(
+    useSummaryAs(
       loadedState({ model: null, loading: true }),
     );
     renderSummaryBar();
@@ -83,7 +89,7 @@ describe("SummaryBar", () => {
   });
 
   it("renders an empty state without misleading counts", () => {
-    useSummaryMock.mockReturnValue(
+    useSummaryAs(
       loadedState({
         model: {
           monthly: { month: "2026-03", total: 0, byPriority: { critical: 0, medium: 0, low: 0 } },
@@ -99,7 +105,7 @@ describe("SummaryBar", () => {
   });
 
   it("shows the error message when the load fails", () => {
-    useSummaryMock.mockReturnValue(
+    useSummaryAs(
       loadedState({ model: null, error: "Failed to load summary" }),
     );
     renderSummaryBar();
