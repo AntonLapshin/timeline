@@ -22,6 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (wired into `App.tsx`'s `summarySlot`). Empty/zero state renders cleanly with
   no misleading counts.
 
+- **Deterministic SummaryBar component tests (issue #37):** extends
+  `apps/web/tests/ui/SummaryBar.test.tsx` to cover the remaining render
+  branches of the summary bar deterministically, regardless of the date the
+  suite runs on. The next-7-days tally is now asserted for both the overdue
+  highlight (`hasOverdue: true` → "N overdue in next 7 days") and the
+  non-overdue case (`hasOverdue: false` → "N in next 7 days", with no
+  "overdue" text), and the initial loading state ("Loading summary…") is
+  covered via a mocked `useSummary` view model.
+
 - **Missing tests for occurrences December rollover (issue #31):** adds
   boundary tests for the `month == 12` year-rollover branch of
   `_next_after_month` in `apps/api/app/occurrences.py`. A new pure test in
