@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Calendar view: month grid + day drawer (issue #28):** the web app's
+  Calendar view now renders a custom Tailwind month grid (no third-party
+  calendar lib) with per-day event dots/counts, prev/next month navigation and
+  a current-month label, and a day drawer that lists a selected day's
+  occurrences (title, time, priority color/icon, tag badge, recurrence badge
+  via `src/core/recurrenceFormat`, and a next-occurrence hint where
+  available). Events are sourced from `GET /api/events/occurrences?month=YYYY-MM`
+  (the per-occurrence endpoint from issue #27), so no recurrence port is
+  needed in `src/core`. All derivation lives in a new pure
+  `src/core/calendar` module (`monthKey`, `monthLabel`, `navigateMonth`,
+  `monthGrid`, `dayOccurrences`, `withOccurrences`, `toOccurrenceRow`) which
+  is 100% Vitest-covered; the view model (`useCalendar`) is thin and consumes
+  services via `useServices()` context injection; the components are dumb. The
+  `apiClient` gains a `getOccurrences(month)` method for the new endpoint.
+
 - **Per-occurrence API endpoint (issue #27):** the API now exposes
   `GET /api/events/occurrences?month=YYYY-MM`, which returns each active
   event's concrete occurrences falling in that month (interpreted in each

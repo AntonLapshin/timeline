@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AppShell, type AppView } from "./ui/components/AppShell";
 import { TimelineView } from "./ui/components/TimelineView";
+import { CalendarView } from "./ui/components/CalendarView";
 import { ServicesProvider } from "./ui/services/ServicesProvider";
 
 /**
@@ -16,17 +17,9 @@ export default function App() {
   return (
     <ServicesProvider>
       <AppShell view={view} onViewChange={setView}>
-        {view === "timeline" ? <TimelineView /> : <CalendarPlaceholder />}
+        {view === "timeline" ? <TimelineView /> : <CalendarView />}
       </AppShell>
     </ServicesProvider>
   );
 }
 
-/** Placeholder for the Calendar view (wired in a later issue). */
-function CalendarPlaceholder() {
-  return (
-    <p className="text-sm text-slate-500">
-      Calendar view is coming in a later milestone.
-    </p>
-  );
-}
