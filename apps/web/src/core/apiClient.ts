@@ -11,6 +11,7 @@ import type {
   EventCreate,
   EventOccurrence,
   EventRead,
+  EventUpdate,
   SummaryResponse,
 } from "./eventTypes";
 
@@ -46,6 +47,7 @@ export interface ApiClient {
   listEvents(): Promise<EventRead[]>;
   getEvent(id: number): Promise<EventRead>;
   createEvent(payload: EventCreate): Promise<EventRead>;
+  updateEvent(id: number, payload: EventUpdate): Promise<EventRead>;
   getSummary(month: string): Promise<SummaryResponse>;
   getOccurrences(month: string): Promise<EventOccurrence[]>;
 }
@@ -86,6 +88,12 @@ export function createApiClient(
     async createEvent(payload: EventCreate): Promise<EventRead> {
       return request<EventRead>("/api/events", "create event", {
         method: "POST",
+        body: payload,
+      });
+    },
+    async updateEvent(id: number, payload: EventUpdate): Promise<EventRead> {
+      return request<EventRead>(`/api/events/${id}`, "update event", {
+        method: "PATCH",
         body: payload,
       });
     },

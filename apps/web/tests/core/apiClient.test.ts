@@ -61,6 +61,23 @@ describe("apiClient core module", () => {
     ).resolves.toEqual(created);
   });
 
+  it("updates an event via PATCH /api/events/{id} with a JSON body", async () => {
+    const updated = { id: 9, title: "Renamed" };
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toBe("http://127.0.0.1:8123/api/events/9");
+      expect(init?.method).toBe("PATCH");
+      expect(init?.body).toBe(
+        JSON.stringify({ title: "Renamed", priority: "critical" }),
+      );
+      expect(init?.headers).toEqual({ "Content-Type": "application/json" });
+      return { ok: true, status: 200, json: async () => updated };
+    });
+    const client = createApiClient("http://127.0.0.1:8123", fetchImpl);
+    await expect(
+      client.updateEvent(9, { title: "Renamed", priority: "critical" }),
+    ).resolves.toEqual(updated);
+  });
+
   it("gets a summary with an encoded month param", async () => {
     const summary = { month: "2026-09", total: 12, by_priority: {} };
     const fetchImpl = mockFetch((url) => {

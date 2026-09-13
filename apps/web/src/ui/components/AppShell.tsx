@@ -13,6 +13,8 @@ export interface AppShellProps {
   children: ReactNode;
   /** Optional summary bar content rendered in the header slot. */
   summarySlot?: ReactNode;
+  /** Optional header actions (e.g. a New-event button). */
+  actions?: ReactNode;
 }
 
 /**
@@ -28,6 +30,7 @@ export function AppShell({
   onViewChange,
   children,
   summarySlot,
+  actions,
 }: AppShellProps) {
   const tabs: Array<{ id: AppView; label: string }> = [
     { id: "timeline", label: "Timeline" },
@@ -55,6 +58,11 @@ export function AppShell({
                 {tab.label}
               </button>
             ))}
+            {actions && (
+              <div className="ml-2 border-l border-slate-200 pl-2">
+                {actions}
+              </div>
+            )}
           </nav>
         </div>
         {summarySlot && (

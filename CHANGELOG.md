@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **App-level keyboard-shortcut tests (issue #39):** adds a new
+  `apps/web/tests/ui/App.test.tsx` that renders the app root and verifies the
+  acceptance-criterion 6 behavior — pressing the `c` key opens the create
+  wizard, other keys don't, an already-open wizard isn't re-opened, the `+ New`
+  header action opens it, and the keydown listener is removed on unmount.
+
+- **3-step create/edit event wizard (issue #39):** adds a modal wizard that
+  captures a new event or edits an existing one across three steps — What/When
+  (title, notes, date/time or all-day, timezone), Recurrence (none / daily /
+  weekly / monthly / quarterly / yearly / custom with an RFC 5545 rule), and
+  Priority & Reminders (critical / medium / low, reminder channels and
+  offsets). A new pure `src/core/eventWizard` module holds the draft, validates
+  each step (so an incomplete event can't be submitted), derives the RRULE the
+  API expects, pre-fills a draft from an existing event for edit mode, and
+  builds the create/update payloads (100% Vitest-covered). A thin
+  `useEventWizard` view model performs the create/update I/O through the
+  injected `apiClient` (a new `updateEvent`/`PATCH` method was added), and
+  dumb `EventWizard`/`WizardStepOne`/`WizardStepTwo`/`WizardStepThree`
+  components render each step. The wizard opens from a `+ New` header action
+  (wired via a new `AppShell` `actions` slot) or the `c` keyboard shortcut, and
+  clicking a timeline row opens it pre-filled for editing; save reflects
+  success/error states.
+
 - **Summary bar: events this month by priority, next 7 days, overdue highlight
   (issue #37):** renders a summary bar in the `AppShell` header `summarySlot`
   fed by `GET /api/summary?month=YYYY-MM`. The bar shows the current month's
