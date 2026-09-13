@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Dark/light theme toggle + responsive polish (issue #48):** adds a theme
+  toggle in the app-shell header that switches the whole app between light and
+  dark, persisted in `localStorage` and applied across all views (Timeline,
+  Calendar, wizard, drawer, summary bar). Every component gained
+  `dark:` Tailwind variants (via `darkMode: "class"`) so nothing is illegible
+  in dark mode, and the header, summary bar, wizard modal and calendar controls
+  were made responsive for narrow/mobile widths (e.g. 360px). Theme state is
+  provided through the existing context-injection pattern (`ThemeProvider` +
+  `useTheme`, no global singletons); the pure toggle/normalize/label
+  derivation lives in `src/core/theme` (100% Vitest-covered), persistence and
+  DOM application live in a `src/adapters/themeStorage` adapter, and the toggle
+  itself is a thin dumb component.
+
 - **Smart-input "Add event…" box calling `/parse` (issue #47):** adds a
   free-text smart-input box in the app-shell header that accepts natural
   language (e.g. "dentist next Tuesday 3pm") and calls the `/parse` endpoint

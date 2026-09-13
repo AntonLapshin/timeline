@@ -89,4 +89,17 @@ describe("AppShell", () => {
     );
     expect(screen.getByText("Smart input")).toBeInTheDocument();
   });
+
+  it("renders the themeToggleSlot content in the header", () => {
+    render(
+      <AppShell
+        view="timeline"
+        onViewChange={() => {}}
+        themeToggleSlot={<button>🌙</button>}
+      >
+        <p>content</p>
+      </AppShell>,
+    );
+    expect(screen.getByRole("button", { name: "🌙" })).toBeInTheDocument();
+  });
 });

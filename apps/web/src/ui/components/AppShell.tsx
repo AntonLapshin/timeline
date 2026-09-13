@@ -19,6 +19,8 @@ export interface AppShellProps {
   smartInputSlot?: ReactNode;
   /** Optional header actions (e.g. a New-event button). */
   actions?: ReactNode;
+  /** Optional theme-toggle control rendered in the header. */
+  themeToggleSlot?: ReactNode;
 }
 
 /**
@@ -37,6 +39,7 @@ export function AppShell({
   searchSlot,
   smartInputSlot,
   actions,
+  themeToggleSlot,
 }: AppShellProps) {
   const tabs: Array<{ id: AppView; label: string }> = [
     { id: "timeline", label: "Timeline" },
@@ -44,32 +47,35 @@ export function AppShell({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-semibold text-slate-900">Timeline</h1>
-          <nav className="flex gap-1" aria-label="Views">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                aria-pressed={view === tab.id}
-                onClick={() => onViewChange(tab.id)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
-                  view === tab.id
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-            {actions && (
-              <div className="ml-2 border-l border-slate-200 pl-2">
-                {actions}
-              </div>
-            )}
-          </nav>
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
+      <header className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
+          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Timeline</h1>
+          <div className="flex items-center gap-2">
+            {themeToggleSlot}
+            <nav className="flex flex-wrap gap-1" aria-label="Views">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={view === tab.id}
+                  onClick={() => onViewChange(tab.id)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                    view === tab.id
+                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+              {actions && (
+                <div className="ml-2 border-l border-slate-200 pl-2 dark:border-slate-600">
+                  {actions}
+                </div>
+              )}
+            </nav>
+          </div>
         </div>
         {searchSlot && (
           <div className="mx-auto max-w-3xl px-4 pb-3">{searchSlot}</div>

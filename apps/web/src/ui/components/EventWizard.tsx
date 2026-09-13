@@ -39,27 +39,27 @@ export function EventWizard({ wizard }: EventWizardProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 p-4 pt-16"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 p-4 pt-16 dark:bg-black/60"
       role="dialog"
       aria-modal="true"
       aria-label="Create or edit event"
     >
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
             {editingEvent ? "Edit event" : "New event"}
           </h2>
           <button
             type="button"
             onClick={close}
             aria-label="Close wizard"
-            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
           >
             ✕
           </button>
         </div>
 
-        <ol className="mb-5 flex items-center gap-2 text-xs font-medium">
+        <ol className="mb-5 flex flex-wrap items-center gap-2 text-xs font-medium">
           {STEP_TITLES.map((title, index) => {
             const stepNum = (index + 1) as 1 | 2 | 3;
             const active = stepNum === step;
@@ -69,16 +69,16 @@ export function EventWizard({ wizard }: EventWizardProps) {
                 <span
                   className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
                     active
-                      ? "bg-slate-900 text-white"
+                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
                       : done
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-500"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
                   }`}
                 >
                   {done ? "✓" : stepNum}
                 </span>
                 <span
-                  className={active ? "text-slate-900" : "text-slate-500"}
+                  className={active ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}
                 >
                   {title}
                 </span>
@@ -99,9 +99,9 @@ export function EventWizard({ wizard }: EventWizardProps) {
           )}
         </div>
 
-        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
         {saved && (
-          <p className="mb-3 text-sm text-emerald-600">
+          <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">
             {editingEvent ? "Event updated." : "Event created."}
           </p>
         )}
@@ -111,7 +111,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
             type="button"
             onClick={back}
             disabled={step === 1}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-40"
           >
             Back
           </button>
@@ -121,7 +121,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
               type="button"
               onClick={next}
               disabled={!canNext}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-40"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300 disabled:opacity-40"
             >
               Next
             </button>
