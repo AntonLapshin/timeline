@@ -71,6 +71,18 @@ describe("apiClient core module", () => {
     await expect(client.getSummary("2026-09")).resolves.toEqual(summary);
   });
 
+  it("gets occurrences with an encoded month param", async () => {
+    const occurrences = [
+      { event_id: 1, title: "HRA", priority: "critical", start_at: "2026-09-05T10:00:00" },
+    ];
+    const fetchImpl = mockFetch((url) => {
+      expect(url).toBe("http://127.0.0.1:8123/api/events/occurrences?month=2026-09");
+      return { ok: true, status: 200, json: async () => occurrences };
+    });
+    const client = createApiClient("http://127.0.0.1:8123", fetchImpl);
+    await expect(client.getOccurrences("2026-09")).resolves.toEqual(occurrences);
+  });
+
   it("throws ApiError with the status on a failed response", async () => {
     const fetchImpl = mockFetch(() => ({
       ok: false,

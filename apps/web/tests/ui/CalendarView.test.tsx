@@ -1,0 +1,169 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import type { ReactNode } from "react";
+import { CalendarView } from "../../src/ui/components/CalendarView";
+import { ServicesContext, type Services } from "../../src/ui/services/context";
+import type { EventOccurrence } from "../../src/core/eventTypes";
+
+function makeOccurrence(overrides: Partial<EventOccurrence>): EventOccurrence {
+  return {
+    event_id: 1,
+    title: "Test",
+    priority: "medium",
+    tag: null,
+    rrule: null,
+    start_at: "2026-09-05T10:00:00",
+    all_day: false,
+    tz: "UTC",
+    next_occurrence: null,
+    ...overrides,
+  };
+}
+
+function renderWithServices(services: Services, ui: ReactNode) {
+  return render(
+    <ServicesContext.Provider value={services}>{ui}</ServicesContext.Provider>,
+  );
+}
+
+function apiClientWith(getOccurrences: Services["apiClient"]["getOccurrences"]) {
+  return { getOccurrences } as unknown as Services["apiClient"];
+}
+
+describe("CalendarView", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders the month grid with the current month label and day counts", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({
+        event_id: 1,
+        title: "HRA",
+        start_at: "2026-09-05T10:00:00",
+        priority: "critical",
+        tag: "health",
+        rrule: "FREQ=MONTHLY;INTERVAL=3",
+      }),
+      makeOccurrence({ event_id: 2, title: "Lunch", start_at: "2026-09-05T12:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    // The month label is the current month.
+    expect(screen.getByText("Sun")).toBeInTheDocument();
+    expect(screen.getByText("Sat")).toBeInTheDocument();
+    // A day with two occurrences shows the count dots.
+    expect(screen.getByLabelText("2026-09-05, 2 events")).toBeInTheDocument();
+  });
+
+  it("opens the day drawer on click and lists the day's occurrences", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({
+        event_id: 1,
+        title: "HRA",
+        start_at: "2026-09-05T10:00:00",
+        priority: "critical",
+        tag: "health",
+        rrule: "FREQ=MONTHLY;INTERVAL=3",
+        next_occurrence: "2026-12-05T10:00:00",
+      }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("2026-09-05, 1 event")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("2026-09-05, 1 event"));
+
+    expect(screen.getByText("HRA")).toBeInTheDocument();
+    expect(screen.getByText(/every quarter/)).toBeInTheDocument();
+    expect(screen.getByText(/Next: Sat, Dec 5/)).toBeInTheDocument();
+    expect(screen.getByText("# health")).toBeInTheDocument();
+  });
+
+  it("shows an empty message for a day with no events", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText(/2026-09-01, 0 events/));
+    expect(screen.getByText("No events this day.")).toBeInTheDocument();
+  });
+
+  it("closes the day drawer", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "HRA", start_at: "2026-09-05T10:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("2026-09-05, 1 event")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("2026-09-05, 1 event"));
+    expect(screen.getByText("HRA")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Close"));
+    expect(screen.queryByText("HRA")).not.toBeInTheDocument();
+  });
+
+  it("navigates months with prev/next buttons", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("Next month"));
+    await waitFor(() =>
+      expect(screen.getByText(/October 2026/)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText("Previous month"));
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+  });
+
+  it("shows the error message when the load fails", async () => {
+    const getOccurrences = vi.fn().mockRejectedValue(new Error("boom"));
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Failed to load occurrences")).toBeInTheDocument(),
+    );
+  });
+});

@@ -7,7 +7,12 @@
  * `GET /api/summary?month=YYYY-MM`. No React, no direct browser API access.
  */
 
-import type { EventCreate, EventRead, SummaryResponse } from "./eventTypes";
+import type {
+  EventCreate,
+  EventOccurrence,
+  EventRead,
+  SummaryResponse,
+} from "./eventTypes";
 
 /** A minimal fetch-compatible function (injected, not imported). */
 export type FetchLike = (
@@ -42,6 +47,7 @@ export interface ApiClient {
   getEvent(id: number): Promise<EventRead>;
   createEvent(payload: EventCreate): Promise<EventRead>;
   getSummary(month: string): Promise<SummaryResponse>;
+  getOccurrences(month: string): Promise<EventOccurrence[]>;
 }
 
 /**
@@ -87,6 +93,12 @@ export function createApiClient(
       return request<SummaryResponse>(
         `/api/summary?month=${encodeURIComponent(month)}`,
         "get summary",
+      );
+    },
+    async getOccurrences(month: string): Promise<EventOccurrence[]> {
+      return request<EventOccurrence[]>(
+        `/api/events/occurrences?month=${encodeURIComponent(month)}`,
+        "get occurrences",
       );
     },
   };

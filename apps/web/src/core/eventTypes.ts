@@ -94,3 +94,33 @@ export interface SummaryResponse {
   total: number;
   by_priority: Record<string, number>;
 }
+
+/**
+ * A single concrete event occurrence within a month, as returned by
+ * `GET /api/events/occurrences?month=YYYY-MM` (issue #27).
+ *
+ * Mirrors the API's `EventOccurrenceRead` schema: each entry is one concrete
+ * occurrence of an event falling in the requested month, carrying the fields
+ * the calendar grid needs to place it (title, priority, tag, rrule) plus
+ * `next_occurrence` for the day drawer.
+ */
+export interface EventOccurrence {
+  /** The owning event's id. */
+  event_id: number;
+  /** The event title. */
+  title: string;
+  /** The event priority (critical / medium / low). */
+  priority: EventPriority;
+  /** The event's first tag, for the tag badge, or null. */
+  tag: string | null;
+  /** The event's recurrence rule, or null for a one-time event. */
+  rrule: string | null;
+  /** ISO 8601 start timestamp of this occurrence. */
+  start_at: string;
+  /** Whether the event is all-day. */
+  all_day: boolean;
+  /** The event's IANA timezone. */
+  tz: string;
+  /** The next occurrence at/after the month, for the day drawer, or null. */
+  next_occurrence: string | null;
+}
