@@ -4,8 +4,10 @@ import { TimelineView } from "./ui/components/TimelineView";
 import { CalendarView } from "./ui/components/CalendarView";
 import { SummaryBar } from "./ui/components/SummaryBar";
 import { EventWizard } from "./ui/components/EventWizard";
+import { EventDrawer } from "./ui/components/EventDrawer";
 import { ServicesProvider } from "./ui/services/ServicesProvider";
 import { useEventWizard } from "./ui/viewModels/useEventWizard";
+import { useEventDrawer } from "./ui/viewModels/useEventDrawer";
 
 /**
  * App root.
@@ -17,6 +19,7 @@ import { useEventWizard } from "./ui/viewModels/useEventWizard";
 export default function App() {
   const [view, setView] = useState<AppView>("timeline");
   const wizard = useEventWizard();
+  const drawer = useEventDrawer();
 
   // Keyboard shortcut: `c` opens the create wizard.
   useEffect(() => {
@@ -46,11 +49,14 @@ export default function App() {
         }
       >
         {view === "timeline" ? (
-          <TimelineView onEventClick={wizard.openEdit} />
+          <TimelineView onEventClick={drawer.openDrawer} />
         ) : (
-          <CalendarView />
+          <CalendarView onEventClick={drawer.openFromOccurrence} />
         )}
       </AppShell>
+      {drawer.open && (
+        <EventDrawer drawer={drawer} onEdit={() => wizard.openEdit(drawer.event!)} />
+      )}
       {wizard.open && <EventWizard wizard={wizard} />}
     </ServicesProvider>
   );

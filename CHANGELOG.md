@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Event drawer with next occurrences + reminder preview (issue #38):** adds a
+  read-only event drawer that opens when an event is clicked (from the Timeline
+  or the Calendar's day drawer / agenda). It shows the event's title, priority,
+  tag, recurrence badge and notes, lists the event's next occurrences (fetched
+  via `apiClient.getOccurrences` and filtered/sorted by a new pure
+  `src/core/eventDrawer` `eventNextOccurrences`), and renders a reminder preview
+  (channels, offsets like `7d / 1d / 2h`, and remind-time-of-day) derived by a
+  new pure `reminderPreview`/`formatReminderOffsets` (100% Vitest-covered). A
+  thin `useEventDrawer` view model holds the selected event, fetches
+  occurrences, resolves a full event from a calendar occurrence via
+  `apiClient.getEvent`, and closes on Esc; a dumb `EventDrawer` component
+  renders it. The drawer closes via ✕/Esc and shows a clear empty state when no
+  event is selected, and offers an Edit action that opens the existing wizard.
+  Calendar occurrence rows now accept an optional `onEventClick` to open the
+  drawer.
+
 - **App-level keyboard-shortcut tests (issue #39):** adds a new
   `apps/web/tests/ui/App.test.tsx` that renders the app root and verifies the
   acceptance-criterion 6 behavior — pressing the `c` key opens the create
