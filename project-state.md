@@ -10,14 +10,16 @@ domain: models+migrations, recurrence expansion, CRUD+summary+seed), M3-T1
 (app shell + Timeline + Calendar month/week/agenda views), M3-T2 (summary
 bar + event drawer), and M3-T3 (3-step wizard + smart-input /parse +
 search/filter + dark/light + responsive + keyboard shortcuts — merged via
-#42/#50/#52/#53) are fully implemented and merged. The `Deploy to GitHub
-Pages` CI workflow still fails (Pages not enabled — need-owner #49); the `CI`
-workflow passes independently. The next planned slice is M3-T4 (component
-Showcase files + Playwright smoke) plus the start of M4 (reminder engine).
+#42/#50/#52/#53) are fully implemented and merged. GitHub Pages is now
+**enabled** (owner action, #49) — the `Deploy to GitHub Pages` workflow on
+`main` is green and the demo URL `https://antonlapshin.github.io/timeline/`
+returns HTTP 200 (issue #49 closed). The `CI` workflow passes independently.
+The next planned slice is M3-T4 (component Showcase files + Playwright smoke)
+plus the start of M4 (reminder engine).
 
-The `Deploy to GitHub Pages` CI workflow is **failing** because GitHub Pages is
-not enabled on the repo — documented as need-owner issue #49 (`pi:needs-human`).
-The `CI` workflow (build/lint/test/coverage) passes independently.
+The `Deploy to GitHub Pages` CI workflow is now **passing** — GitHub Pages is
+enabled (owner action) and the demo URL is live; issue #49 is closed. The `CI`
+workflow (build/lint/test/coverage) passes independently.
 Owner-gated need-owner issues: #5 (natalies-corner access) and #10 (voxtype)
 are **resolved and closed** — the owner cloned natalies-corner to
 `/home/monarch/ws/natalies-corner` (local reference), and voxtype 1.0.1 is
@@ -85,7 +87,7 @@ M1 (owner-in-the-loop):
 - [ ] #8 — Email decision for v1 (SMTP/Resend or skip) (pi:blocked, p2).
 
 Need-owner (blocked on owner input; do not block M3/M4 code work):
-- [ ] #49 — Enable GitHub Pages (Actions source) so the demo URL goes live (pi:needs-human; CI deploy workflow fails until enabled).
+- [x] #49 — Enable GitHub Pages (Actions source) so the demo URL goes live (resolved & closed; Pages enabled, deploy workflow green, demo URL HTTP 200).
 
 Further milestones (M4 reminder engine, M5 Telegram inbound/STT/AI, M6
 hardening/backups, M7 polish/docs) will be planned on later PM turns.
