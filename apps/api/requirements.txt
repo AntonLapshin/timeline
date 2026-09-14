@@ -5,6 +5,7 @@ pydantic>=2.7
 alembic>=1.13
 python-dateutil>=2.9
 apscheduler>=3.10,<4
+python-telegram-bot>=21,<22
 # tzdata for IANA zoneinfo on slim images
 
 

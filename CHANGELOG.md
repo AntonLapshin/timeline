@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Telegram outbound reminder sender with Ack/Snooze/Delete (issue #55):**
+  adds the Telegram outbound module in `apps/api/app/telegram_outbound.py`
+  (python-telegram-bot v21) that turns a due reminder from the M4-T1 scheduler
+  into a priority card with emoji, title, date/time, countdown and notes, plus
+  inline **Acknowledge** / **Snooze 1d** / **Delete** buttons. Button callbacks
+  are persisted to `DeliveryLog` (`acked`/`snoozed`/`deleted`), and Snooze
+  re-schedules the reminder one day later through APScheduler (distinct dedupe
+  key). A single-user allowlist is enforced via `TELEGRAM_USER_ID` (from local
+  `.env`, never committed) and fails closed; low-priority events are never
+  pushed. The scheduler job function (`make_telegram_job_func`) reuses the
+  scheduler's `deliver_reminder` so at-least-once semantics and the audit trail
+  are preserved. Pure helpers (`priority_emoji`, `should_push`,
+  `is_allowed_user`, `countdown_text`, `format_reminder_card`,
+  `callback_data`/`parse_callback_data`, `ack_delivery`, `snooze_delivery`,
+  `delete_delivery`, `handle_callback`) are unit-tested with a mocked bot (no
+  real network), bringing `app/telegram_outbound.py` to 100% coverage. New
+  `BOT_TOKEN`/`TELEGRAM_USER_ID` settings are loaded from `.env`.
+
 - **Persistent APScheduler jobstore + at-least-once reminder scheduling (issue #57):**
   adds the persistent reminder scheduler foundation in `apps/api/app/scheduler.py`
   using APScheduler with a SQLite-backed jobstore (WAL, under `./data`, gitignored)
