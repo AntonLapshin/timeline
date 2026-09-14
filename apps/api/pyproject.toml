@@ -10,6 +10,7 @@ dependencies = [
     "pydantic>=2.7",
     "alembic>=1.13",
     "python-dateutil>=2.9",
+    "apscheduler>=3.10,<4",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +35,11 @@ strict = true
 warn_unused_ignores = true
 show_error_codes = true
 files = ["app"]
+
+[[tool.mypy.overrides]]
+# APScheduler ships no type stubs; treat it as untyped (Any) rather than error.
+module = ["apscheduler.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

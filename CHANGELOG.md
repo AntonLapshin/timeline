@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Persistent APScheduler jobstore + at-least-once reminder scheduling (issue #57):**
+  adds the persistent reminder scheduler foundation in `apps/api/app/scheduler.py`
+  using APScheduler with a SQLite-backed jobstore (WAL, under `./data`, gitignored)
+  so the job queue survives app restarts. Reminder jobs are keyed by a dedupe key
+  `(event_id, occurrence_id, offset)` so the same reminder is never scheduled twice
+  across restarts; a reminder whose run time passed while the app was down is drained
+  to run immediately on startup (`drain_schedule`), and a failed delivery is recorded
+  in `DeliveryLog(status="failed")` and requeued rather than silently dropped
+  (`requeue_failed`, `with_retry`, `deliver_reminder`). The scheduler reads per-event
+  reminder config (`reminder_offsets`, `remind_time_of_day`) from the DB and schedules
+  jobs for upcoming occurrences. Pure helpers (`parse_offset`, `dedupe_key`,
+  `reminder_run_time`, `schedule_plan`, `with_retry`) are unit-tested in isolation;
+  pytest covers job persistence across a simulated restart, dedupe on identical
+  schedule, and at-least-once retry on failure. This is the scheduling foundation for
+  the Telegram outbound sender (M4-T2).
+
 - **Add missing tests for PR #50 (issue #51):** closes two non-blocking test
   gaps flagged by the Review Engineer on the search/filter work (#46/#50). Adds
   an `App.test.tsx` typing-guard case that fires `keyDown` with `/` and `c`
