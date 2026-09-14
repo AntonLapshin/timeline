@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   jobs for upcoming occurrences. Pure helpers (`parse_offset`, `dedupe_key`,
   `reminder_run_time`, `schedule_plan`, `with_retry`) are unit-tested in isolation;
   pytest covers job persistence across a simulated restart, dedupe on identical
-  schedule, and at-least-once retry on failure. This is the scheduling foundation for
+  schedule, at-least-once retry on failure, and the defensive skip of malformed
+  failed `DeliveryLog` rows with missing `occurrence_id`/`offset` (bringing
+  `app/scheduler.py` to 100% coverage). This is the scheduling foundation for
   the Telegram outbound sender (M4-T2).
 
 - **Add missing tests for PR #50 (issue #51):** closes two non-blocking test

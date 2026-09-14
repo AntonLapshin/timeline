@@ -602,3 +602,49 @@ def test_requeue_failed_skips_sent(
         assert jobs[0].id == dedupe_key(event.id, "occ-a", "1h")
     finally:
         _shutdown(scheduler)
+
+
+def test_requeue_failed_skips_missing_fields(
+    tmp_path: Path, session_factory: sessionmaker[Session]
+) -> None:
+    """Malformed failed logs (missing occurrence_id/offset) are skipped.
+
+    A failed DeliveryLog row with ``occurrence_id`` or ``offset`` set to None
+    cannot be requeued (its dedupe key is incomplete), so ``requeue_failed``
+    must skip it and schedule no job.
+    """
+    settings, _ = _make_db(tmp_path, "scheduler.db")
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.flush()
+        session.add(
+            DeliveryLog(
+                event_id=event.id,
+                occurrence_id=None,
+                offset="1h",
+                status="failed",
+            )
+        )
+        session.add(
+            DeliveryLog(
+                event_id=event.id,
+                occurrence_id="occ-a",
+                offset=None,
+                status="failed",
+            )
+        )
+        session.commit()
+
+    scheduler = build_scheduler(settings)
+    try:
+        requeued = requeue_failed(
+            scheduler,
+            session_factory,
+            job_func=_noop_job,
+            now=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+        assert requeued == 0
+        assert scheduler.get_jobs() == []
+    finally:
+        _shutdown(scheduler)
