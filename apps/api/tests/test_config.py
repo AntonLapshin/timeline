@@ -85,3 +85,44 @@ def test_quiet_hours_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     settings = Settings()
     assert settings.quiet_hours_start == "22:00"
     assert settings.quiet_hours_end == "08:00"
+
+
+# --- Telegram outbound settings (issue #55) ----------------------------------
+
+
+def test_telegram_settings_default_to_none() -> None:
+    """Without env vars the Telegram settings default to None (disabled)."""
+    settings = Settings(telegram_bot_token=None, telegram_user_id=None)
+    assert settings.telegram_bot_token is None
+    assert settings.telegram_user_id is None
+
+
+def test_telegram_settings_fall_back_to_none_when_env_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With BOT_TOKEN/TELEGRAM_USER_ID unset the _optional_env branch returns None."""
+    monkeypatch.delenv("BOT_TOKEN", raising=False)
+    monkeypatch.delenv("TELEGRAM_USER_ID", raising=False)
+    settings = Settings()
+    assert settings.telegram_bot_token is None
+    assert settings.telegram_user_id is None
+
+
+def test_telegram_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """BOT_TOKEN/TELEGRAM_USER_ID env vars are reflected on the settings."""
+    monkeypatch.setenv("BOT_TOKEN", "123:abc")
+    monkeypatch.setenv("TELEGRAM_USER_ID", "42")
+    settings = Settings()
+    assert settings.telegram_bot_token == "123:abc"
+    assert settings.telegram_user_id == "42"
+
+
+def test_telegram_settings_accept_blank_as_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Blank env values are treated as disabled (no Telegram outbound)."""
+    monkeypatch.setenv("BOT_TOKEN", "  ")
+    monkeypatch.setenv("TELEGRAM_USER_ID", "")
+    settings = Settings()
+    assert settings.telegram_bot_token is None
+    assert settings.telegram_user_id is None

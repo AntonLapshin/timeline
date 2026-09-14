@@ -68,6 +68,14 @@ class Settings:
     quiet_hours_end: str | None = field(
         default_factory=lambda: _optional_env("QUIET_END")
     )
+    #: Telegram bot token (from local .env BOT_TOKEN, never committed).
+    telegram_bot_token: str | None = field(
+        default_factory=lambda: _optional_env("BOT_TOKEN")
+    )
+    #: Numeric Telegram user id for the single-user allowlist.
+    telegram_user_id: str | None = field(
+        default_factory=lambda: _optional_env("TELEGRAM_USER_ID")
+    )
 
     @property
     def database_url(self) -> str:
