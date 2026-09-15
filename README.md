@@ -89,9 +89,72 @@ The API log is written to `./data/timeline.log` and bounded by the committed
 `RotatingFileHandler` (`TIMELINE_LOG_FILE` / `TIMELINE_LOG_MAX_BYTES` /
 `TIMELINE_LOG_BACKUP_COUNT`).
 
+#### Runbook — systemd daily-driver path (start / stop / logs / backup / restore / update)
+
+The native systemd `--user` path is the daily driver. Everything below assumes
+you installed `systemd/timeline.service` (and, for backups,
+`systemd/timeline-backup.service` + `systemd/timeline-backup.timer`) into
+`~/.config/systemd/user/` and edited the `USER` / clone / venv paths.
+
+**Start / stop / status:**
+
+```bash
+systemctl --user enable --now timeline.service   # enable + start (autostarts on login)
+systemctl --user start timeline                  # start (already enabled)
+systemctl --user stop timeline                   # stop
+systemctl --user restart timeline                # restart
+systemctl --user status timeline                 # status
+curl http://127.0.0.1:8123/healthz               # health probe
+```
+
+**Logs:**
+
+```bash
+journalctl --user -u timeline -f                 # follow API logs
+journalctl --user -u timeline-backup -f          # follow backup logs
+```
+
+**Backup (automatic nightly + manual):**
+
+A nightly backup runs at 02:00 via `systemd/timeline-backup.timer` (a missed
+run fires on next wake thanks to `Persistent=true`). It dumps the SQLite DB
+into `./backups/` (gitignored) under a timestamped name and keeps the newest
+`TIMELINE_BACKUP_KEEP` (default 30) — see `apps/api/app/backup.py`. To run one
+now, or list / inspect stored backups:
+
+```bash
+cd apps/api && . .venv/bin/activate
+python -m app.backup backup          # dump + rotate now
+python -m app.backup list            # list stored backups (newest first)
+systemctl --user list-timers timeline-backup   # next scheduled run
+```
+
+**Restore (one command):**
+
+Stop the app, then restore the newest (or a chosen) backup into the live DB:
+
+```bash
+systemctl --user stop timeline
+cd apps/api && . .venv/bin/activate
+python -m app.backup restore backups/timeline-20260915-020000.db   # one-command restore
+systemctl --user start timeline
+```
+
+Backups are verified round-trip (backup → restore → data intact) by the pytest
+suite (`apps/api/tests/test_backup.py`).
+
+**Update (pull + restart):**
+
+```bash
+cd <clone> && git pull
+cd apps/api && . .venv/bin/activate && pip install -r requirements.txt
+cd ../web && npm ci && npm run build
+systemctl --user restart timeline
+```
+
 Both paths read secrets from the local `.env` (gitignored) — never from
-committed files. See `systemd/timeline.service` and `docker-compose.yml` for
-details.
+committed files. See `systemd/timeline.service`, `systemd/timeline-backup.*`
+and `docker-compose.yml` for details.
 
 ---
 

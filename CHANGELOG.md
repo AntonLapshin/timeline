@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Nightly SQLite backups + rotation + one-command restore (issue #85, M6-T2):**
+  adds a pure, unit-tested backup module `apps/api/app/backup.py` that dumps the
+  SQLite DB (via SQLite's online backup API, WAL-safe) into `./backups/` under a
+  timestamped name and prunes old backups keeping the newest `TIMELINE_BACKUP_KEEP`
+  (default 30). A one-command CLI (`python -m app.backup backup|list|restore <file>`)
+  gives dump+rotate, listing, and restore; backup → restore → data-intact is
+  verified by a pytest round-trip test. Config gains `backups_dir` / `backup_keep`
+  (`TIMELINE_BACKUPS_DIR` / `TIMELINE_BACKUP_KEEP`). Nightly runs are driven by new
+  `systemd/timeline-backup.service` + `systemd/timeline-backup.timer` (02:00,
+  `Persistent=true` so a missed run fires on next wake). README gains a systemd
+  daily-driver runbook section (start/stop/logs/backup/restore/update). `./backups/`
+  is already gitignored. 21 new pytest cases; full suite passes with 100%
+  `src/core` coverage maintained.
+
 - **Boundary test for out-of-range draft index (issue #79, M9-T1):** adds a
   test for the `_handle_callback_query` guard `action.index >= len(pending.drafts)`
   in `apps/api/app/telegram_inbound.py`, which returns

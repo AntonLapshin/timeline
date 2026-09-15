@@ -46,6 +46,18 @@ class Settings:
     db_name: str = field(
         default_factory=lambda: os.getenv("TIMELINE_DB_NAME", "timeline.db")
     )
+    #: Directory for nightly SQLite backups (gitignored, default ./backups).
+    backups_dir: Path = field(
+        default_factory=lambda: Path(
+            os.getenv(
+                "TIMELINE_BACKUPS_DIR", str(_DEFAULT_DATA_DIR.parent / "backups")
+            )
+        )
+    )
+    #: Number of recent backups to keep when pruning (default 30, ~30 days).
+    backup_keep: int = field(
+        default_factory=lambda: int(os.getenv("TIMELINE_BACKUP_KEEP", "30"))
+    )
     #: Host to bind. Must stay loopback-only (no auth); refuse 0.0.0.0.
     host: str = field(default_factory=lambda: os.getenv("TIMELINE_HOST", "127.0.0.1"))
     #: Port to bind.
@@ -137,6 +149,11 @@ class Settings:
     def database_url(self) -> str:
         """SQLAlchemy database URL (SQLite, WAL-enabled)."""
         return f"sqlite:///{self.data_dir / self.db_name}"
+
+    @property
+    def db_path(self) -> Path:
+        """Absolute path to the SQLite database file."""
+        return self.data_dir / self.db_name
 
 
 def get_settings() -> Settings:

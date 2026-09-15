@@ -1,0 +1,27 @@
+# Timeline — nightly SQLite backup timer (issue #85, M6-T2).
+#
+# Triggers systemd/timeline-backup.service once per night at 02:00 local time.
+# Persistent=true means a missed run (machine asleep / off at 02:00) fires as
+# soon as the machine is next up, so backups are not silently skipped.
+#
+# Install (per-user):
+#
+#   cp systemd/timeline-backup.timer ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now timeline-backup.timer
+#
+# Inspect:
+#
+#   systemctl --user list-timers timeline-backup   # next/elapsed run
+#   systemctl --user status timeline-backup.timer
+
+[Unit]
+Description=Run the timeline nightly SQLite backup
+Requires=timeline-backup.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
