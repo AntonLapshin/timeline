@@ -450,9 +450,7 @@ def test_build_telegram_inbound_application_replies(
         session.commit()
 
     settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
-    app = build_telegram_inbound_application(
-        settings, session_factory, now=_now()
-    )
+    app = build_telegram_inbound_application(settings, session_factory, now=_now())
     assert app is not None
 
     # Grab the nested handler off the MessageHandler it is registered on.
