@@ -1,0 +1,23 @@
+# Timeline API — logrotate configuration (issue #77, M6-T1).
+#
+# Rotates the timeline API log so it never grows unbounded. Install by copying
+# to /etc/logrotate.d/timeline (root) or ~/.config/logrotate (user), adjusting
+# the path to your log location.
+#
+#   sudo cp systemd/timeline.logrotate /etc/logrotate.d/timeline
+#   sudo logrotate -d /etc/logrotate.d/timeline   # dry-run to verify
+#
+# The service logs to ./data/timeline.log by default (see settings.log_file);
+# rotation keeps 5 rotated files of up to 5 MB each, compresses old ones and
+# does not fail if the log is missing.
+
+/home/USER/timeline/data/timeline.log {
+    daily
+    rotate 5
+    maxsize 5M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

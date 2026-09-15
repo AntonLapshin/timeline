@@ -39,7 +39,7 @@ make migrate         # alembic upgrade head (creates ./data/timeline.db)
 make dev             # uvicorn on 127.0.0.1:8123
 ```
 
-Health probe: `GET http://127.0.0.1:8123/healthz` → `{"status": "ok"}`.
+Health probe: `GET http://127.0.0.1:8123/healthz` → `{"status": "ok", "uptime_seconds": N}`.
 
 ### Secrets & data (public repo hygiene)
 
@@ -67,18 +67,27 @@ milestones. `docker compose down` stops the stack; data persists in the
 `timeline-data` volume (`docker compose down -v` removes it).
 
 **2. systemd --user service (daily driver).** Native run that autostarts on
-login and restarts on failure. The example unit runs the API bound to
-`127.0.0.1:8123`:
+login and restarts on failure (`Restart=on-failure` + `RestartSec=5`). The
+example unit runs the API bound to `127.0.0.1:8123` and refuses to start if
+the bind host is ever changed to a non-loopback address (fail-closed guard):
 
 ```bash
 mkdir -p ~/.config/systemd/user
 cp systemd/timeline.service ~/.config/systemd/user/
 # edit the paths (USER, clone location, venv) in the copied unit
 systemctl --user daemon-reload
-systemctl --user enable --now timeline.service
-systemctl --user status timeline        # status
-curl http://127.0.0.1:8123/healthz      # health probe
+systemctl --user enable --now timeline.service   # enable + start (autostarts on login)
+systemctl --user start timeline                  # start (already enabled)
+systemctl --user stop timeline                   # stop
+systemctl --user status timeline                 # status
+journalctl --user -u timeline -f                 # follow logs
+curl http://127.0.0.1:8123/healthz               # health probe
 ```
+
+The API log is written to `./data/timeline.log` and bounded by the committed
+`systemd/timeline.logrotate` config (5 MB × 5 files, compressed) and a Python
+`RotatingFileHandler` (`TIMELINE_LOG_FILE` / `TIMELINE_LOG_MAX_BYTES` /
+`TIMELINE_LOG_BACKUP_COUNT`).
 
 Both paths read secrets from the local `.env` (gitignored) — never from
 committed files. See `systemd/timeline.service` and `docker-compose.yml` for

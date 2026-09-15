@@ -2,25 +2,37 @@
 #
 # Example unit for running the timeline API (FastAPI) as the daily driver,
 # bound to loopback only (127.0.0.1:8123) because the app has no auth. It must
-# NEVER bind to 0.0.0.0 or a LAN/internet interface.
+# NEVER bind to 0.0.0.0 or a LAN/internet interface — the app enforces this at
+# startup with a fail-closed guard and refuses to start otherwise.
 #
 # Install (per-user, autostarts on login):
 #
 #   mkdir -p ~/.config/systemd/user
 #   cp systemd/timeline.service ~/.config/systemd/user/
+#   # edit the paths (USER, clone location, venv) in the copied unit
 #   systemctl --user daemon-reload
 #   systemctl --user enable --now timeline.service
 #
-# Check status / logs:
+# Manage:
 #
-#   systemctl --user status timeline
-#   journalctl --user -u timeline -f
+#   systemctl --user enable --now timeline.service   # enable + start (autostart on login)
+#   systemctl --user start timeline                  # start (already enabled)
+#   systemctl --user stop timeline                   # stop
+#   systemctl --user restart timeline                # restart
+#   systemctl --user status timeline                 # status (running/active)
+#   systemctl --user disable timeline                # stop autostarting on login
 #
-# Health probe: curl http://127.0.0.1:8123/healthz
+# Logs / health:
+#
+#   journalctl --user -u timeline -f                  # follow logs
+#   curl http://127.0.0.1:8123/healthz                # {"status":"ok","uptime_seconds":N}
 #
 # NOTE: paths below are examples — adjust WorkingDirectory and ExecStart to
 # your clone location and Python environment. The SQLite DB lives under
-# ./data (gitignored) and secrets come from a local .env (gitignored).
+# ./data (gitignored) and secrets come from a local .env (gitignored). The
+# API log is written to ./data/timeline.log and rotated by the committed
+# logrotate config (systemd/timeline.logrotate); set TIMELINE_LOG_FILE to
+# disable file logging (stderr).
 
 [Unit]
 Description=Timeline local-first schedule API (loopback only)
@@ -28,12 +40,16 @@ After=network.target
 
 [Service]
 Type=simple
-# Loopback bind only — no auth. Never change --host to 0.0.0.0.
+# Loopback bind only — no auth. Never change --host to 0.0.0.0; the startup
+# guard refuses non-loopback binds.
 ExecStart=/home/USER/timeline/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8123
 WorkingDirectory=/home/USER/timeline/apps/api
 Environment=TIMELINE_HOST=127.0.0.1
 Environment=TIMELINE_PORT=8123
 Environment=TIMELINE_DATA_DIR=/home/USER/timeline/data
+Environment=TIMELINE_LOG_FILE=/home/USER/timeline/data/timeline.log
+Environment=TIMELINE_LOG_MAX_BYTES=5242880
+Environment=TIMELINE_LOG_BACKUP_COUNT=5
 Restart=on-failure
 RestartSec=5
 # Harden the service (loopback-only network; read-only filesystem except data).
