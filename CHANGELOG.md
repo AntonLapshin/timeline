@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Parse eval set (20 samples) + redacted logs by default (issue #76, M5-T4B):**
+  adds a committed eval harness for the `POST /api/events/parse` pipeline —
+  `apps/api/tests/eval/` holds 20 representative sample inputs with expected
+  structured drafts (one-time future, recurrent daily/weekly/monthly/
+  quarterly/yearly, “next June” relative-date resolution, maybe/series/idea →
+  low priority, ambiguous → medium default, needs_clarification, multi-event in
+  one message, tz/relative-date resolution, channels/tags, all-day, and the
+  critical-financial draft guard). A pytest runner feeds each sample through the
+  pure `llm_parse.parse_events` with an injected fake LLM client (no live
+  network) and asserts the expected draft fields (title, start_at, rrule,
+  priority, type, channels, tags, needs_clarification); it runs as part of the
+  normal suite. Logging is redacted by default: a new pure `app.redaction`
+  module provides content-free references (length + short hash for text/prompt
+  bodies, basename-only for audio/voice file paths), and `llm_parse.parse_events`
+  logs only a redacted reference — never raw message text, parsed content, or
+  prompt bodies. Tests capture logs during a parse call and assert no raw text
+  appears. 100% `src/core` coverage maintained.
+
 - **Omarchy hardening: loopback bind guard, systemd enable, log rotation,
   /healthz (issue #77, M6-T1):** enforces a fail-closed loopback-only bind —
   a new pure `app.bind_guard` module rejects any non-loopback host
