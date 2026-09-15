@@ -4,19 +4,18 @@
 
 ## Status
 
-**In progress (M4 — Reminder engine + Telegram outbound).**
+**In progress (M5 — Telegram inbound + local STT + AI parsing).**
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
-merged, including M3-T4 (component Showcase gallery + Playwright smoke test,
-merged via #56/#60). M4-T1 (persistent APScheduler jobstore + at-least-once
-scheduling, merged via #57/#58) and M4-T2 (Telegram outbound sender with
-Ack/Snooze/Delete buttons, merged via #55/#59) are done. The next slice is
-M4-T3 (per-event reminder config + quiet-hours digest + email flag +
-delivery-log UI + tests). GitHub Pages is **enabled** (owner action, #49) —
-the `Deploy to GitHub Pages` workflow on `main` is green and the demo URL
-`https://antonlapshin.github.io/timeline/` returns HTTP 200. The `CI`
-workflow passes independently.
+merged. M4 (reminder engine + Telegram outbound) is **fully done**: M4-T1
+(persistent APScheduler jobstore, #57/#58), M4-T2 (Telegram outbound sender
+with Ack/Snooze/Delete, #55/#59), and M4-T3 (per-event reminder config +
+quiet-hours digest + email feature-flag sender + delivery-log/preview UI +
+tests) merged via #61/#62/#63/#64/#65/#67/#68. GitHub Pages is **enabled**
+(owner action, #49) — the `Deploy to GitHub Pages` workflow on `main` is
+green and the demo URL `https://antonlapshin.github.io/timeline/` returns
+HTTP 200. The `CI` workflow passes independently.
 
 The `Deploy to GitHub Pages` CI workflow is now **passing** — GitHub Pages is
 enabled (owner action) and the demo URL is live; issue #49 is closed. The `CI`
@@ -77,11 +76,16 @@ M3 — remaining slice (merged this cycle):
 M4 — reminder engine (merged this cycle):
 - [x] #57 #M4-T1 — APScheduler persistent jobstore + at-least-once scheduling (merged via #58).
 - [x] #55 #M4-T2 — Telegram outbound reminder sender with Ack/Snooze/Delete buttons (merged via #59).
+- [x] #62 #M4-T3A — Wire quiet-hours + per-event reminder config into scheduler delivery (merged via #64).
+- [x] #61 #M4-T3B — Email reminder sender behind feature flag (merged via #65).
+- [x] #63 #M4-T3C — Delivery log + reminder preview UI in web app (merged via #67).
+- [x] #66 — Add missing test for telegram_outbound event-None branch (merged via #68).
 
-M4 — remaining slice (planned this turn, `pi:ready`):
-- [ ] #62 #M4-T3A — Wire quiet-hours + per-event reminder config into scheduler delivery (pi:ready, p1).
-- [ ] #61 #M4-T3B — Email reminder sender behind feature flag (pi:ready, p2).
-- [ ] #63 #M4-T3C — Delivery log + reminder preview UI in web app (pi:ready, p2).
+M5 — Telegram inbound + STT + AI parsing (planned this turn, `pi:ready`):
+- [ ] #69 #M5-T1 — Telegram inbound bot: DM-only /add /today /upcoming /low /ask (pi:ready, p1).
+- [ ] #70 #M5-T3 — POST /api/events/parse: JoinGonka OpenAI-compatible AI parsing (pi:ready, p1).
+- [ ] #71 #M5-T2 — Local STT: Telegram voice → whisper.cpp, 2-min cap, no audio leaves machine (pi:ready, p2).
+- [ ] #M5-T4 — Draft Save/Edit/Discard via Telegram buttons; web smart-input reuses endpoint; eval set of 20 samples; redacted logs (planned on a later PM turn).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).
@@ -94,8 +98,9 @@ M1 (owner-in-the-loop):
 Need-owner (blocked on owner input; do not block M3/M4 code work):
 - [x] #49 — Enable GitHub Pages (Actions source) so the demo URL goes live (resolved & closed; Pages enabled, deploy workflow green, demo URL HTTP 200).
 
-Further milestones (M4 reminder engine, M5 Telegram inbound/STT/AI, M6
-hardening/backups, M7 polish/docs) will be planned on later PM turns.
+Further milestones (M5 Telegram inbound/STT/AI, M6 hardening/backups, M7
+polish/docs) — M5 batch #69/#70/#71 planned this turn (`pi:ready`); remaining
+M5-T4 and M6/M7 will be planned on later PM turns.
 
 ## Changelog (CHANGELOG.md)
 

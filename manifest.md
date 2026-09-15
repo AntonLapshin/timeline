@@ -135,7 +135,7 @@ A personal, local-first global schedule that remembers everything: capture one-t
 ### M4 — Reminder engine + Telegram outbound
 - [x] M4-T1 — APScheduler persistent jobstore on SQLite; dedupe key (event_id, occurrence_id, offset); at-least-once delivery; queue survives restart. (merged via #57/#58)
 - [x] M4-T2 — Telegram outbound sender (python-telegram-bot v21, polling): priority card + Acknowledge/Snooze 1d/Delete buttons; single-user allowlist TELEGRAM_USER_ID. (merged via #55/#59)
-- [ ] M4-T3 — Per-event reminder config (channels, offsets, remind_time_of_day, repeat_until_ack, snooze_allowed, quiet_hours → morning digest); low priority sends nothing; email sender behind feature flag; reminder preview + delivery log UI; tests (T-1m test offset with Ack/Snooze).
+- [x] M4-T3 — Per-event reminder config (channels, offsets, remind_time_of_day, repeat_until_ack, snooze_allowed, quiet_hours → morning digest); low priority sends nothing; email sender behind feature flag; reminder preview + delivery log UI; tests (T-1m test offset with Ack/Snooze). (merged via #61/#62/#63/#64/#65/#67/#68)
 
 ### M5 — Telegram inbound + local STT + AI parsing
 - [ ] M5-T1 — Bot polling, DM-only, single-user allowlist; commands /add, /today, /upcoming [7d|30d], /low, /ask; ignores group/channel noise.
