@@ -1,0 +1,37 @@
+# Timeline — nightly SQLite backup service (issue #85, M6-T2).
+#
+# One-shot unit that dumps the SQLite DB into ./backups and prunes old backups
+# (keeps the newest TIMELINE_BACKUP_KEEP, default 30). Driven by the paired
+# systemd/timeline-backup.timer. Runs the pure backup module's CLI:
+#
+#   python -m app.backup backup
+#
+# Install (per-user, alongside timeline.service):
+#
+#   cp systemd/timeline-backup.service systemd/timeline-backup.timer \
+#       ~/.config/systemd/user/
+#   # edit the paths (USER, clone location, venv) in the copied units
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now timeline-backup.timer
+#
+# Manage / logs:
+#
+#   systemctl --user start timeline-backup.service   # run one backup now
+#   systemctl --user list-timers timeline-backup     # next run time
+#   journalctl --user -u timeline-backup -f          # follow backup logs
+#
+# NOTE: paths below are examples — adjust WorkingDirectory and ExecStart to
+# your clone location and Python environment. The SQLite DB lives under
+# ./data (gitignored) and backups are written to ./backups (gitignored).
+
+[Unit]
+Description=Timeline nightly SQLite backup (dump + rotation)
+After=timeline.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/USER/timeline/.venv/bin/python -m app.backup backup
+WorkingDirectory=/home/USER/timeline/apps/api
+Environment=TIMELINE_DATA_DIR=/home/USER/timeline/data
+Environment=TIMELINE_BACKUPS_DIR=/home/USER/timeline/backups
+Environment=TIMELINE_BACKUP_KEEP=30
