@@ -105,6 +105,21 @@ class Settings:
     llm_api_key: str | None = field(
         default_factory=lambda: _optional_env("LLM_API_KEY")
     )
+    #: Path to the local voxtype binary used for whisper.cpp transcription
+    #: (issue #71). Defaults to ``voxtype`` on PATH; points at the local install
+    #: when it lives elsewhere (e.g. the natalies-corner voxtype install).
+    stt_voxtype_path: str = field(
+        default_factory=lambda: os.getenv("STT_VOXTYPE_PATH", "voxtype")
+    )
+    #: Local whisper model path for STT. Empty ⇒ let voxtype use its installed
+    #: default model (issue #71).
+    stt_model_path: str | None = field(
+        default_factory=lambda: _optional_env("STT_MODEL_PATH")
+    )
+    #: Maximum voice-message duration in seconds (2-minute cap, issue #71).
+    stt_max_seconds: float = field(
+        default_factory=lambda: float(os.getenv("STT_MAX_SECONDS", "120"))
+    )
 
     @property
     def database_url(self) -> str:
