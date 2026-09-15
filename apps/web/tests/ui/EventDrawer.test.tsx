@@ -57,6 +57,9 @@ function drawerState(overrides: Partial<EventDrawerState> = {}): EventDrawerStat
       hasReminders: true,
     },
     occurrences: [],
+    deliveriesLoading: false,
+    deliveriesError: null,
+    deliveries: [],
     openDrawer: vi.fn(),
     openFromOccurrence: vi.fn(),
     close: vi.fn(),
@@ -169,6 +172,58 @@ describe("EventDrawer", () => {
     );
     render(<EventDrawer drawer={useEventDrawerMock()} />);
     expect(screen.getByText("Failed to load occurrences")).toBeInTheDocument();
+  });
+
+  it("renders the delivery log rows with status, time and detail", () => {
+    useEventDrawerMock.mockReturnValue(
+      drawerState({
+        deliveries: [
+          {
+            log: {
+              id: 2,
+              event_id: 3,
+              occurrence_id: "occ-2",
+              offset: "1d",
+              status: "acked",
+              scheduled_at: "2026-09-05T09:00:00",
+              sent_at: "2026-09-05T09:00:00",
+              error: null,
+              created_at: "2026-09-05T09:00:00",
+              updated_at: "2026-09-05T09:00:00",
+            },
+            statusLabel: "Acknowledged",
+            statusStyle: { color: "text-sky-700 bg-sky-50 border-sky-200", icon: "☑" },
+            detailLabel: "1d before · occ-2",
+            timeLabel: "Sep 5, 9:00 AM",
+          },
+        ],
+      }),
+    );
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByText("Delivery log")).toBeInTheDocument();
+    expect(screen.getByText("Acknowledged")).toBeInTheDocument();
+    expect(screen.getByText("Sep 5, 9:00 AM")).toBeInTheDocument();
+    expect(screen.getByText("1d before · occ-2")).toBeInTheDocument();
+  });
+
+  it("shows a no-deliveries message when the delivery log is empty", () => {
+    useEventDrawerMock.mockReturnValue(drawerState());
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByText(/No deliveries yet/)).toBeInTheDocument();
+  });
+
+  it("shows a loading state while the delivery log loads", () => {
+    useEventDrawerMock.mockReturnValue(drawerState({ deliveriesLoading: true }));
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByText(/Loading delivery log/)).toBeInTheDocument();
+  });
+
+  it("shows an error when the delivery log fails to load", () => {
+    useEventDrawerMock.mockReturnValue(
+      drawerState({ deliveriesError: "Failed to load delivery log" }),
+    );
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByText("Failed to load delivery log")).toBeInTheDocument();
   });
 
   it("calls close when the close button is clicked", () => {

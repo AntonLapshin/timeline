@@ -8,10 +8,14 @@ import {
 import { toOccurrenceRow, type OccurrenceRow } from "../../core/calendar";
 import { monthKey } from "../../core/calendar";
 import { parseIso } from "../../core/dateFmt";
-import type { EventOccurrence, EventRead } from "../../core/eventTypes";
+import { deliveryLogRows, type DeliveryLogRow } from "../../core/deliveryLog";
+import type { DeliveryLog, EventOccurrence, EventRead } from "../../core/eventTypes";
 
 /** The maximum number of next occurrences shown in the drawer. */
 export const NEXT_OCCURRENCE_LIMIT = 5;
+
+/** The maximum number of delivery-log rows shown in the drawer. */
+export const DELIVERY_LOG_LIMIT = 8;
 
 /** A next-occurrence row: the raw occurrence plus its derived display row. */
 export interface DrawerOccurrence {
@@ -35,6 +39,12 @@ export interface EventDrawerState {
   preview: ReminderPreview | null;
   /** The event's next occurrences (sorted, limited). */
   occurrences: DrawerOccurrence[];
+  /** Whether the delivery-log data is still loading. */
+  deliveriesLoading: boolean;
+  /** A human error message for the delivery log, or null. */
+  deliveriesError: string | null;
+  /** The event's delivery-log rows (newest-first, limited). */
+  deliveries: DeliveryLogRow[];
   /** Open the drawer for a given event. */
   openDrawer: (event: EventRead) => void;
   /** Open the drawer for an event occurrence (fetches the full event). */
@@ -57,6 +67,9 @@ export function useEventDrawer(): EventDrawerState {
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deliveriesRaw, setDeliveriesRaw] = useState<DeliveryLog[]>([]);
+  const [deliveriesLoading, setDeliveriesLoading] = useState(false);
+  const [deliveriesError, setDeliveriesError] = useState<string | null>(null);
 
   // The month whose occurrences we fetch: the selected event's start month.
   const month = useMemo(() => {
@@ -93,6 +106,33 @@ export function useEventDrawer(): EventDrawerState {
     };
   }, [apiClient, month]);
 
+  useEffect(() => {
+    if (!event) {
+      setDeliveriesRaw([]);
+      setDeliveriesLoading(false);
+      setDeliveriesError(null);
+      return;
+    }
+    let cancelled = false;
+    setDeliveriesLoading(true);
+    setDeliveriesError(null);
+    apiClient
+      .getEventDeliveries(event.id)
+      .then((list) => {
+        if (cancelled) return;
+        setDeliveriesRaw(list);
+      })
+      .catch(() => {
+        if (!cancelled) setDeliveriesError("Failed to load delivery log");
+      })
+      .finally(() => {
+        if (!cancelled) setDeliveriesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiClient, event]);
+
   const openDrawer = useCallback((selected: EventRead) => {
     setEvent(selected);
     setError(null);
@@ -115,6 +155,8 @@ export function useEventDrawer(): EventDrawerState {
     setEvent(null);
     setOccurrences([]);
     setError(null);
+    setDeliveriesRaw([]);
+    setDeliveriesError(null);
   }, []);
 
   // Esc closes the drawer.
@@ -143,6 +185,11 @@ export function useEventDrawer(): EventDrawerState {
     [nextOccurrences],
   );
 
+  const deliveries = useMemo(
+    () => deliveryLogRows(deliveriesRaw).slice(0, DELIVERY_LOG_LIMIT),
+    [deliveriesRaw],
+  );
+
   return {
     event,
     open: event !== null,
@@ -150,6 +197,9 @@ export function useEventDrawer(): EventDrawerState {
     error,
     preview,
     occurrences: drawerOccurrences,
+    deliveriesLoading,
+    deliveriesError,
+    deliveries,
     openDrawer,
     openFromOccurrence,
     close,

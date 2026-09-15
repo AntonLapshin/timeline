@@ -26,7 +26,16 @@ export interface EventDrawerProps {
  * the view model). No business logic lives here.
  */
 export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
-  const { event, loading, error, preview, occurrences } = drawer;
+  const {
+    event,
+    loading,
+    error,
+    preview,
+    occurrences,
+    deliveries,
+    deliveriesLoading,
+    deliveriesError,
+  } = drawer;
 
   if (!event) {
     return (
@@ -154,6 +163,46 @@ export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
                     {row.nextOccurrenceLabel}
                   </div>
                 )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+        Delivery log
+      </h3>
+      {deliveriesError ? (
+        <p className="text-sm text-red-600 dark:text-red-400">{deliveriesError}</p>
+      ) : deliveriesLoading ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading delivery log…</p>
+      ) : deliveries.length === 0 ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">No deliveries yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {deliveries.map((row) => (
+            <li
+              key={row.log.id}
+              className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/40"
+            >
+              <span
+                aria-hidden
+                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${row.statusStyle.color}`}
+              >
+                {row.statusStyle.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {row.statusLabel}
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {row.timeLabel}
+                  </span>
+                </div>
+                <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {row.detailLabel}
+                </div>
               </div>
             </li>
           ))}

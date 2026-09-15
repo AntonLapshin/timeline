@@ -53,6 +53,7 @@ describe("useEventWizard", () => {
         getEvent: vi.fn(),
         getSummary: vi.fn(),
         getOccurrences: vi.fn(),
+        getEventDeliveries: vi.fn(),
       },
       llmParser: {},
     });
@@ -156,6 +157,7 @@ describe("useEventWizard", () => {
         getEvent: vi.fn(),
         getSummary: vi.fn(),
         getOccurrences: vi.fn(),
+        getEventDeliveries: vi.fn(),
       },
       llmParser: {},
     });
@@ -180,6 +182,7 @@ describe("useEventWizard", () => {
         getEvent: vi.fn(),
         getSummary: vi.fn(),
         getOccurrences: vi.fn(),
+        getEventDeliveries: vi.fn(),
       },
       llmParser: {},
     });
@@ -202,6 +205,7 @@ describe("useEventWizard", () => {
         getEvent: vi.fn(),
         getSummary: vi.fn(),
         getOccurrences: vi.fn(),
+        getEventDeliveries: vi.fn(),
       },
       llmParser: {},
     });
@@ -224,6 +228,7 @@ describe("useEventWizard", () => {
         getEvent: vi.fn(),
         getSummary: vi.fn(),
         getOccurrences: vi.fn(),
+        getEventDeliveries: vi.fn(),
       },
       llmParser: {},
     });

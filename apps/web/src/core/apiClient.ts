@@ -8,6 +8,7 @@
  */
 
 import type {
+  DeliveryLog,
   EventCreate,
   EventOccurrence,
   EventRead,
@@ -50,6 +51,7 @@ export interface ApiClient {
   updateEvent(id: number, payload: EventUpdate): Promise<EventRead>;
   getSummary(month: string): Promise<SummaryResponse>;
   getOccurrences(month: string): Promise<EventOccurrence[]>;
+  getEventDeliveries(id: number): Promise<DeliveryLog[]>;
 }
 
 /**
@@ -107,6 +109,12 @@ export function createApiClient(
       return request<EventOccurrence[]>(
         `/api/events/occurrences?month=${encodeURIComponent(month)}`,
         "get occurrences",
+      );
+    },
+    async getEventDeliveries(id: number): Promise<DeliveryLog[]> {
+      return request<DeliveryLog[]>(
+        `/api/events/${id}/deliveries`,
+        "get event deliveries",
       );
     },
   };

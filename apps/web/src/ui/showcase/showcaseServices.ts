@@ -12,6 +12,7 @@ import type { ApiClient } from "../../core/apiClient";
 import type { LlmParser } from "../../core/llmParse";
 import type { Services } from "../services/context";
 import type {
+  DeliveryLog,
   EventOccurrence,
   EventRead,
   SummaryResponse,
@@ -20,6 +21,7 @@ import {
   SHOWCASE_EVENTS,
   SHOWCASE_OCCURRENCES,
   SHOWCASE_SUMMARY,
+  SHOWCASE_DELIVERIES,
 } from "./showcaseData";
 
 /**
@@ -49,6 +51,8 @@ function createShowcaseApiClient(
       : scenario === "empty"
         ? { month: "2026-09", total: 0, by_priority: {} }
         : null;
+  const deliveries: DeliveryLog[] | null =
+    scenario === "populated" ? SHOWCASE_DELIVERIES : scenario === "empty" ? [] : null;
 
   return {
     listEvents: () =>
@@ -70,6 +74,10 @@ function createShowcaseApiClient(
       occurrences === null
         ? reject()
         : Promise.resolve(occurrences as EventOccurrence[]),
+    getEventDeliveries: () =>
+      deliveries === null
+        ? reject()
+        : Promise.resolve(deliveries as DeliveryLog[]),
   };
 }
 

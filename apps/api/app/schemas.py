@@ -139,6 +139,29 @@ class SummaryResponse(BaseModel):
     by_priority: dict[str, int]
 
 
+class DeliveryLogRead(BaseModel):
+    """A single reminder-delivery audit row as returned by the API (issue #63).
+
+    Mirrors the ``DeliveryLog`` ORM model so the web app can render the delivery
+    log for an event: which occurrence/offset was delivered, its status
+    (``scheduled`` / ``sent`` / ``failed`` / ``acked`` / ``snoozed`` /
+    ``deleted``) and the relevant timestamps.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    event_id: int
+    occurrence_id: str | None = None
+    offset: str | None = None
+    status: str
+    scheduled_at: datetime | None = None
+    sent_at: datetime | None = None
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class EventOccurrenceRead(BaseModel):
     """A single concrete event occurrence within a month (issue #27).
 

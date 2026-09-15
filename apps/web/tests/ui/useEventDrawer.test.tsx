@@ -68,6 +68,7 @@ describe("useEventDrawer", () => {
         createEvent: vi.fn(),
         updateEvent: vi.fn(),
         getSummary: vi.fn(),
+        getEventDeliveries: vi.fn().mockResolvedValue([]),
       },
       llmParser: {},
     });
@@ -105,6 +106,7 @@ describe("useEventDrawer", () => {
         createEvent: vi.fn(),
         updateEvent: vi.fn(),
         getSummary: vi.fn(),
+        getEventDeliveries: vi.fn().mockResolvedValue([]),
       },
       llmParser: {},
     });
@@ -127,6 +129,7 @@ describe("useEventDrawer", () => {
         createEvent: vi.fn(),
         updateEvent: vi.fn(),
         getSummary: vi.fn(),
+        getEventDeliveries: vi.fn().mockResolvedValue([]),
       },
       llmParser: {},
     });
@@ -134,6 +137,74 @@ describe("useEventDrawer", () => {
     act(() => result.current.openDrawer(sampleEvent()));
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe("Failed to load occurrences");
+  });
+
+  it("fetches and derives the event's delivery log", async () => {
+    const getEventDeliveries = vi.fn().mockResolvedValue([
+      {
+        id: 2,
+        event_id: 3,
+        occurrence_id: "occ-2",
+        offset: "1d",
+        status: "acked",
+        scheduled_at: "2026-09-05T09:00:00",
+        sent_at: "2026-09-05T09:00:00",
+        error: null,
+        created_at: "2026-09-05T09:00:00",
+        updated_at: "2026-09-05T09:00:00",
+      },
+      {
+        id: 1,
+        event_id: 3,
+        occurrence_id: "occ-1",
+        offset: "1d",
+        status: "sent",
+        scheduled_at: "2026-09-01T09:00:00",
+        sent_at: "2026-09-01T09:00:00",
+        error: null,
+        created_at: "2026-09-01T09:00:00",
+        updated_at: "2026-09-01T09:00:00",
+      },
+    ]);
+    useServicesMock.mockReturnValue({
+      apiClient: {
+        getOccurrences: vi.fn().mockResolvedValue([]),
+        getEventDeliveries,
+        listEvents: vi.fn(),
+        getEvent: vi.fn(),
+        createEvent: vi.fn(),
+        updateEvent: vi.fn(),
+        getSummary: vi.fn(),
+      },
+      llmParser: {},
+    });
+    const { result } = renderHook(() => useEventDrawer());
+    act(() => result.current.openDrawer(sampleEvent()));
+    expect(getEventDeliveries).toHaveBeenCalledWith(3);
+    await waitFor(() => expect(result.current.deliveriesLoading).toBe(false));
+    // Newest first, derived into display rows.
+    expect(result.current.deliveries.map((d) => d.log.id)).toEqual([2, 1]);
+    expect(result.current.deliveries[0].statusLabel).toBe("Acknowledged");
+    expect(result.current.deliveries[1].statusLabel).toBe("Sent");
+  });
+
+  it("reports an error when the delivery log fails to load", async () => {
+    useServicesMock.mockReturnValue({
+      apiClient: {
+        getOccurrences: vi.fn().mockResolvedValue([]),
+        getEventDeliveries: vi.fn().mockRejectedValue(new Error("boom")),
+        listEvents: vi.fn(),
+        getEvent: vi.fn(),
+        createEvent: vi.fn(),
+        updateEvent: vi.fn(),
+        getSummary: vi.fn(),
+      },
+      llmParser: {},
+    });
+    const { result } = renderHook(() => useEventDrawer());
+    act(() => result.current.openDrawer(sampleEvent()));
+    await waitFor(() => expect(result.current.deliveriesLoading).toBe(false));
+    expect(result.current.deliveriesError).toBe("Failed to load delivery log");
   });
 
   it("close clears the selected event and occurrences", async () => {
@@ -166,6 +237,7 @@ describe("useEventDrawer", () => {
         createEvent: vi.fn(),
         updateEvent: vi.fn(),
         getSummary: vi.fn(),
+        getEventDeliveries: vi.fn().mockResolvedValue([]),
       },
       llmParser: {},
     });
@@ -190,6 +262,7 @@ describe("useEventDrawer", () => {
         createEvent: vi.fn(),
         updateEvent: vi.fn(),
         getSummary: vi.fn(),
+        getEventDeliveries: vi.fn().mockResolvedValue([]),
       },
       llmParser: {},
     });

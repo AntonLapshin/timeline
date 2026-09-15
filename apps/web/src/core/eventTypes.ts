@@ -115,8 +115,7 @@ export interface SummaryResponse {
  */
 export interface EventOccurrence {
   /** The owning event's id. */
-  event_id: number;
-  /** The event title. */
+  event_id: number;  /** The event title. */
   title: string;
   /** The event priority (critical / medium / low). */
   priority: EventPriority;
@@ -132,4 +131,35 @@ export interface EventOccurrence {
   tz: string;
   /** The next occurrence at/after the month, for the day drawer, or null. */
   next_occurrence: string | null;
+}
+
+/**
+ * A single reminder-delivery audit row, as returned by
+ * `GET /api/events/{id}/deliveries` (issue #63).
+ *
+ * Mirrors the API's `DeliveryLogRead` schema: which occurrence/offset was
+ * delivered, its status (scheduled / sent / failed / acked / snoozed /
+ * deleted) and the relevant timestamps.
+ */
+export interface DeliveryLog {
+  /** The delivery-log row id. */
+  id: number;
+  /** The owning event's id. */
+  event_id: number;
+  /** The concrete occurrence id the reminder targeted, or null. */
+  occurrence_id: string | null;
+  /** The reminder offset (e.g. "1d", "2h"), or null. */
+  offset: string | null;
+  /** The delivery status (scheduled / sent / failed / acked / snoozed / deleted). */
+  status: string;
+  /** When the reminder was scheduled to run, or null. */
+  scheduled_at: string | null;
+  /** When the reminder was actually sent, or null. */
+  sent_at: string | null;
+  /** An error message for failed deliveries, or null. */
+  error: string | null;
+  /** When the row was created. */
+  created_at: string;
+  /** When the row was last updated. */
+  updated_at: string;
 }

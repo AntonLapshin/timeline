@@ -16,8 +16,9 @@ from sqlalchemy.orm import Session
 
 from . import crud, occurrences, summary
 from .enums import EventStatus
-from .models import Event
+from .models import DeliveryLog, Event
 from .schemas import (
+    DeliveryLogRead,
     EventCreate,
     EventOccurrenceRead,
     EventRead,
@@ -115,6 +116,17 @@ def get_event(event_id: int, db: SessionDep) -> Event:
             status_code=status.HTTP_404_NOT_FOUND, detail="event not found"
         )
     return event
+
+
+@router.get("/events/{event_id}/deliveries", response_model=list[DeliveryLogRead])
+def get_event_deliveries(event_id: int, db: SessionDep) -> list[DeliveryLog]:
+    """Return an event's delivery log, most recent first (issue #63)."""
+    event = crud.get_event(db, event_id)
+    if event is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="event not found"
+        )
+    return crud.list_deliveries(db, event_id)
 
 
 @router.patch("/events/{event_id}", response_model=EventRead)
