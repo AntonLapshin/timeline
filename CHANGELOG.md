@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Local STT for Telegram voice messages (issue #71, M5-T2):** adds
+  `apps/api/app/stt.py`, a local speech-to-text module that converts a Telegram
+  `voice.ogg` to a 16 kHz mono WAV via ffmpeg, then transcribes it with
+  whisper.cpp by reusing the local voxtype install/model (`voxtype transcribe`,
+  which loads the installed whisper model under the hood). Everything runs on
+  this machine — no audio bytes are ever sent to an external service; only the
+  resulting text leaves the module for the parse flow. New config fields
+  `STT_VOXTYPE_PATH` / `STT_MODEL_PATH` / `STT_MAX_SECONDS` (local `.env` only,
+  safe defaults). The pure orchestration/guard logic (2-minute cap, ffmpeg and
+  whisper command construction, transcript extraction) is fully unit-tested
+  with an injected subprocess runner; a 2-minute cap rejects over-limit voice
+  messages before any conversion attempt, and a missing voxtype/whisper install
+  returns a graceful `unavailable` rather than crashing. `apps/api/app/stt.py`
+  is at 100% line coverage.
+
 - **POST /api/events/parse: JoinGonka OpenAI-compatible AI parsing (issue #70,
   M5-T3):** adds a thin direct JoinGonka OpenAI-compatible fetch that turns
   free text into validated structured event draft(s). New config fields
