@@ -81,11 +81,17 @@ M4 — reminder engine (merged this cycle):
 - [x] #63 #M4-T3C — Delivery log + reminder preview UI in web app (merged via #67).
 - [x] #66 — Add missing test for telegram_outbound event-None branch (merged via #68).
 
-M5 — Telegram inbound + STT + AI parsing (planned this turn, `pi:ready`):
-- [ ] #69 #M5-T1 — Telegram inbound bot: DM-only /add /today /upcoming /low /ask (pi:ready, p1).
-- [ ] #70 #M5-T3 — POST /api/events/parse: JoinGonka OpenAI-compatible AI parsing (pi:ready, p1).
-- [ ] #71 #M5-T2 — Local STT: Telegram voice → whisper.cpp, 2-min cap, no audio leaves machine (pi:ready, p2).
-- [ ] #M5-T4 — Draft Save/Edit/Discard via Telegram buttons; web smart-input reuses endpoint; eval set of 20 samples; redacted logs (planned on a later PM turn).
+M5 — Telegram inbound + STT + AI parsing (merged this cycle):
+- [x] #69 #M5-T1 — Telegram inbound bot: DM-only /add /today /upcoming /low /ask (merged via #72).
+- [x] #70 #M5-T3 — POST /api/events/parse: JoinGonka OpenAI-compatible AI parsing (merged via #73).
+- [x] #71 #M5-T2 — Local STT: Telegram voice → whisper.cpp, 2-min cap, no audio leaves machine (merged via #74).
+
+M5 — remaining slice + M6 hardening (planned this turn, `pi:ready`):
+- [ ] #75 #M5-T4A — Telegram draft flow: /add → parse → Save/Edit/Discard buttons (pi:ready, p1).
+- [ ] #76 #M5-T4B — Parse eval set (20 samples) + redacted logs by default (pi:ready, p2).
+- [ ] #77 #M6-T1 — Omarchy hardening: loopback bind guard, systemd enable, log rotation, /healthz (pi:ready, p1).
+- [ ] #M6-T2 — Nightly SQLite dump + backups rotation + one-command restore; README runbook (planned on a later PM turn).
+- [ ] #M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no IDs/keys in docs; README privacy disclosure (planned on a later PM turn).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).

@@ -138,9 +138,9 @@ A personal, local-first global schedule that remembers everything: capture one-t
 - [x] M4-T3 — Per-event reminder config (channels, offsets, remind_time_of_day, repeat_until_ack, snooze_allowed, quiet_hours → morning digest); low priority sends nothing; email sender behind feature flag; reminder preview + delivery log UI; tests (T-1m test offset with Ack/Snooze). (merged via #61/#62/#63/#64/#65/#67/#68)
 
 ### M5 — Telegram inbound + local STT + AI parsing
-- [ ] M5-T1 — Bot polling, DM-only, single-user allowlist; commands /add, /today, /upcoming [7d|30d], /low, /ask; ignores group/channel noise.
-- [ ] M5-T2 — Local STT: Telegram voice.ogg → ffmpeg → wav 16k → whisper.cpp (reuse voxtype install/model if present) with 2-min cap; no audio leaves the machine.
-- [ ] M5-T3 — POST /api/events/parse: thin direct JoinGonka OpenAI-compatible fetch (configurable base/model/key, JSON mode, now+tz injection, multi-event, needs_clarification follow-up); default medium if uncertain, low on maybe/series/idea, never silently save critical financial events.
+- [x] M5-T1 — Bot polling, DM-only, single-user allowlist; commands /add, /today, /upcoming [7d|30d], /low, /ask; ignores group/channel noise. (merged via #72)
+- [x] M5-T2 — Local STT: Telegram voice.ogg → ffmpeg → wav 16k → whisper.cpp (reuse voxtype install/model if present) with 2-min cap; no audio leaves the machine. (merged via #74)
+- [x] M5-T3 — POST /api/events/parse: thin direct JoinGonka OpenAI-compatible fetch (configurable base/model/key, JSON mode, now+tz injection, multi-event, needs_clarification follow-up); default medium if uncertain, low on maybe/series/idea, never silently save critical financial events. (merged via #73)
 - [ ] M5-T4 — Draft Save/Edit/Discard flow via Telegram buttons; web smart-input reuses endpoint; eval set of 20 samples; redacted logs by default.
 
 ### M6 — Omarchy hardening, autostart, local backups
