@@ -54,6 +54,10 @@ htmlcov/
 .coverage
 .coverage.*
 
+# --- Playwright (e2e smoke) artifacts ---
+test-results/
+playwright-report/
+
 # --- auto-pi local state (secrets + run artifacts — never commit) ---
 .pi/local.json
 .pi/logs/

@@ -14,12 +14,17 @@ packages/shared/   # Shared contracts — event JSON schema v1 + enums used by w
 
 ```bash
 npm ci
-npm run dev          # Vite dev server
+npm run dev          # Vite dev server (127.0.0.1:8123)
 npm run lint         # eslint --max-warnings 0
 npm test             # Vitest (all workspaces)
 npm run test:coverage  # Vitest coverage gate: 100% on src/core/**/*.ts
 npm run build        # tsc + vite build
+npm run test:e2e     # Playwright smoke (boots dev server on 127.0.0.1:8123)
 ```
+
+> **Showcase gallery (dev):** open `http://127.0.0.1:8123/?showcase=1` to view a
+> dev-only gallery of every UI component and its key states, with fake services
+> injected via context (no backend required).
 
 ### API (apps/api)
 
@@ -346,6 +351,8 @@ npm run dev     # start the dev server
 | `npm run lint`      | Run ESLint                                 |
 | `npm test`          | Run unit tests (Vitest)                    |
 | `npm run test:coverage` | Run tests and enforce 100% core coverage |
+| `npm run test:e2e`  | Run the Playwright smoke test (loopback 127.0.0.1:8123) |
+| `npm run test:e2e:install` | Install the Playwright Chromium browser    |
 
 ## Architecture
 

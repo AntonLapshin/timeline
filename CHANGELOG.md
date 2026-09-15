@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Component Showcase + Playwright smoke test (issue #56):** adds a dev-only
+  Showcase gallery at `/?showcase=1` (rendered by a new `Root` component that
+  switches between the normal app and the gallery) demonstrating every UI
+  component in `src/ui/components` (AppShell, TimelineView, CalendarView,
+  SummaryBar, EventDrawer, EventWizard + WizardStepOne/Two/Three,
+  SearchFilterBar, SmartInputBox, ThemeToggle, DemoPanel) across its key states
+  (empty, populated, error, dark/light, narrow/mobile). The gallery is purely
+  presentational: it injects fake services via `ShowcaseServicesProvider`
+  (the same React-context injection pattern the real app uses), so it runs with
+  no backend and no business logic. Adds a Playwright smoke test
+  (`apps/web/tests/e2e/smoke.spec.ts`, `npm run test:e2e`) that boots the Vite
+  dev server on loopback `127.0.0.1:8123`, intercepts the API routes with
+  sample JSON, and asserts the app shell, Timeline, Calendar and summary bar
+  all render. The smoke test is wired into the `CI` workflow; the Vite dev/
+  preview servers are now bound to `127.0.0.1:8123` to match the project's
+  loopback-only convention.
+
 - **Telegram outbound reminder sender with Ack/Snooze/Delete (issue #55):**
   adds the Telegram outbound module in `apps/api/app/telegram_outbound.py`
   (python-telegram-bot v21) that turns a due reminder from the M4-T1 scheduler
