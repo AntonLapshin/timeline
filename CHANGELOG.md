@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Wire per-event reminder config + quiet-hours digest into scheduler delivery (issue #62):**
+  the scheduler/outbound delivery now honors each event's reminder settings read
+  from the Event model. Delivery only pushes to configured `channels` (a
+  Telegram-only check in the outbound sender means an event not configured for
+  Telegram is never pushed), `repeat_until_ack` re-schedules a delivered
+  reminder until it's acknowledged (a follow-up job with a distinct occurrence
+  id is scheduled after each unacknowledged delivery; acknowledging any repeat
+  traces back to the base delivery and stops the loop), and `snooze_allowed`
+  disables the Snooze button (and rejects a Snooze callback) when false.
+  Quiet hours (`quiet_hours_start`/`quiet_hours_end`, default `22:00-08:00`)
+  defer any reminder whose run time falls inside the window to a morning digest
+  (the next local morning after quiet-hours end) instead of pushing immediately,
+  applied in `schedule_plan`. Low-priority events still send nothing (consistent
+  with `should_push`). All pure logic lives in `apps/api/app/scheduler.py`
+  (quiet-hours helpers `in_quiet_hours`/`defer_to_morning_digest`/
+  `quiet_hours_run_time`, `channel_allows`, `should_repeat_until_ack`,
+  `base_occurrence_id`, `repeat_until_ack_plan`) and the outbound wiring in
+  `apps/api/app/telegram_outbound.py`, fully covered by pytest.
+
 - **Component Showcase + Playwright smoke test (issue #56):** adds a dev-only
   Showcase gallery at `/?showcase=1` (rendered by a new `Root` component that
   switches between the normal app and the gallery) demonstrating every UI

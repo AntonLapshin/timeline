@@ -35,9 +35,17 @@ from typing import Any, Protocol
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
-from .enums import EventPriority
+from .enums import EventChannel, EventPriority
 from .models import DeliveryLog, Event
-from .scheduler import PlannedReminder, add_reminder_job, deliver_reminder
+from .scheduler import (
+    PlannedReminder,
+    add_reminder_job,
+    base_occurrence_id,
+    channel_allows,
+    deliver_reminder,
+    repeat_until_ack_plan,
+    should_repeat_until_ack,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -176,31 +184,35 @@ def parse_callback_data(data: str) -> tuple[str, int, str, str] | None:
 
 
 def build_reply_markup(
-    event_id: int, occurrence_id: str, offset: str
+    event_id: int,
+    occurrence_id: str,
+    offset: str,
+    *,
+    snooze_allowed: bool = True,
 ) -> dict[str, Any]:
-    """Return the Telegram inline-keyboard markup for the action buttons."""
-    buttons = [
-        [
-            {
-                "text": _ACTION_LABELS[_ACTION_ACK],
-                "callback_data": callback_data(
-                    _ACTION_ACK, event_id, occurrence_id, offset
-                ),
-            },
-            {
-                "text": _ACTION_LABELS[_ACTION_SNOOZE],
-                "callback_data": callback_data(
-                    _ACTION_SNOOZE, event_id, occurrence_id, offset
-                ),
-            },
-            {
-                "text": _ACTION_LABELS[_ACTION_DELETE],
-                "callback_data": callback_data(
-                    _ACTION_DELETE, event_id, occurrence_id, offset
-                ),
-            },
-        ]
-    ]
+    """Return the Telegram inline-keyboard markup for the action buttons.
+
+    When ``snooze_allowed`` is False the Snooze button is omitted (per-event
+    ``snooze_allowed`` config, issue #62).
+    """
+    ack = {
+        "text": _ACTION_LABELS[_ACTION_ACK],
+        "callback_data": callback_data(_ACTION_ACK, event_id, occurrence_id, offset),
+    }
+    delete = {
+        "text": _ACTION_LABELS[_ACTION_DELETE],
+        "callback_data": callback_data(_ACTION_DELETE, event_id, occurrence_id, offset),
+    }
+    if snooze_allowed:
+        snooze = {
+            "text": _ACTION_LABELS[_ACTION_SNOOZE],
+            "callback_data": callback_data(
+                _ACTION_SNOOZE, event_id, occurrence_id, offset
+            ),
+        }
+        buttons = [[ack, snooze, delete]]
+    else:
+        buttons = [[ack, delete]]
     return {"inline_keyboard": buttons}
 
 
@@ -213,13 +225,16 @@ def ack_delivery(
     """Mark the delivered reminder as acknowledged.
 
     Updates the ``sent`` DeliveryLog for the reminder to ``acked`` and returns
-    True when a matching log was updated.
+    True when a matching log was updated. Repeat/snooze follow-up deliveries
+    trace back to their base occurrence so acknowledging any of them stops the
+    repeat-until-ack loop.
     """
+    base = base_occurrence_id(occurrence_id)
     log = (
         session.query(DeliveryLog)
         .filter_by(
             event_id=event_id,
-            occurrence_id=occurrence_id,
+            occurrence_id=base,
             offset=offset,
             status="sent",
         )
@@ -304,8 +319,9 @@ def handle_callback(
 
     Parses the callback ``data`` and dispatches to the matching state
     transition. Snooze re-schedules the reminder one day later through the
-    scheduler with the same job function. Returns a human message for the bot
-    to answer the callback query with.
+    scheduler with the same job function, unless the event's ``snooze_allowed``
+    is False (issue #62). Returns a human message for the bot to answer the
+    callback query with.
     """
     parsed = parse_callback_data(data)
     if parsed is None:
@@ -315,6 +331,8 @@ def handle_callback(
         ok = ack_delivery(session, event_id, occurrence_id, offset)
         return "Acknowledged ✓" if ok else "Nothing to acknowledge"
     if action == _ACTION_SNOOZE:
+        if not snooze_allowed_for_event(session, event_id):
+            return "Snooze not allowed"
         planned = snooze_delivery(session, event_id, occurrence_id, offset, now=now)
         if planned is None:
             return "Nothing to snooze"
@@ -324,6 +342,18 @@ def handle_callback(
         ok = delete_delivery(session, event_id, occurrence_id, offset)
         return "Reminder deleted 🗑" if ok else "Nothing to delete"
     return "Unknown action"
+
+
+def snooze_allowed_for_event(session: Session, event_id: int) -> bool:
+    """Whether the event allows snoozing (per-event ``snooze_allowed``).
+
+    Returns False when the event is missing or its ``snooze_allowed`` is False,
+    so a Snooze callback never re-schedules a reminder the event forbids.
+    """
+    event = session.get(Event, event_id)
+    if event is None:
+        return False
+    return bool(event.snooze_allowed)
 
 
 # --- impure wiring (python-telegram-bot v21) ---------------------------------
@@ -357,19 +387,27 @@ def make_telegram_job_func(
     settings: Settings,
     *,
     now: datetime | None = None,
+    scheduler: Any = None,
+    repeat_interval: timedelta | None = None,
 ) -> Callable[[int, str, str], bool]:
     """Build the scheduler job function that sends a due reminder to Telegram.
 
     The returned function matches the scheduler's job signature
     ``(event_id, occurrence_id, offset)`` and reuses ``deliver_reminder`` so the
     at-least-once / audit-trail semantics from the scheduler are preserved. It
-    fails closed: no bot token, no allowed user, or a low-priority event means
-    nothing is sent.
+    fails closed: no bot token, no allowed user, a low-priority event, or a
+    channel the event isn't configured for means nothing is sent (issue #62).
+
+    When ``scheduler`` is provided and the event has ``repeat_until_ack`` set, a
+    successfully delivered reminder that hasn't been acknowledged is re-scheduled
+    (repeat-until-ack, issue #62).
     """
     allowed = settings.telegram_user_id
     chat_id = _parse_chat_id(allowed)
 
     def job_func(event_id: int, occurrence_id: str, offset: str) -> bool:
+        now_utc = now or datetime.now(UTC)
+
         def send() -> None:
             with session_factory() as session:
                 event = session.get(Event, event_id)
@@ -377,23 +415,71 @@ def make_telegram_job_func(
                     raise RuntimeError(f"event {event_id} not found")
                 if not should_push(event.priority):
                     return None
+                if not channel_allows(event.channels, EventChannel.TELEGRAM):
+                    return None
                 if not is_allowed_user(allowed, settings.telegram_user_id):
                     raise PermissionError("telegram user not allowed")
-                text = format_reminder_card(
-                    event, occurrence_id, offset, now=now or datetime.now(UTC)
+                text = format_reminder_card(event, occurrence_id, offset, now=now_utc)
+                _run_send(
+                    bot,
+                    chat_id,
+                    text,
+                    event_id,
+                    occurrence_id,
+                    offset,
+                    snooze_allowed=bool(event.snooze_allowed),
                 )
-                _run_send(bot, chat_id, text, event_id, occurrence_id, offset)
 
-        return deliver_reminder(
+        delivered = deliver_reminder(
             session_factory,
             event_id,
             occurrence_id,
             offset,
-            now=now,
+            now=now_utc,
             send=send,
         )
 
+        if delivered and scheduler is not None:
+            with session_factory() as session:
+                event = session.get(Event, event_id)
+                if event is None:
+                    return delivered
+                acked = _is_acked(session_factory, event_id, occurrence_id, offset)
+                if should_repeat_until_ack(event.repeat_until_ack, acked):
+                    planned = repeat_until_ack_plan(
+                        event,
+                        occurrence_id,
+                        offset,
+                        now_utc,
+                        repeat_interval=repeat_interval,
+                    )
+                    if planned is not None:
+                        add_reminder_job(scheduler, planned, job_func)
+        return delivered
+
     return job_func
+
+
+def _is_acked(
+    session_factory: sessionmaker[Session],
+    event_id: int,
+    occurrence_id: str,
+    offset: str,
+) -> bool:
+    """Whether the base delivery for a reminder has been acknowledged."""
+    base = base_occurrence_id(occurrence_id)
+    with session_factory() as session:
+        return (
+            session.query(DeliveryLog)
+            .filter_by(
+                event_id=event_id,
+                occurrence_id=base,
+                offset=offset,
+                status=_STATUS_ACKED,
+            )
+            .first()
+            is not None
+        )
 
 
 def _parse_chat_id(allowed: str | None) -> int | None:
@@ -413,6 +499,8 @@ def _run_send(
     event_id: int,
     occurrence_id: str,
     offset: str,
+    *,
+    snooze_allowed: bool = True,
 ) -> None:
     """Synchronously dispatch the async card send (thin adapter).
 
@@ -424,7 +512,12 @@ def _run_send(
     import asyncio
 
     coro = send_reminder_card(
-        bot, chat_id, text, build_reply_markup(event_id, occurrence_id, offset)
+        bot,
+        chat_id,
+        text,
+        build_reply_markup(
+            event_id, occurrence_id, offset, snooze_allowed=snooze_allowed
+        ),
     )
     try:
         loop = asyncio.get_running_loop()
