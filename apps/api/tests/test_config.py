@@ -179,3 +179,49 @@ def test_email_smtp_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> N
     assert settings.smtp_pass == "secret"
     assert settings.smtp_from == "from@example.com"
     assert settings.smtp_to == "to@example.com"
+
+
+# --- LLM parse settings (issue #70) -----------------------------------------
+
+
+def test_llm_settings_defaults() -> None:
+    """LLM settings have safe defaults; key defaults to None (unavailable)."""
+    settings = Settings(
+        llm_base_url="https://gate.joingonka.ai/openai/v1",
+        llm_model="",
+        llm_api_key=None,
+    )
+    assert settings.llm_base_url == "https://gate.joingonka.ai/openai/v1"
+    assert settings.llm_model == ""
+    assert settings.llm_api_key is None
+
+
+def test_llm_settings_fall_back_when_env_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With LLM env vars unset, safe defaults apply and key is None."""
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    settings = Settings()
+    assert settings.llm_base_url == "https://gate.joingonka.ai/openai/v1"
+    assert settings.llm_model == ""
+    assert settings.llm_api_key is None
+
+
+def test_llm_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM env vars are reflected on the settings."""
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example/v1")
+    monkeypatch.setenv("LLM_MODEL", "my-model")
+    monkeypatch.setenv("LLM_API_KEY", "secret-key")
+    settings = Settings()
+    assert settings.llm_base_url == "https://llm.example/v1"
+    assert settings.llm_model == "my-model"
+    assert settings.llm_api_key == "secret-key"
+
+
+def test_llm_settings_accept_blank_key_as_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blank LLM_API_KEY is treated as disabled (unavailable)."""
+    monkeypatch.setenv("LLM_API_KEY", "  ")
+    settings = Settings()
+    assert settings.llm_api_key is None

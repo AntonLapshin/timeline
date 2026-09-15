@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings
+from app.config import Settings, get_settings
 from app.main import create_app
 from app.models import DeliveryLog
 
@@ -234,3 +234,27 @@ def test_get_event_deliveries_scoped_to_event(client: TestClient) -> None:
     assert len(body) == 1
     assert body[0]["event_id"] == a["id"]
     assert body[0]["status"] == "sent"
+
+
+# --- LLM parse endpoint (issue #70) -----------------------------------------
+
+
+def test_parse_endpoint_unavailable_without_key(client: TestClient) -> None:
+    """Without an LLM key, POST /api/events/parse returns 503 (unavailable)."""
+    client.app.dependency_overrides[get_settings] = lambda: Settings(llm_api_key=None)
+    try:
+        resp = client.post(
+            "/api/events/parse",
+            json={"text": "dentist tomorrow 9am"},
+        )
+    finally:
+        client.app.dependency_overrides.clear()
+    assert resp.status_code == 503
+    body = resp.json()
+    assert "detail" in body
+
+
+def test_parse_endpoint_requires_text(client: TestClient) -> None:
+    """An empty text payload is rejected with 422."""
+    resp = client.post("/api/events/parse", json={"text": ""})
+    assert resp.status_code == 422

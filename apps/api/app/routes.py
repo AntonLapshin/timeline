@@ -9,20 +9,25 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from . import crud, occurrences, summary
+from .config import Settings, get_settings
 from .enums import EventStatus
+from .llm_parse import parse_events
 from .models import DeliveryLog, Event
 from .schemas import (
     DeliveryLogRead,
     EventCreate,
     EventOccurrenceRead,
+    EventParseResponse,
     EventRead,
     EventUpdate,
+    ParseRequestPayload,
     SummaryResponse,
 )
 
@@ -168,4 +173,44 @@ def get_summary(
         month=result.month,
         total=result.total,
         by_priority=result.by_priority,
+    )
+
+
+@router.post("/events/parse", response_model=EventParseResponse)
+def parse_event_text(
+    payload: ParseRequestPayload,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> EventParseResponse:
+    """Parse free text into event draft(s) via the LLM (issue #70).
+
+    Thin layer: delegates to the pure ``llm_parse.parse_events`` with a real
+    HTTP client. Returns HTTP 503 ``unavailable`` when the LLM key is absent
+    (matching the web ``LlmParser`` contract). No DB access — drafts are
+    confirmed before save.
+    """
+    import httpx
+
+    result = parse_events(
+        text=payload.text,
+        now=payload.now or datetime.now(UTC),
+        tz=payload.tz or settings.tz,
+        settings=settings,
+        http_client=httpx.Client(timeout=30.0),
+    )
+    if result.unavailable:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=result.error or "LLM key not configured",
+        )
+    if not result.ok or result.outcome is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=result.error or "LLM parsing failed",
+        )
+    if result.outcome.needs_clarification:
+        return EventParseResponse(
+            needs_clarification=True, message=result.outcome.clarification
+        )
+    return EventParseResponse(
+        events=[d.model_dump(exclude_none=True) for d in result.outcome.drafts or []],
     )
