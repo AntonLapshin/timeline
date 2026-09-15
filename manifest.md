@@ -130,11 +130,11 @@ A personal, local-first global schedule that remembers everything: capture one-t
 - [x] M3-T1 — App shell (no login), Timeline view (grouped by month/week, infinite scroll, priority/tag color+icon, recurrence badge), Calendar view (custom Tailwind month/week/agenda grid + day drawer). (merged via #23/#25/#32/#33)
 - [x] M3-T2 — Summary bar (events this month by priority, next 7 days, overdue highlight) + event drawer with next occurrences and reminder preview. (merged via #40/#43)
 - [x] M3-T3 — 3-step create/edit wizard (What/When → Recurrence → Priority & Reminders) + smart-input box calling /parse + search/filter + dark/light + responsive + keyboard shortcuts (c=create, /=search). (merged via #42/#50/#52/#53)
-- [ ] M3-T4 — Atomic folders (atoms/molecules/organisms/templates/pages) with services (apiClient, llmParse, dateFmt) injected via Context; every organism has a Showcase file; Vitest 100% src/core + Playwright smoke on 127.0.0.1.
+- [x] M3-T4 — Atomic folders (atoms/molecules/organisms/templates/pages) with services (apiClient, llmParse, dateFmt) injected via Context; every organism has a Showcase file; Vitest 100% src/core + Playwright smoke on 127.0.0.1. (merged via #56/#60)
 
 ### M4 — Reminder engine + Telegram outbound
-- [ ] M4-T1 — APScheduler persistent jobstore on SQLite; dedupe key (event_id, occurrence_id, offset); at-least-once delivery; queue survives restart.
-- [ ] M4-T2 — Telegram outbound sender (python-telegram-bot v21, polling): priority card + Acknowledge/Snooze 1d/Delete buttons; single-user allowlist TELEGRAM_USER_ID.
+- [x] M4-T1 — APScheduler persistent jobstore on SQLite; dedupe key (event_id, occurrence_id, offset); at-least-once delivery; queue survives restart. (merged via #57/#58)
+- [x] M4-T2 — Telegram outbound sender (python-telegram-bot v21, polling): priority card + Acknowledge/Snooze 1d/Delete buttons; single-user allowlist TELEGRAM_USER_ID. (merged via #55/#59)
 - [ ] M4-T3 — Per-event reminder config (channels, offsets, remind_time_of_day, repeat_until_ack, snooze_allowed, quiet_hours → morning digest); low priority sends nothing; email sender behind feature flag; reminder preview + delivery log UI; tests (T-1m test offset with Ack/Snooze).
 
 ### M5 — Telegram inbound + local STT + AI parsing

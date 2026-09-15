@@ -4,18 +4,19 @@
 
 ## Status
 
-**In progress (M3 — Web UI: timeline, calendar, wizard, smart-input).**
+**In progress (M4 — Reminder engine + Telegram outbound).**
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
-domain: models+migrations, recurrence expansion, CRUD+summary+seed), M3-T1
-(app shell + Timeline + Calendar month/week/agenda views), M3-T2 (summary
-bar + event drawer), and M3-T3 (3-step wizard + smart-input /parse +
-search/filter + dark/light + responsive + keyboard shortcuts — merged via
-#42/#50/#52/#53) are fully implemented and merged. GitHub Pages is now
-**enabled** (owner action, #49) — the `Deploy to GitHub Pages` workflow on
-`main` is green and the demo URL `https://antonlapshin.github.io/timeline/`
-returns HTTP 200 (issue #49 closed). The `CI` workflow passes independently.
-The next planned slice is M3-T4 (component Showcase files + Playwright smoke)
-plus the start of M4 (reminder engine).
+domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
+smart-input/search/theme — merged via #23-#60) are fully implemented and
+merged, including M3-T4 (component Showcase gallery + Playwright smoke test,
+merged via #56/#60). M4-T1 (persistent APScheduler jobstore + at-least-once
+scheduling, merged via #57/#58) and M4-T2 (Telegram outbound sender with
+Ack/Snooze/Delete buttons, merged via #55/#59) are done. The next slice is
+M4-T3 (per-event reminder config + quiet-hours digest + email flag +
+delivery-log UI + tests). GitHub Pages is **enabled** (owner action, #49) —
+the `Deploy to GitHub Pages` workflow on `main` is green and the demo URL
+`https://antonlapshin.github.io/timeline/` returns HTTP 200. The `CI`
+workflow passes independently.
 
 The `Deploy to GitHub Pages` CI workflow is now **passing** — GitHub Pages is
 enabled (owner action) and the demo URL is live; issue #49 is closed. The `CI`
@@ -70,13 +71,17 @@ M3 — current batch (merged this cycle):
 - [x] #48 #M3-T3D — Dark/light theme toggle + responsive polish (merged via #53).
 - [x] #51 — Add missing tests for PR #50 (merged via #54).
 
-M3 — remaining slice (planned this turn, `pi:ready`):
-- [ ] #56 #M3-T4 — Component Showcase files + Playwright smoke test (pi:ready, p3).
+M3 — remaining slice (merged this cycle):
+- [x] #56 #M3-T4 — Component Showcase files + Playwright smoke test (merged via #60).
 
-M4 — reminder engine (planned this turn, `pi:ready`):
-- [ ] #57 #M4-T1 — APScheduler persistent jobstore + at-least-once scheduling (pi:ready, p1).
-- [ ] #55 #M4-T2 — Telegram outbound reminder sender with Ack/Snooze/Delete buttons (pi:ready, p2).
-- [ ] M4-T3 — Per-event reminder config + email flag + delivery-log UI + tests (planned on a later PM turn).
+M4 — reminder engine (merged this cycle):
+- [x] #57 #M4-T1 — APScheduler persistent jobstore + at-least-once scheduling (merged via #58).
+- [x] #55 #M4-T2 — Telegram outbound reminder sender with Ack/Snooze/Delete buttons (merged via #59).
+
+M4 — remaining slice (planned this turn, `pi:ready`):
+- [ ] #62 #M4-T3A — Wire quiet-hours + per-event reminder config into scheduler delivery (pi:ready, p1).
+- [ ] #61 #M4-T3B — Email reminder sender behind feature flag (pi:ready, p2).
+- [ ] #63 #M4-T3C — Delivery log + reminder preview UI in web app (pi:ready, p2).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).
