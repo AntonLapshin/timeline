@@ -24,20 +24,35 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import models
 from app.config import Settings
 from app.db import create_engine_from_settings, make_session_factory
-from app.enums import EventPriority, EventSource, EventStatus, EventType
+from app.enums import (
+    EventChannel,
+    EventPriority,
+    EventSource,
+    EventStatus,
+    EventType,
+)
+from app.llm_parse import ParsedDraft
 from app.models import Event, TelegramInbound
 from app.telegram_inbound import (
     Command,
+    DraftAction,
+    DraftStore,
+    PendingDraft,
+    _handle_callback_query,
     _handle_update,
+    build_draft_keyboard,
     build_inbound_record,
     build_telegram_inbound_application,
+    draft_to_event_create,
     events_low,
     events_today,
     events_upcoming,
+    format_draft_card,
     format_event_line,
     handle_command,
     is_private_chat,
     parse_command,
+    parse_draft_callback,
     parse_upcoming_days,
     record_inbound,
 )
@@ -260,12 +275,11 @@ def test_handle_command_low_empty() -> None:
     assert result.reply == "No low-priority events."
 
 
-def test_handle_command_add_stub() -> None:
-    """/add records the text and explains parsing isn't wired yet."""
+def test_handle_command_add_parse_marker() -> None:
+    """/add returns the text with an add_parse marker for the adapter to parse."""
     result = handle_command(Command("add", "dentist tomorrow 9am"), [], now=_now())
-    assert result.message_type == "text"
-    assert "dentist tomorrow 9am" in result.reply
-    assert "AI parsing isn't wired up yet" in result.reply
+    assert result.message_type == "add_parse"
+    assert result.reply == "dentist tomorrow 9am"
 
 
 def test_handle_command_add_missing_text() -> None:
@@ -293,6 +307,118 @@ def test_handle_command_unknown() -> None:
     result = handle_command(Command("bogus", ""), [], now=_now())
     assert "Unknown command" in result.reply
     assert "/today" in result.reply
+
+
+# --- draft flow (pure) --------------------------------------------------------
+
+
+def _draft(**overrides: object) -> ParsedDraft:
+    """Build a minimal parsed draft."""
+    values: dict[str, object] = {
+        "title": "Dentist",
+        "start_at": "2026-01-02T09:00:00+00:00",
+        "priority": "medium",
+        "type": "one_time",
+        "tz": "UTC",
+        "channels": ["telegram"],
+    }
+    values.update(overrides)
+    return ParsedDraft(**values)
+
+
+def test_format_draft_card() -> None:
+    """A draft card renders the title and the confident fields."""
+    card = format_draft_card(_draft())
+    assert "📝 Dentist" in card
+    assert "2026-01-02T09:00:00+00:00" in card
+    assert "Priority: medium" in card
+    assert "Channels: telegram" in card
+
+
+def test_format_draft_card_omits_unknown_fields() -> None:
+    """Optional fields the model didn't fill are omitted from the card."""
+    card = format_draft_card(_draft(rrule=None, tags=None, all_day=None, channels=None))
+    assert "Repeats:" not in card
+    assert "Tags:" not in card
+    assert "All day:" not in card
+    assert "Channels:" not in card
+
+
+def test_format_draft_card_extra_fields() -> None:
+    """All-day, recurrence and tags are rendered when present."""
+    card = format_draft_card(
+        _draft(all_day=True, rrule="FREQ=DAILY", tags=["health", "morning"])
+    )
+    assert "All day: yes" in card
+    assert "Repeats: FREQ=DAILY" in card
+    assert "Tags: health, morning" in card
+
+
+def test_build_draft_keyboard() -> None:
+    """The draft keyboard has Save/Edit/Discard with indexed callback data."""
+    buttons = build_draft_keyboard(2)
+    assert buttons == [
+        ("💾 Save", "draft:save:2"),
+        ("✏️ Edit", "draft:edit:2"),
+        ("🗑 Discard", "draft:discard:2"),
+    ]
+
+
+def test_parse_draft_callback() -> None:
+    """A well-formed draft callback parses into a DraftAction."""
+    assert parse_draft_callback("draft:save:0") == DraftAction("save", 0)
+    assert parse_draft_callback("draft:edit:1") == DraftAction("edit", 1)
+    assert parse_draft_callback("draft:discard:3") == DraftAction("discard", 3)
+
+
+def test_parse_draft_callback_invalid() -> None:
+    """Malformed / unknown callback payloads are rejected."""
+    assert parse_draft_callback(None) is None
+    assert parse_draft_callback("") is None
+    assert parse_draft_callback("other:save:0") is None
+    assert parse_draft_callback("draft:bogus:0") is None
+    assert parse_draft_callback("draft:save") is None
+    assert parse_draft_callback("draft:save:abc") is None
+    assert parse_draft_callback("draft:save:-1") is None
+
+
+def test_draft_to_event_create_maps_fields() -> None:
+    """A confirmed draft maps onto a draft-status telegram_text EventCreate."""
+    payload = draft_to_event_create(_draft(), "dentist tomorrow 9am")
+    assert payload.title == "Dentist"
+    assert payload.start_at.isoformat() == "2026-01-02T09:00:00+00:00"
+    assert payload.type == EventType.ONE_TIME
+    assert payload.priority == EventPriority.MEDIUM
+    assert payload.channels == [EventChannel.TELEGRAM]
+    assert payload.source == EventSource.TELEGRAM_TEXT
+    assert payload.status == EventStatus.DRAFT
+    assert payload.raw_input == "dentist tomorrow 9am"
+
+
+def test_draft_to_event_create_defaults() -> None:
+    """Missing optional draft fields fall back to safe defaults."""
+    payload = draft_to_event_create(
+        _draft(priority=None, type=None, channels=None), "x"
+    )
+    assert payload.priority == EventPriority.MEDIUM
+    assert payload.type == EventType.ONE_TIME
+    assert payload.channels == [EventChannel.TELEGRAM]
+    assert payload.tz == "UTC"
+
+
+def test_draft_store_roundtrip() -> None:
+    """DraftStore holds, replaces and pops a chat's pending draft."""
+    store = DraftStore()
+    pending = PendingDraft(drafts=[_draft()], raw_input="x")
+    assert store.get(123) is None
+    store.set(123, pending)
+    assert store.get(123) is pending
+    # A new /add replaces the pending draft for the same chat.
+    replacement = PendingDraft(drafts=[_draft(title="New")], raw_input="y")
+    store.set(123, replacement)
+    assert store.get(123) is replacement
+    assert store.pop(123) is replacement
+    assert store.get(123) is None
 
 
 # --- inbound record -----------------------------------------------------------
@@ -373,14 +499,14 @@ class _FakeUpdate:
 
 def test_handle_update_dm_only() -> None:
     """A group message is ignored even from the allowed user."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="token")
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     update = _FakeUpdate(_FakeMessage(_FakeChat(123, "group"), _FakeUser(42), "/today"))
     assert _handle_update(update, settings) is None
 
 
 def test_handle_update_allowlist_rejection() -> None:
     """A private message from a non-allowed user is ignored."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="token")
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     update = _FakeUpdate(
         _FakeMessage(_FakeChat(123, "private"), _FakeUser(999), "/today")
     )
@@ -389,13 +515,13 @@ def test_handle_update_allowlist_rejection() -> None:
 
 def test_handle_update_no_message() -> None:
     """An update with no message is ignored."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="token")
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     assert _handle_update(_FakeUpdate(None), settings) is None
 
 
 def test_handle_update_non_command_ignored() -> None:
     """Plain text (not a command) is ignored."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="token")
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     update = _FakeUpdate(
         _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "hello")
     )
@@ -410,14 +536,14 @@ def test_handle_update_today_replies_and_records(
         session.add(_event(start_at=_now() + timedelta(hours=1)))
         session.commit()
 
-    settings = Settings(telegram_user_id="42", telegram_bot_token="token")
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     update = _FakeUpdate(
         _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/today")
     )
     reply = _handle_update(update, settings, session_factory, now=_now())
     assert reply is not None
-    assert "📅 Today" in reply
-    assert "Team standup" in reply
+    assert "📅 Today" in reply.text
+    assert "Team standup" in reply.text
 
     with session_factory() as session:
         assert session.query(TelegramInbound).count() == 1
@@ -495,3 +621,376 @@ def test_build_telegram_inbound_application_no_reply_for_ignored(
     )
     asyncio.run(handler(update, None))
     assert replied == []
+
+
+# --- draft flow (impure wiring) ------------------------------------------------
+
+
+class _FakeResponse:
+    def __init__(self, data: object, status_code: int = 200) -> None:
+        self.status_code = status_code
+        self._data = data
+
+    def json(self) -> object:
+        return self._data
+
+
+class _FakeHttp:
+    """A fake HTTP client returning a canned parse response."""
+
+    def __init__(self, data: object, status_code: int = 200) -> None:
+        self._data = data
+        self._status_code = status_code
+
+    def post(self, url: str, *, headers: dict, json: dict) -> _FakeResponse:
+        return _FakeResponse(self._data, self._status_code)
+
+
+class _FakeCallback:
+    def __init__(self, data: str, user_id: int, chat_id: int) -> None:
+        self.data = data
+        self.from_user = _FakeUser(user_id)
+        self.message = _FakeMessage(
+            _FakeChat(chat_id, "private"), _FakeUser(user_id), "/add x"
+        )
+
+
+def _parse_response() -> dict:
+    """A canned successful parse response with one draft."""
+    return {
+        "events": [
+            {
+                "title": "Dentist",
+                "start_at": "2026-01-02T09:00:00+00:00",
+                "priority": "medium",
+                "type": "one_time",
+                "tz": "UTC",
+                "channels": ["telegram"],
+            }
+        ]
+    }
+
+
+def test_handle_update_add_presents_draft_card(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """/add parses and returns a draft card with buttons; draft is stored."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    http = _FakeHttp(_parse_response())
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+        )
+    )
+    reply = _handle_update(
+        update,
+        settings,
+        session_factory,
+        now=_now(),
+        http_client=http,
+        draft_store=store,
+    )
+    assert reply is not None
+    assert "📝 Dentist" in reply.text
+    assert reply.reply_markup == [
+        [
+            ("💾 Save", "draft:save:0"),
+            ("✏️ Edit", "draft:edit:0"),
+            ("🗑 Discard", "draft:discard:0"),
+        ]
+    ]
+    pending = store.get(123)
+    assert pending is not None
+    assert pending.raw_input == "dentist tomorrow 9am"
+    assert len(pending.drafts) == 1
+    # Inbound record is persisted with message_type "draft".
+    with session_factory() as session:
+        assert session.query(TelegramInbound).one().message_type == "draft"
+
+
+def test_handle_update_add_unavailable() -> None:
+    """/add with no LLM key returns a plain-text availability reply."""
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key=None
+    )
+    store = DraftStore()
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+        )
+    )
+    reply = _handle_update(
+        update,
+        settings,
+        None,
+        now=_now(),
+        http_client=_FakeHttp(_parse_response()),
+        draft_store=store,
+    )
+    assert reply is not None
+    assert "AI parsing isn't configured" in reply.text
+    assert reply.reply_markup is None
+    assert store.get(123) is None
+
+
+def test_handle_update_add_needs_clarification() -> None:
+    """/add that needs clarification replies with the message and stores nothing."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    http = _FakeHttp({"needs_clarification": True, "message": "When is it?"})
+    update = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/add something vague")
+    )
+    reply = _handle_update(
+        update, settings, None, now=_now(), http_client=http, draft_store=store
+    )
+    assert reply is not None
+    assert reply.text == "When is it?"
+    assert store.get(123) is None
+
+
+def test_handle_update_add_no_parse_client() -> None:
+    """/add without a parse client replies that parsing is unavailable."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+        )
+    )
+    reply = _handle_update(
+        update, settings, None, now=_now(), http_client=None, draft_store=DraftStore()
+    )
+    assert reply is not None
+    assert "AI parsing isn't available" in reply.text
+
+
+def test_handle_update_add_parse_error() -> None:
+    """/add with a failing parse returns the error and stores nothing."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    http = _FakeHttp({"events": []}, status_code=500)
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+        )
+    )
+    reply = _handle_update(
+        update, settings, None, now=_now(), http_client=http, draft_store=store
+    )
+    assert reply is not None
+    assert "Couldn't parse that" in reply.text
+    assert store.get(123) is None
+
+
+def test_handle_callback_query_no_message() -> None:
+    """A callback with no message/chat replies there is nothing to act on."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    query = _FakeCallback("draft:save:0", 42, 123)
+    query.message = None
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "No pending draft" in reply.text
+
+
+def test_handle_callback_query_save_no_db() -> None:
+    """Save without a database replies that it can't save right now."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("draft:save:0", 42, 123)
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "Can't save right now" in reply.text
+    # The pending draft is retained (not saved).
+    assert store.get(123) is not None
+
+
+def test_build_telegram_inbound_application_draft_card(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The handler sends a draft card with an inline keyboard for /add."""
+    import asyncio
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    store = DraftStore()
+    http = _FakeHttp(_parse_response())
+    app = build_telegram_inbound_application(
+        settings, session_factory, now=_now(), http_client=http, draft_store=store
+    )
+    assert app is not None
+    handler = app.handlers[0][0].callback
+
+    sent: list[tuple[str, object]] = []
+
+    class _ReplyMessage(_FakeMessage):
+        async def reply_text(self, text: str, **kwargs: object) -> None:
+            sent.append((text, kwargs))
+
+    update = _FakeUpdate(
+        _ReplyMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+        )
+    )
+    asyncio.run(handler(update, None))
+
+    assert len(sent) == 1
+    text, kwargs = sent[0]
+    assert "📝 Dentist" in text
+    assert "reply_markup" in kwargs
+
+
+def test_build_telegram_inbound_application_callback_save(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The callback handler routes a Save button to persist the event."""
+    import asyncio
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    app = build_telegram_inbound_application(
+        settings, session_factory, now=_now(), draft_store=store
+    )
+    assert app is not None
+    callback = app.handlers[0][1].callback
+
+    answered: list[str] = []
+    sent: list[str] = []
+
+    class _FakeQuery:
+        data = "draft:save:0"
+        from_user = _FakeUser(42)
+        message = _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/add x")
+
+        async def answer(self) -> None:
+            answered.append("ok")
+
+    class _ReplyMessage(_FakeMessage):
+        async def reply_text(self, text: str, **kwargs: object) -> None:
+            sent.append(text)
+
+    query = _FakeQuery()
+    query.message = _ReplyMessage(_FakeChat(123, "private"), _FakeUser(42), "/add x")
+
+    class _Update:
+        callback_query = query
+
+    asyncio.run(callback(_Update(), None))
+
+    assert answered == ["ok"]
+    assert sent == ["✅ Saved: Dentist"]
+    with session_factory() as session:
+        assert session.query(Event).one().title == "Dentist"
+
+
+def test_build_telegram_inbound_application_callback_guards() -> None:
+    """The callback handler ignores updates with no query or no action."""
+    import asyncio
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    app = build_telegram_inbound_application(settings, None, now=_now())
+    assert app is not None
+    callback = app.handlers[0][1].callback
+
+    class _NoQueryUpdate:
+        callback_query = None
+
+    # No callback_query -> no-op.
+    asyncio.run(callback(_NoQueryUpdate(), None))
+
+    sent: list[str] = []
+
+    class _FakeQuery:
+        data = "bogus:data"
+        from_user = _FakeUser(42)
+
+        async def answer(self) -> None:
+            pass
+
+    class _ReplyMessage(_FakeMessage):
+        async def reply_text(self, text: str, **kwargs: object) -> None:
+            sent.append(text)
+
+    class _Update:
+        callback_query = _FakeQuery()
+
+    _Update.callback_query.message = _ReplyMessage(
+        _FakeChat(123, "private"), _FakeUser(42), "/add x"
+    )
+    # A malformed payload -> _handle_callback_query returns None -> no reply.
+    asyncio.run(callback(_Update(), None))
+    assert sent == []
+
+
+def test_handle_callback_query_save_persists_event(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Save persists the confirmed draft as a real event and clears it."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="dentist tomorrow 9am"))
+    query = _FakeCallback("draft:save:0", 42, 123)
+    reply = _handle_callback_query(query, settings, session_factory, store, now=_now())
+    assert reply is not None
+    assert "✅ Saved: Dentist" in reply.text
+    assert store.get(123) is None
+    with session_factory() as session:
+        event = session.query(Event).one()
+        assert event.title == "Dentist"
+        assert event.status == EventStatus.DRAFT
+        assert event.source == EventSource.TELEGRAM_TEXT
+        assert event.raw_input == "dentist tomorrow 9am"
+
+
+def test_handle_callback_query_edit_prompts() -> None:
+    """Edit re-prompts for corrected text and keeps the pending draft."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("draft:edit:0", 42, 123)
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "Send the corrected event text" in reply.text
+    assert store.get(123) is not None
+
+
+def test_handle_callback_query_discard_drops() -> None:
+    """Discard drops the pending draft with a confirmation reply."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("draft:discard:0", 42, 123)
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "Draft discarded" in reply.text
+    assert store.get(123) is None
+
+
+def test_handle_callback_query_allowlist_rejection() -> None:
+    """A callback from a non-allowed user is ignored."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("draft:save:0", 999, 123)
+    assert _handle_callback_query(query, settings, None, store, now=_now()) is None
+
+
+def test_handle_callback_query_no_pending_draft() -> None:
+    """A callback with no pending draft replies that it's gone."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    query = _FakeCallback("draft:save:0", 42, 123)
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "That draft is no longer available" in reply.text
+
+
+def test_handle_callback_query_bad_payload() -> None:
+    """A malformed callback payload is ignored."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("bogus:data", 42, 123)
+    assert _handle_callback_query(query, settings, None, store, now=_now()) is None
