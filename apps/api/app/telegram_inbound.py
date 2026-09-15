@@ -6,9 +6,11 @@ A python-telegram-bot v21 polling updater (consistent with
 - ``/today`` — list today's events.
 - ``/upcoming [7d|30d]`` — list upcoming events (default 7 days).
 - ``/low`` — list low-priority events on demand.
-- ``/add <text>`` — route to the AI parse → draft flow. The parse endpoint
-  (issue #70, M5-T3) is not merged yet, so this is a **stub** that records the
-  inbound message and explains parsing will be wired when available.
+- ``/add <text>`` — route to the AI parse → draft flow (issue #75, M5-T4A):
+  parse the text via ``llm_parse.parse_events`` (the same pure module the
+  ``POST /api/events/parse`` endpoint reuses), present each parsed draft as a
+  Telegram card with inline **Save / Edit / Discard** buttons, and only persist
+  a confirmed draft (via the CRUD layer) when the owner taps **Save**.
 - ``/ask <question>`` — LLM query over history. The query endpoint is not
   merged yet, so this is a **stub**, wired when available.
 
@@ -21,11 +23,13 @@ The pure business logic lives here and is fully unit-tested: the DM-only gate
 (``is_private_chat``), command parsing (``parse_command``), the upcoming-days
 parser (``parse_upcoming_days``), the event-listing helpers
 (``events_today`` / ``events_upcoming`` / ``events_low``), the line formatter
-(``format_event_line``), the command dispatcher (``handle_command``) and the
-inbound-record builder (``build_inbound_record``). The impure Telegram wiring
-(``_handle_update`` / ``build_telegram_inbound_application`` /
-``record_inbound``) is a thin adapter over python-telegram-bot v21 (polling)
-and is kept to a minimum.
+(``format_event_line``), the command dispatcher (``handle_command``), the
+inbound-record builder (``build_inbound_record``) and the draft-flow helpers
+(``format_draft_card`` / ``build_draft_keyboard`` / ``parse_draft_callback`` /
+``draft_to_event_create`` / ``DraftStore``). The impure Telegram wiring
+(``_handle_update`` / ``_handle_callback_query`` /
+``build_telegram_inbound_application`` / ``record_inbound``) is a thin adapter
+over python-telegram-bot v21 (polling) and is kept to a minimum.
 """
 
 from __future__ import annotations
@@ -39,10 +43,13 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from . import crud
 from .config import Settings
-from .enums import EventStatus
+from .enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
+from .llm_parse import ParsedDraft, parse_events
 from .models import Event, TelegramInbound
 from .recurrence import Occurrence, next_occurrences
+from .schemas import EventCreate
 from .telegram_outbound import is_allowed_user, priority_emoji
 
 logger = logging.getLogger(__name__)
@@ -86,6 +93,54 @@ class CommandResult:
 
     reply: str
     message_type: str | None = None
+
+
+@dataclass(frozen=True)
+class BotReply:
+    """A reply to send: text plus an optional inline keyboard (thin adapter)."""
+
+    text: str
+    reply_markup: Any | None = None
+
+
+@dataclass(frozen=True)
+class DraftAction:
+    """A parsed draft-button action: which action on which draft index."""
+
+    action: str  # "save" | "edit" | "discard"
+    index: int
+
+
+@dataclass
+class PendingDraft:
+    """A chat's in-memory pending draft set plus the raw text that produced it."""
+
+    drafts: list[ParsedDraft]
+    raw_input: str
+
+
+class DraftStore:
+    """In-memory pending-draft state keyed by ``chat_id`` (issue #75).
+
+    Holds the pending draft per chat so a confirmed draft can be saved later
+    (across updates within a session). A new ``/add`` replaces any pending
+    draft for that chat. Pure in-memory state — no I/O.
+    """
+
+    def __init__(self) -> None:
+        self._pending: dict[str, PendingDraft] = {}
+
+    def set(self, chat_id: int | str, pending: PendingDraft) -> None:
+        """Store (replacing) the pending draft for ``chat_id``."""
+        self._pending[str(chat_id)] = pending
+
+    def get(self, chat_id: int | str) -> PendingDraft | None:
+        """Return the pending draft for ``chat_id`` (or None)."""
+        return self._pending.get(str(chat_id))
+
+    def pop(self, chat_id: int | str) -> PendingDraft | None:
+        """Remove and return the pending draft for ``chat_id`` (or None)."""
+        return self._pending.pop(str(chat_id), None)
 
 
 def is_private_chat(chat_type: str | None) -> bool:
@@ -310,19 +365,108 @@ def _reply_low(events: Sequence[_InboundEvent], now: datetime) -> CommandResult:
 
 
 def _reply_add(args: str) -> CommandResult:
-    """Stub for /add: record the text; AI parsing wires in when merged (#70)."""
+    """Handle /add: empty text gets a usage hint; otherwise mark for parsing.
+
+    The actual AI parse is impure (HTTP), so the command dispatcher returns the
+    stripped text with ``message_type="add_parse"`` and the thin adapter
+    (``_handle_update``) performs the parse and presents the draft card.
+    """
     text = args.strip()
     if not text:
         return CommandResult(
             reply="Usage: /add <event text>, e.g. /add dentist tomorrow 9am.",
             message_type="text",
         )
-    return CommandResult(
-        reply=(
-            f'📝 Got it: "{text}". AI parsing isn\'t wired up yet — add it '
-            "manually in the web app for now."
+    return CommandResult(reply=text, message_type="add_parse")
+
+
+def format_draft_card(draft: ParsedDraft) -> str:
+    """Render a parsed draft as a readable Telegram draft card (pure).
+
+    Shows the title plus any fields the model was confident about (start time,
+    all-day, recurrence, priority, channels, tags).
+    """
+    lines = [f"📝 {draft.title}"]
+    if draft.start_at:
+        lines.append(f"  When: {draft.start_at}")
+    if draft.all_day:
+        lines.append("  All day: yes")
+    if draft.rrule:
+        lines.append(f"  Repeats: {draft.rrule}")
+    if draft.priority:
+        lines.append(f"  Priority: {draft.priority}")
+    if draft.channels:
+        lines.append(f"  Channels: {', '.join(draft.channels)}")
+    if draft.tags:
+        lines.append(f"  Tags: {', '.join(draft.tags)}")
+    return "\n".join(lines)
+
+
+def build_draft_keyboard(index: int) -> list[tuple[str, str]]:
+    """Build the (label, callback_data) buttons for one draft (pure).
+
+    Returns the Save / Edit / Discard row; the callback data embeds the action
+    and the draft index so ``parse_draft_callback`` can route it back.
+    """
+    return [
+        ("💾 Save", f"draft:save:{index}"),
+        ("✏️ Edit", f"draft:edit:{index}"),
+        ("🗑 Discard", f"draft:discard:{index}"),
+    ]
+
+
+def parse_draft_callback(callback_data: str | None) -> DraftAction | None:
+    """Parse a draft-button callback payload into a ``DraftAction`` (pure).
+
+    Returns ``None`` for anything that isn't a well-formed ``draft:<action>:<i>``
+    payload with a known action and a valid index.
+    """
+    if not callback_data:
+        return None
+    parts = callback_data.split(":")
+    if len(parts) != 3 or parts[0] != "draft":
+        return None
+    action = parts[1]
+    if action not in ("save", "edit", "discard"):
+        return None
+    try:
+        index = int(parts[2])
+    except ValueError:
+        return None
+    if index < 0:
+        return None
+    return DraftAction(action=action, index=index)
+
+
+def draft_to_event_create(draft: ParsedDraft, raw_input: str) -> EventCreate:
+    """Map a confirmed draft onto an ``EventCreate`` payload (pure).
+
+    The draft is persisted with ``source=telegram_text`` and ``status=draft`` —
+    it stays a draft until the web app activates it; nothing is auto-activated.
+    Missing optional fields fall back to sensible defaults (one-time, medium
+    priority, telegram channel, UTC).
+    """
+    return EventCreate(
+        title=draft.title,
+        start_at=datetime.fromisoformat(draft.start_at)
+        if draft.start_at
+        else datetime.now(UTC),
+        type=EventType(draft.type) if draft.type else EventType.ONE_TIME,
+        tz=draft.tz or "UTC",
+        all_day=bool(draft.all_day),
+        rrule=draft.rrule,
+        priority=EventPriority(draft.priority)
+        if draft.priority
+        else EventPriority.MEDIUM,
+        channels=(
+            [EventChannel(c) for c in draft.channels]
+            if draft.channels
+            else [EventChannel.TELEGRAM]
         ),
-        message_type="text",
+        tags=list(draft.tags or []),
+        source=EventSource.TELEGRAM_TEXT,
+        status=EventStatus.DRAFT,
+        raw_input=raw_input,
     )
 
 
@@ -384,14 +528,18 @@ def _handle_update(
     session_factory: sessionmaker[Session] | None = None,
     *,
     now: datetime | None = None,
-) -> str | None:
+    http_client: Any | None = None,
+    draft_store: DraftStore | None = None,
+) -> BotReply | None:
     """Process one inbound update and return the reply to send (or None).
 
     Thin adapter that applies the DM-only gate and the single-user allowlist
     (ignoring group/channel/other-user noise), parses the command, dispatches
-    to the pure handler and persists the inbound message. Returns ``None`` when
-    the update is ignored (no message, not a private chat, not the allowed
-    user, or non-command text).
+    to the pure handler and persists the inbound message. For ``/add`` the
+    reply is a draft card with inline buttons (the LLM parse is impure, so it
+    happens here via ``http_client``). Returns ``None`` when the update is
+    ignored (no message, not a private chat, not the allowed user, or
+    non-command text).
     """
     message = getattr(update, "effective_message", None) or getattr(
         update, "message", None
@@ -417,10 +565,134 @@ def _handle_update(
 
     result = handle_command(command, events, now=now)
 
+    if result.message_type == "add_parse":
+        chat = getattr(message, "chat", None)
+        chat_id = getattr(chat, "id", None)
+        reply = _handle_add_flow(
+            result.reply,
+            settings,
+            now=now,
+            http_client=http_client,
+            draft_store=draft_store,
+            chat_id=chat_id,
+        )
+        if session_factory is not None:
+            with session_factory() as session:
+                record_inbound(session, message, "draft")
+        return reply
+
     if session_factory is not None:
         with session_factory() as session:
             record_inbound(session, message, result.message_type)
-    return result.reply
+    return BotReply(result.reply)
+
+
+def _handle_add_flow(
+    text: str,
+    settings: Settings,
+    *,
+    now: datetime | None,
+    http_client: Any | None,
+    draft_store: DraftStore | None,
+    chat_id: Any,
+) -> BotReply:
+    """Run the /add parse flow: parse, store the pending draft, render the card.
+
+    Impure (calls ``parse_events`` via ``http_client``). On success the parsed
+    draft(s) are stored in ``draft_store`` for this chat and returned as a card
+    with Save / Edit / Discard buttons. Failures (no LLM key, transport error,
+    clarification needed) return a plain text reply and store nothing.
+    """
+    if http_client is None or draft_store is None or chat_id is None:
+        return BotReply("AI parsing isn't available right now.")
+
+    result = parse_events(
+        text=text,
+        now=_as_utc(now or datetime.now(UTC)),
+        tz=settings.tz,
+        settings=settings,
+        http_client=http_client,
+    )
+    if result.unavailable:
+        return BotReply(
+            "AI parsing isn't configured (no LLM key). "
+            "Add the event manually in the web app for now."
+        )
+    if not result.ok or result.outcome is None:
+        return BotReply(f"Couldn't parse that: {result.error or 'unknown error'}")
+    if result.outcome.needs_clarification:
+        return BotReply(result.outcome.clarification or "Need more details.")
+
+    drafts = result.outcome.drafts or []
+
+    draft_store.set(chat_id, PendingDraft(drafts=drafts, raw_input=text))
+    card_text = "\n\n".join(format_draft_card(d) for d in drafts)
+    keyboard_rows = [build_draft_keyboard(i) for i in range(len(drafts))]
+    return BotReply(card_text, reply_markup=keyboard_rows)
+
+
+def _handle_callback_query(
+    query: Any,
+    settings: Settings,
+    session_factory: sessionmaker[Session] | None,
+    draft_store: DraftStore | None,
+    *,
+    now: datetime | None = None,
+) -> BotReply | None:
+    """Route a draft-button callback (Save / Edit / Discard) to its action.
+
+    Applies the single-user allowlist (only the owner may act), parses the
+    callback payload, looks up the chat's pending draft and acts: Save persists
+    via CRUD, Edit re-prompts for corrected text, Discard drops the draft.
+    Returns ``None`` when the callback isn't a draft action or the user is not
+    allowed.
+    """
+    user = getattr(query, "from_user", None)
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not is_allowed_user(user_id, settings.telegram_user_id):
+        return None
+
+    action = parse_draft_callback(getattr(query, "data", None))
+    if action is None:
+        return None
+
+    chat = getattr(getattr(query, "message", None), "chat", None)
+    chat_id = getattr(chat, "id", None)
+    if chat_id is None or draft_store is None:
+        return BotReply("No pending draft to act on.")
+
+    pending = draft_store.get(chat_id)
+    if pending is None or action.index >= len(pending.drafts):
+        return BotReply("That draft is no longer available.")
+
+    draft = pending.drafts[action.index]
+    if action.action == "save":
+        return _save_draft(session_factory, draft, pending, chat_id, draft_store)
+    if action.action == "edit":
+        return BotReply(
+            "✏️ Send the corrected event text (e.g. /add <text>) and I'll re-parse it."
+        )
+    if action.action == "discard":
+        draft_store.pop(chat_id)
+        return BotReply("🗑 Draft discarded.")
+    return None  # pragma: no cover — all actions are handled above
+
+
+def _save_draft(
+    session_factory: sessionmaker[Session] | None,
+    draft: ParsedDraft,
+    pending: PendingDraft,
+    chat_id: Any,
+    draft_store: DraftStore,
+) -> BotReply:
+    """Persist a confirmed draft as a real event and clear the pending draft."""
+    if session_factory is None:
+        return BotReply("Can't save right now (no database).")
+    payload = draft_to_event_create(draft, pending.raw_input)
+    with session_factory() as session:
+        event = crud.create_event(session, payload)
+    draft_store.pop(chat_id)
+    return BotReply(f"✅ Saved: {event.title}")
 
 
 def build_telegram_inbound_application(
@@ -428,28 +700,80 @@ def build_telegram_inbound_application(
     session_factory: sessionmaker[Session] | None = None,
     *,
     now: datetime | None = None,
+    http_client: Any | None = None,
+    draft_store: DraftStore | None = None,
 ) -> Any:
     """Build the python-telegram-bot Application with an inbound DM handler.
 
     Returns ``None`` when no bot token is configured so the app can start
-    without Telegram (same guard as the outbound sender). The caller is
-    responsible for ``run_polling()``.
+    without Telegram (same guard as the outbound sender). Registers a text
+    handler for commands and a ``CallbackQueryHandler`` for the draft buttons.
+    The caller is responsible for ``run_polling()``.
     """
     if not settings.telegram_bot_token:
         return None
-    from telegram.ext import Application, MessageHandler, filters
+    from telegram.ext import (
+        Application,
+        CallbackQueryHandler,
+        MessageHandler,
+        filters,
+    )
 
     app = Application.builder().token(settings.telegram_bot_token).build()
+    if http_client is None:
+        import httpx
+
+        http_client = httpx.Client(timeout=30.0)
+    if draft_store is None:
+        draft_store = DraftStore()
 
     async def handler(update: Any, _context: Any) -> None:
-        reply = _handle_update(update, settings, session_factory, now=now)
+        reply = _handle_update(
+            update,
+            settings,
+            session_factory,
+            now=now,
+            http_client=http_client,
+            draft_store=draft_store,
+        )
         if reply is None:
             return
         message = getattr(update, "effective_message", None) or getattr(
             update, "message", None
         )
         if message is not None:
-            await message.reply_text(reply)
+            await _send_reply(message.reply_text, reply)
+
+    async def callback_handler(update: Any, _context: Any) -> None:
+        query = getattr(update, "callback_query", None)
+        if query is None:
+            return
+        reply = _handle_callback_query(
+            query, settings, session_factory, draft_store, now=now
+        )
+        if reply is None:
+            return
+        sender = getattr(query, "answer", None)
+        if sender is not None:
+            await sender()
+        message = getattr(query, "message", None)
+        if message is not None:
+            await _send_reply(message.reply_text, reply)
 
     app.add_handler(MessageHandler(filters.TEXT, handler))
+    app.add_handler(CallbackQueryHandler(callback_handler))
     return app
+
+
+async def _send_reply(reply_text: Any, reply: BotReply) -> None:
+    """Send a ``BotReply`` as a Telegram message (thin adapter)."""
+    if reply.reply_markup is None:
+        await reply_text(reply.text)
+        return
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+    rows = [
+        [InlineKeyboardButton(label, callback_data=data) for label, data in row]
+        for row in reply.reply_markup
+    ]
+    await reply_text(reply.text, reply_markup=InlineKeyboardMarkup(rows))

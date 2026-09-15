@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Telegram /add → parse → Save/Edit/Discard draft flow (issue #75, M5-T4A):**
+  wires the inbound `/add <text>` command to the (merged) parse logic so a
+  parsed event is returned as a confirmable Telegram draft card with inline
+  **Save / Edit / Discard** buttons, and only a confirmed draft is persisted as
+  a real `Event`. The `/add` command reuses the pure `llm_parse.parse_events`
+  module (the same logic behind `POST /api/events/parse`); on success the
+  drafts are rendered as cards (title, when, all-day, recurrence, priority,
+  channels, tags) with per-draft callback buttons. **Save** persists the draft
+  via the existing CRUD layer as `status=draft` / `source=telegram_text`
+  (never auto-activated, so a critical/financial event is never silently
+  saved); **Edit** re-prompts for corrected text; **Discard** drops the draft
+  with a confirmation reply. Pending draft state is held in-memory keyed by
+  `chat_id` (a new `/add` replaces any pending draft), and a
+  `CallbackQueryHandler` routes the `save`/`edit`/`discard` actions behind the
+  same single-user allowlist. The pure draft-flow logic (card rendering,
+  keyboard building, callback routing, draft → event mapping, `DraftStore`)
+  lives in `apps/api/app/telegram_inbound.py` and is fully unit-tested (100%
+  line coverage); the Telegram wiring stays a thin adapter.
+
 - **Local STT for Telegram voice messages (issue #71, M5-T2):** adds
   `apps/api/app/stt.py`, a local speech-to-text module that converts a Telegram
   `voice.ogg` to a 16 kHz mono WAV via ffmpeg, then transcribes it with
