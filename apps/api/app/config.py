@@ -49,9 +49,7 @@ class Settings:
     #: Directory for nightly SQLite backups (gitignored, default ./backups).
     backups_dir: Path = field(
         default_factory=lambda: Path(
-            os.getenv(
-                "TIMELINE_BACKUPS_DIR", str(_DEFAULT_DATA_DIR.parent / "backups")
-            )
+            os.getenv("TIMELINE_BACKUPS_DIR", str(_DEFAULT_DATA_DIR.parent / "backups"))
         )
     )
     #: Number of recent backups to keep when pruning (default 30, ~30 days).
