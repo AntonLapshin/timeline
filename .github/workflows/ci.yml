@@ -59,6 +59,12 @@ jobs:
       - name: Web build
         run: npm run build
 
+      - name: Web e2e smoke (Playwright, loopback 127.0.0.1:8123)
+        working-directory: apps/web
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+
       - name: Backend lint (ruff)
         working-directory: apps/api
         run: ruff check app tests
