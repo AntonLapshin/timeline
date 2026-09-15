@@ -25,6 +25,7 @@ from app.config import Settings
 from app.db import create_engine_from_settings, make_session_factory
 from app.email_outbound import (
     SmtpConfig,
+    _dispatch_send,
     build_email_message,
     build_smtp_config,
     make_email_job_func,
@@ -172,6 +173,95 @@ def test_send_email_calls_smtp_client() -> None:
     send_email(FakeSmtp(), config, msg)
     assert len(sent) == 1
     assert sent[0] is msg
+
+
+def test_dispatch_send_opens_real_smtp_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_dispatch_send opens a real smtplib.SMTP when none is injected.
+
+    Monkeypatches smtplib.SMTP so the network branch (connect/STARTTLS/login/
+    quit) is exercised without any real I/O.
+    """
+    calls: list[str] = []
+    sent: list[object] = []
+
+    class FakeRealSmtp:
+        def __init__(self, host: str, port: int, timeout: int = 30) -> None:
+            calls.append(f"connect:{host}:{port}:{timeout}")
+
+        def starttls(self) -> None:
+            calls.append("starttls")
+
+        def login(self, user: str, password: str) -> None:
+            calls.append(f"login:{user}:{password}")
+
+        def send_message(self, message: object) -> None:
+            sent.append(message)
+
+        def quit(self) -> None:
+            calls.append("quit")
+
+    monkeypatch.setattr("app.email_outbound.smtplib.SMTP", FakeRealSmtp)
+
+    event = _event()
+    msg = build_email_message(event, "occ-1", "1h", "to@example.com")
+    config = SmtpConfig(
+        host="smtp.example.com",
+        port=587,
+        user="user",
+        password="secret",
+        from_addr="from@example.com",
+        to_addr="to@example.com",
+    )
+    _dispatch_send(None, config, msg)
+    assert len(sent) == 1
+    assert sent[0] is msg
+    assert calls == [
+        "connect:smtp.example.com:587:30",
+        "starttls",
+        "login:user:secret",
+        "quit",
+    ]
+
+
+def test_dispatch_send_no_credentials_skips_login(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without credentials the real SMTP branch skips login."""
+    calls: list[str] = []
+
+    class FakeRealSmtp:
+        def __init__(self, host: str, port: int, timeout: int = 30) -> None:
+            calls.append(f"connect:{host}:{port}")
+
+        def starttls(self) -> None:
+            calls.append("starttls")
+
+        def login(self, user: str, password: str) -> None:
+            calls.append("login")
+
+        def send_message(self, message: object) -> None:
+            pass
+
+        def quit(self) -> None:
+            calls.append("quit")
+
+    monkeypatch.setattr("app.email_outbound.smtplib.SMTP", FakeRealSmtp)
+
+    event = _event()
+    msg = build_email_message(event, "occ-1", "1h", "to@example.com")
+    config = SmtpConfig(
+        host="smtp.example.com",
+        port=587,
+        user=None,
+        password=None,
+        from_addr="from@example.com",
+        to_addr="to@example.com",
+    )
+    _dispatch_send(None, config, msg)
+    assert calls == ["connect:smtp.example.com:587", "starttls", "quit"]
+    assert "login" not in calls
 
 
 def test_make_email_job_func_sends_and_records(

@@ -20,7 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   only and never committed; `redact_credentials` keeps the password out of
   logs. Pure helpers (`should_send_email`, `build_email_message`,
   `build_smtp_config`, `redact_credentials`) are unit-tested in isolation and
-  the SMTP client is injected/mocked (no real network); the job func reuses
+  the SMTP client is injected/mocked (no real network) and the real
+  `smtplib.SMTP` connect/STARTTLS/login/quit path in `_dispatch_send` is
+exercised via a monkeypatched SMTP (no real I/O); the job func reuses
   `deliver_reminder` so at-least-once / audit-trail semantics are preserved.
   New `Settings` fields (`email_enabled`, `smtp_*`) are covered by config tests.
 
