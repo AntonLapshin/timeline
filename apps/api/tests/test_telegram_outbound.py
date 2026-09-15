@@ -677,7 +677,9 @@ def test_make_telegram_job_func_repeat_until_ack_schedules_followup(
         async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
             sent.append(text)
 
-    settings = Settings(data_dir=tmp_path, db_name="telegram.db")
+    settings = Settings(
+        data_dir=tmp_path, db_name="telegram.db", telegram_user_id="123"
+    )
     scheduler = build_scheduler(settings)
     try:
         job_func = make_telegram_job_func(
@@ -719,7 +721,9 @@ def test_make_telegram_job_func_no_repeat_when_acked(
         async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
             sent.append(text)
 
-    settings = Settings(data_dir=tmp_path, db_name="telegram.db")
+    settings = Settings(
+        data_dir=tmp_path, db_name="telegram.db", telegram_user_id="123"
+    )
     scheduler = build_scheduler(settings)
     try:
         job_func = make_telegram_job_func(
