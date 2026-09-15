@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Telegram inbound DM command bot (issue #69, M5-T1):** adds a
+  python-telegram-bot v21 polling updater in `apps/api/app/telegram_inbound.py`
+  that answers the owner's private-chat commands. Messages from
+  groups/channels/other users are ignored via the DM-only gate
+  (`is_private_chat`) and the single-user allowlist (`TELEGRAM_USER_ID`,
+  fail-closed). Commands: `/today` (list today's events), `/upcoming [7d|30d]`
+  (default 7d, list upcoming events), `/low` (list low-priority events on
+  demand), `/add <text>` (route to parse → draft flow — a stub until the parse
+  endpoint, issue #70, is merged) and `/ask <question>` (LLM query over
+  history — a stub until the query endpoint lands). No bot token configured ⇒
+  the inbound updater is a no-op (never polls), same guard style as the
+  outbound sender. The pure command logic (DM gate, command parsing, upcoming-
+  days parsing, event listing for today/upcoming/low, line formatting, command
+  dispatch and the inbound-record builder) lives in the module and is fully
+  unit-tested; the Telegram wiring (`_handle_update` /
+  `build_telegram_inbound_application` / `record_inbound`) is a thin adapter
+  over the library. Inbound DM messages are persisted to the existing
+  `TelegramInbound` table.
+
 - **Test for uncovered defensive branch in telegram_outbound.py (issue #66):**
   adds a test covering the `event is None` branch in the repeat-until-ack
   wiring of `make_telegram_job_func` (the event-deleted-mid-flight case). The
