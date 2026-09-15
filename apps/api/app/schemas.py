@@ -179,3 +179,35 @@ class EventOccurrenceRead(BaseModel):
     all_day: bool = False
     tz: str = "UTC"
     next_occurrence: datetime | None = None
+
+
+# --- LLM parse (issue #70) ----------------------------------------------------
+
+
+class ParseRequestPayload(BaseModel):
+    """Payload for ``POST /api/events/parse``.
+
+    ``now`` (defaults to the server's current time) and ``tz`` are injected into
+    the LLM prompt so relative dates resolve correctly.
+    """
+
+    text: str = Field(min_length=1, max_length=5000)
+    now: datetime | None = None
+    tz: str | None = None
+
+
+class EventParseResponse(BaseModel):
+    """Response for ``POST /api/events/parse``.
+
+    Either ``events`` (validated drafts, multi-event) or
+    ``needs_clarification`` (the model couldn't determine the event) is
+    populated on success. ``unavailable``/``error`` describe failure cases.
+    Mirrors the web ``LlmParser`` contract (issue #70).
+    """
+
+    events: list[dict[str, object]] | None = None
+    needs_clarification: bool | None = None
+    message: str | None = None
+    unavailable: bool = False
+    error: str | None = None
+

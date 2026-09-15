@@ -93,6 +93,16 @@ class Settings:
     smtp_from: str | None = field(default_factory=lambda: _optional_env("SMTP_FROM"))
     #: Default "To" address for reminder emails.
     smtp_to: str | None = field(default_factory=lambda: _optional_env("SMTP_TO"))
+    #: JoinGonka / OpenAI-compatible base URL for LLM parsing (issue #70).
+    llm_base_url: str = field(
+        default_factory=lambda: os.getenv("LLM_BASE_URL", "https://gate.joingonka.ai/openai/v1")
+    )
+    #: LLM model name for parsing (local .env only).
+    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", ""))
+    #: LLM API key (local .env only, never committed). Absent ⇒ parse unavailable.
+    llm_api_key: str | None = field(
+        default_factory=lambda: _optional_env("LLM_API_KEY")
+    )
 
     @property
     def database_url(self) -> str:

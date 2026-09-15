@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **POST /api/events/parse: JoinGonka OpenAI-compatible AI parsing (issue #70,
+  M5-T3):** adds a thin direct JoinGonka OpenAI-compatible fetch that turns
+  free text into validated structured event draft(s). New config fields
+  `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` (local `.env` only, safe
+  defaults; absent key ⇒ the endpoint returns HTTP 503 `unavailable`, matching
+  the web `LlmParser` contract). The pure logic lives in
+  `apps/api/app/llm_parse.py` — prompt building (injecting the caller's `now`
+  and `tz` for relative-date resolution), JSON-mode request construction, and
+  response validation — and is fully unit-tested with an injected/mocked HTTP
+  client (no real network). Supports multi-event responses and a
+  `needs_clarification` follow-up when the model can't determine the event.
+  Drafts are returned for confirmation only — nothing is auto-saved, so a
+  critical financial event is never silently persisted. The route is a thin
+  layer over the pure module (no business logic in the route). `httpx` is
+  promoted to a runtime dependency for the fetch.
+
 - **Full line coverage for the Telegram inbound bot (PR #72 review, issue #69):**
   brings `apps/api/app/telegram_inbound.py` to 100% line coverage. Adds a test
   that invokes the registered inbound handler (via the `Application`'s
