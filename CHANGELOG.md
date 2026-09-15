@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Boundary test for out-of-range draft index (issue #79, M9-T1):** adds a
+  test for the `_handle_callback_query` guard `action.index >= len(pending.drafts)`
+  in `apps/api/app/telegram_inbound.py`, which returns
+  `"That draft is no longer available."` when a callback references a draft index
+  beyond the pending draft list. The test exercises the guard directly (not via
+  the `pending is None` short-circuit): a chat with a single-draft pending store
+  and a `draft:save:5` callback returns the expected reply.
+
 - **Parse eval set (20 samples) + redacted logs by default (issue #76, M5-T4B):**
   adds a committed eval harness for the `POST /api/events/parse` pipeline —
   `apps/api/tests/eval/` holds 20 representative sample inputs with expected
