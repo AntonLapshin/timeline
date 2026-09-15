@@ -52,6 +52,18 @@ class Settings:
     port: int = field(default_factory=lambda: int(os.getenv("TIMELINE_PORT", "8123")))
     #: Enable SQLite WAL mode (durable + concurrent readers).
     wal_enabled: bool = field(default_factory=lambda: _bool_env("TIMELINE_WAL", True))
+    #: Log file path (rotated by RotatingFileHandler / logrotate). Empty ⇒ stderr.
+    log_file: str | None = field(
+        default_factory=lambda: _optional_env("TIMELINE_LOG_FILE")
+    )
+    #: Max size of a single log file before rotation, in bytes (default 5 MB).
+    log_max_bytes: int = field(
+        default_factory=lambda: int(os.getenv("TIMELINE_LOG_MAX_BYTES", "5242880"))
+    )
+    #: Number of rotated log files to keep (default 5).
+    log_backup_count: int = field(
+        default_factory=lambda: int(os.getenv("TIMELINE_LOG_BACKUP_COUNT", "5"))
+    )
     #: Seed the initial events on startup when the events table is empty.
     seed_on_start: bool = field(
         default_factory=lambda: _bool_env("TIMELINE_SEED", True)

@@ -26,10 +26,13 @@ def client(settings: Settings) -> TestClient:
 
 
 def test_healthz_returns_ok(client: TestClient) -> None:
-    """The /healthz endpoint reports ok when the DB is reachable."""
+    """The /healthz endpoint reports ok + uptime when the DB is reachable."""
     resp = client.get("/healthz")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert isinstance(body["uptime_seconds"], int)
+    assert body["uptime_seconds"] >= 0
 
 
 def test_healthz_creates_database_file(settings: Settings) -> None:

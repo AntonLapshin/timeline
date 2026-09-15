@@ -6,6 +6,8 @@ confirmed with defaults of UTC / en-US / no quiet hours.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.config import Settings
@@ -225,3 +227,25 @@ def test_llm_settings_accept_blank_key_as_disabled(
     monkeypatch.setenv("LLM_API_KEY", "  ")
     settings = Settings()
     assert settings.llm_api_key is None
+
+
+# --- Log rotation settings (issue #77) --------------------------------------
+
+
+def test_log_settings_defaults(tmp_path: Path) -> None:
+    """Log settings default to stderr logging with 5 MB / 5 backups."""
+    settings = Settings(data_dir=tmp_path)
+    assert settings.log_file is None
+    assert settings.log_max_bytes == 5 * 1024 * 1024
+    assert settings.log_backup_count == 5
+
+
+def test_log_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TIMELINE_LOG_* env vars are reflected on the settings."""
+    monkeypatch.setenv("TIMELINE_LOG_FILE", "/tmp/timeline.log")
+    monkeypatch.setenv("TIMELINE_LOG_MAX_BYTES", "2048")
+    monkeypatch.setenv("TIMELINE_LOG_BACKUP_COUNT", "3")
+    settings = Settings()
+    assert settings.log_file == "/tmp/timeline.log"
+    assert settings.log_max_bytes == 2048
+    assert settings.log_backup_count == 3

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Omarchy hardening: loopback bind guard, systemd enable, log rotation,
+  /healthz (issue #77, M6-T1):** enforces a fail-closed loopback-only bind —
+  a new pure `app.bind_guard` module rejects any non-loopback host
+  (`0.0.0.0`, LAN/internet) at startup with a clear error, so the no-auth
+  API can never be accidentally exposed to the network. The `systemd`
+  `--user` unit is completed for `systemctl --user enable --now` with
+  `Restart=on-failure` + `RestartSec=5` and documented start/stop/status
+  commands. Logs are bounded two ways: a committed `systemd/timeline.logrotate`
+  config (5 MB × 5, compressed) and a Python `RotatingFileHandler` wired via
+  new `TIMELINE_LOG_FILE` / `TIMELINE_LOG_MAX_BYTES` /
+  `TIMELINE_LOG_BACKUP_COUNT` settings (pure `app.logging_setup` rotation
+  helper, fully unit-tested). `/healthz` now returns HTTP 200 with
+  `{"status": "ok", "uptime_seconds": N}` and stays loopback-only; pytest
+  asserts the guard rejects `0.0.0.0` (both pure and via `create_app`) and
+  the healthz payload. 100% `src/core` coverage maintained.
+
 - **Telegram /add → parse → Save/Edit/Discard draft flow (issue #75, M5-T4A):**
   wires the inbound `/add <text>` command to the (merged) parse logic so a
   parsed event is returned as a confirmable Telegram draft card with inline
