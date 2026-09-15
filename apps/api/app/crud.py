@@ -10,7 +10,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import Event
+from .models import DeliveryLog, Event
 from .schemas import EventCreate, EventUpdate
 
 
@@ -48,3 +48,13 @@ def delete_event(session: Session, event: Event) -> None:
     """Delete an event and persist the change."""
     session.delete(event)
     session.commit()
+
+
+def list_deliveries(session: Session, event_id: int) -> list[DeliveryLog]:
+    """Return an event's delivery-log rows, most recent first."""
+    stmt = (
+        select(DeliveryLog)
+        .where(DeliveryLog.event_id == event_id)
+        .order_by(DeliveryLog.created_at.desc())
+    )
+    return list(session.scalars(stmt).all())

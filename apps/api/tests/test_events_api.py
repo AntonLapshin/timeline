@@ -8,6 +8,7 @@ pattern) and 404 handling.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -15,6 +16,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.models import DeliveryLog
 
 
 @pytest.fixture()
@@ -151,3 +153,84 @@ def test_delete_event_not_found(client: TestClient) -> None:
     """Deleting a missing event returns 404."""
     resp = client.delete("/api/events/999999")
     assert resp.status_code == 404
+
+
+def _add_delivery(
+    client: TestClient, event_id: int, **overrides: object
+) -> DeliveryLog:
+    """Insert a DeliveryLog row directly via the app's session factory."""
+    fields: dict[str, object] = {"status": "sent"}
+    fields.update(overrides)
+    factory = client.app.state.session_factory
+    with factory() as session:
+        log = DeliveryLog(event_id=event_id, **fields)
+        session.add(log)
+        session.commit()
+        session.refresh(log)
+        return log
+
+
+def test_get_event_deliveries_lists_logs(client: TestClient) -> None:
+    """GET /api/events/{id}/deliveries returns the event's delivery log."""
+    created = client.post("/api/events", json=_payload(title="Delivered")).json()
+    event_id = created["id"]
+    _add_delivery(
+        client,
+        event_id,
+        occurrence_id="occ-1",
+        offset="1h",
+        status="sent",
+        scheduled_at=datetime(2026, 9, 1, 9, 0, tzinfo=UTC),
+        sent_at=datetime(2026, 9, 1, 9, 0, tzinfo=UTC),
+    )
+    _add_delivery(
+        client,
+        event_id,
+        occurrence_id="occ-2",
+        offset="1d",
+        status="failed",
+        error="network error",
+    )
+
+    resp = client.get(f"/api/events/{event_id}/deliveries")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+    # Most recent first.
+    assert [row["status"] for row in body] == ["failed", "sent"]
+    first = body[0]
+    assert first["event_id"] == event_id
+    assert first["occurrence_id"] == "occ-2"
+    assert first["offset"] == "1d"
+    assert first["status"] == "failed"
+    assert first["error"] == "network error"
+    assert first["scheduled_at"] is None
+    assert first["sent_at"] is None
+
+
+def test_get_event_deliveries_empty(client: TestClient) -> None:
+    """An event with no deliveries returns an empty list."""
+    created = client.post("/api/events", json=_payload(title="Quiet")).json()
+    resp = client.get(f"/api/events/{created['id']}/deliveries")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_get_event_deliveries_not_found(client: TestClient) -> None:
+    """Fetching deliveries for a missing event returns 404."""
+    resp = client.get("/api/events/999999/deliveries")
+    assert resp.status_code == 404
+
+
+def test_get_event_deliveries_scoped_to_event(client: TestClient) -> None:
+    """Deliveries for other events are not returned."""
+    a = client.post("/api/events", json=_payload(title="A")).json()
+    b = client.post("/api/events", json=_payload(title="B")).json()
+    _add_delivery(client, a["id"], status="sent")
+    _add_delivery(client, b["id"], status="failed")
+
+    resp = client.get(f"/api/events/{a['id']}/deliveries")
+    body = resp.json()
+    assert len(body) == 1
+    assert body[0]["event_id"] == a["id"]
+    assert body[0]["status"] == "sent"

@@ -100,6 +100,18 @@ describe("apiClient core module", () => {
     await expect(client.getOccurrences("2026-09")).resolves.toEqual(occurrences);
   });
 
+  it("gets an event's delivery log via GET /api/events/{id}/deliveries", async () => {
+    const deliveries = [
+      { id: 1, event_id: 1, status: "sent", created_at: "2026-09-01T09:00:00" },
+    ];
+    const fetchImpl = mockFetch((url) => {
+      expect(url).toBe("http://127.0.0.1:8123/api/events/7/deliveries");
+      return { ok: true, status: 200, json: async () => deliveries };
+    });
+    const client = createApiClient("http://127.0.0.1:8123", fetchImpl);
+    await expect(client.getEventDeliveries(7)).resolves.toEqual(deliveries);
+  });
+
   it("propagates a fetch rejection (network error) from request()", async () => {
     const networkError = new Error("fetch failed");
     const fetchImpl = mockFetch(() => {

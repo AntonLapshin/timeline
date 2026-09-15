@@ -15,9 +15,14 @@ import { DemoPanel } from "../components/DemoPanel";
 import { ShowcaseSection } from "./ShowcaseSection";
 import { ShowcaseState } from "./ShowcaseSection";
 import { ShowcaseServicesProvider } from "./showcaseServices.tsx";
-import { SHOWCASE_EVENTS, SHOWCASE_OCCURRENCES } from "./showcaseData";
+import {
+  SHOWCASE_EVENTS,
+  SHOWCASE_OCCURRENCES,
+  SHOWCASE_DELIVERIES,
+} from "./showcaseData";
 import { toOccurrenceRow } from "../../core/calendar";
 import { reminderPreview } from "../../core/eventDrawer";
+import { deliveryLogRows } from "../../core/deliveryLog";
 import type { EventDrawerState } from "../viewModels/useEventDrawer";
 import type { EventWizardState } from "../viewModels/useEventWizard";
 import type { SmartInputState } from "../viewModels/useSmartInput";
@@ -62,6 +67,9 @@ function populatedDrawerState(): EventDrawerState {
     error: null,
     preview: reminderPreview(event),
     occurrences,
+    deliveriesLoading: false,
+    deliveriesError: null,
+    deliveries: deliveryLogRows(SHOWCASE_DELIVERIES),
     openDrawer: noop,
     openFromOccurrence: async () => {},
     close: noop,
@@ -77,6 +85,9 @@ function emptyDrawerState(): EventDrawerState {
     error: null,
     preview: null,
     occurrences: [],
+    deliveriesLoading: false,
+    deliveriesError: null,
+    deliveries: [],
     openDrawer: noop,
     openFromOccurrence: async () => {},
     close: noop,
@@ -272,7 +283,7 @@ export function ShowcasePage() {
       {/* EventDrawer — populated + empty */}
       <ShowcaseSection
         title="EventDrawer"
-        caption="Read-only event details with reminders and next occurrences."
+        caption="Read-only event details with reminders, next occurrences and the delivery log."
       >
         <ShowcaseState label="Populated">
           <EventDrawer drawer={populatedDrawerState()} onEdit={noop} />

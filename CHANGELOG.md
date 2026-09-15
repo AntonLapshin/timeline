@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Delivery log + reminder preview UI in the web app (issue #63):** surfaces
+  the reminder/delivery history in the event drawer. A new API endpoint
+  `GET /api/events/{id}/deliveries` exposes an event's `DeliveryLog` rows
+  (event, occurrence, offset, status, timestamps) newest-first, backed by a
+  thin crud helper (`list_deliveries`) and a `DeliveryLogRead` schema. The
+  event drawer now renders a **Delivery log** section alongside the existing
+  reminder preview, showing each delivery's status badge (scheduled / sent /
+  failed / acknowledged / snoozed / deleted), a human timestamp and an
+  occurrence+offset detail line, with empty/loading/error states. The pure
+  delivery-log formatting and status mapping live in `src/core/deliveryLog.ts`
+  (100% covered); the view model (`useEventDrawer`) fetches and derives rows
+  and the `EventDrawer` component stays thin and dumb. The Showcase gallery
+  gains a populated delivery-log drawer preview. New `getEventDeliveries`
+  method on the `ApiClient`.
+
 - **Email reminder sender behind a feature flag (issue #61):** adds an email
   outbound module in `apps/api/app/email_outbound.py` that sends a reminder
   email (subject/body with event title, occurrence time, offset, notes and

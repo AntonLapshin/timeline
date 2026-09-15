@@ -8,6 +8,7 @@
  */
 
 import type {
+  DeliveryLog,
   EventOccurrence,
   EventRead,
   SummaryResponse,
@@ -141,3 +142,43 @@ export const SHOWCASE_SUMMARY: SummaryResponse = {
   total: 3,
   by_priority: { critical: 1, medium: 1, low: 1 },
 };
+
+/** A populated delivery log for the event-drawer gallery. */
+export const SHOWCASE_DELIVERIES: DeliveryLog[] = [
+  {
+    id: 1,
+    event_id: 1,
+    occurrence_id: "occ-2026-09-05",
+    offset: "2h",
+    status: "acked",
+    scheduled_at: "2026-09-05T07:00:00",
+    sent_at: "2026-09-05T07:00:00",
+    error: null,
+    created_at: "2026-09-05T07:00:00",
+    updated_at: "2026-09-05T08:30:00",
+  },
+  {
+    id: 2,
+    event_id: 1,
+    occurrence_id: "occ-2026-09-05",
+    offset: "1d",
+    status: "sent",
+    scheduled_at: "2026-09-04T09:00:00",
+    sent_at: "2026-09-04T09:00:00",
+    error: null,
+    created_at: "2026-09-04T09:00:00",
+    updated_at: "2026-09-04T09:00:00",
+  },
+  {
+    id: 3,
+    event_id: 1,
+    occurrence_id: "occ-2026-09-05",
+    offset: "7d",
+    status: "snoozed",
+    scheduled_at: "2026-08-29T09:00:00",
+    sent_at: "2026-08-29T09:00:00",
+    error: null,
+    created_at: "2026-08-29T09:00:00",
+    updated_at: "2026-08-29T09:00:00",
+  },
+];
