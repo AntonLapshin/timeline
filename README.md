@@ -250,6 +250,7 @@ Per-event: `channels`, `offsets` (`7d/1d/2h/0m`), `remind_time_of_day`, `repeat_
 
 ### 2.8 Privacy (public repo!)
 - Repo is **public** but contains **only code + docs + prompts + schemas**. Never commit: `.env`, `./data/`, `./backups/`, logs, transcripts, Telegram IDs, API keys, email addresses.
+- **Data never leaves the machine except Telegram/LLM outbound:** the only outbound network calls are Telegram Bot API (poll + send), the JoinGonka HTTPS LLM call, and optional SMTP email (feature-flag, off by default). Everything else — events, reminders, transcripts, logs, backups — stays local under `./data`/`./backups` and is never committed.
 - `.gitignore` covers all of the above + `*.db*`, `*.ogg`, `*.wav`. Pre-commit secret scan (gitleaks) + CI check that no `.env`/`data/` is tracked.
 - Logs redact message text by default (opt-in full log locally). Web has no auth because it never leaves localhost — firewall note in README (bind `127.0.0.1`, do not `--host 0.0.0.0`).
 
