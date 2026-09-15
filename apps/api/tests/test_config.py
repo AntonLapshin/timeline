@@ -126,3 +126,56 @@ def test_telegram_settings_accept_blank_as_disabled(
     settings = Settings()
     assert settings.telegram_bot_token is None
     assert settings.telegram_user_id is None
+
+
+# --- Email outbound settings (issue #61) -------------------------------------
+
+
+def test_email_flag_defaults_off() -> None:
+    """The email feature flag defaults to off in v1."""
+    assert Settings(email_enabled=False).email_enabled is False
+
+
+def test_email_flag_falls_back_to_off_when_env_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With EMAIL_ENABLED unset the feature flag defaults to off."""
+    monkeypatch.delenv("EMAIL_ENABLED", raising=False)
+    settings = Settings()
+    assert settings.email_enabled is False
+
+
+def test_email_flag_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """EMAIL_ENABLED=1 turns the feature flag on."""
+    monkeypatch.setenv("EMAIL_ENABLED", "1")
+    assert Settings().email_enabled is True
+
+
+def test_email_smtp_settings_default_to_none() -> None:
+    """Without env vars the SMTP settings default to None (disabled)."""
+    settings = Settings(
+        smtp_host=None, smtp_user=None, smtp_pass=None, smtp_from=None, smtp_to=None
+    )
+    assert settings.smtp_host is None
+    assert settings.smtp_user is None
+    assert settings.smtp_pass is None
+    assert settings.smtp_from is None
+    assert settings.smtp_to is None
+    assert settings.smtp_port == 587
+
+
+def test_email_smtp_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SMTP env vars are reflected on the settings."""
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
+    monkeypatch.setenv("SMTP_PORT", "465")
+    monkeypatch.setenv("SMTP_USER", "user")
+    monkeypatch.setenv("SMTP_PASS", "secret")
+    monkeypatch.setenv("SMTP_FROM", "from@example.com")
+    monkeypatch.setenv("SMTP_TO", "to@example.com")
+    settings = Settings()
+    assert settings.smtp_host == "smtp.example.com"
+    assert settings.smtp_port == 465
+    assert settings.smtp_user == "user"
+    assert settings.smtp_pass == "secret"
+    assert settings.smtp_from == "from@example.com"
+    assert settings.smtp_to == "to@example.com"
