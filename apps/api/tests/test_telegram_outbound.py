@@ -737,6 +737,66 @@ def test_make_telegram_job_func_no_repeat_when_acked(
             scheduler.shutdown(wait=False)
 
 
+def test_make_telegram_job_func_event_deleted_after_delivery(
+    session_factory: sessionmaker[Session],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An event deleted between delivery and repeat-scheduling is not re-scheduled.
+
+    Covers the defensive ``event is None`` branch after ``deliver_reminder``
+    (issue #66): when the event is removed mid-flight the job returns the
+    delivered result without scheduling a repeat-until-ack follow-up.
+    """
+    import app.telegram_outbound as tob
+
+    with session_factory() as session:
+        event = _event(repeat_until_ack=True)
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[object] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(text)
+
+    real_deliver = tob.deliver_reminder
+
+    def deliver_then_delete(
+        session_factory, event_id, occurrence_id, offset, *, now=None, send=None
+    ):
+        result = real_deliver(
+            session_factory, event_id, occurrence_id, offset, now=now, send=send
+        )
+        # Delete the event between delivery and the follow-up scheduling step.
+        with session_factory() as session:
+            ev = session.get(Event, event_id)
+            if ev is not None:
+                session.delete(ev)
+                session.commit()
+        return result
+
+    monkeypatch.setattr(tob, "deliver_reminder", deliver_then_delete)
+
+    settings = Settings(
+        data_dir=tmp_path, db_name="telegram.db", telegram_user_id="123"
+    )
+    scheduler = build_scheduler(settings)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FakeBot(), settings, now=_now(), scheduler=scheduler
+        )
+        # Delivery succeeds but the event is gone -> no follow-up scheduled.
+        assert job_func(event_id, "occ", "1h") is True
+        assert len(sent) == 1
+        assert scheduler.get_jobs() == []
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
 def test_ack_delivery_acks_base_of_repeat(
     session_factory: sessionmaker[Session],
 ) -> None:

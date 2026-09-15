@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Test for uncovered defensive branch in telegram_outbound.py (issue #66):**
+  adds a test covering the `event is None` branch in the repeat-until-ack
+  wiring of `make_telegram_job_func` (the event-deleted-mid-flight case). The
+  test monkeypatches `deliver_reminder` so the event is deleted between
+  delivery and the follow-up scheduling step, asserting the job returns the
+  delivered result without scheduling a repeat. This brings
+  `app/telegram_outbound.py` to 100% line coverage.
+
 - **Delivery log + reminder preview UI in the web app (issue #63):** surfaces
   the reminder/delivery history in the event drawer. A new API endpoint
   `GET /api/events/{id}/deliveries` exposes an event's `DeliveryLog` rows
