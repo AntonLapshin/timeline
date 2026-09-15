@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
 from .db import create_engine_from_settings
-from .enums import EventStatus
+from .enums import EventChannel, EventStatus
 from .models import DeliveryLog, Event
 from .recurrence import next_occurrences
 
@@ -63,6 +63,15 @@ _OFFSET_UNITS: dict[str, str] = {
 }
 _OFFSET_RE = re.compile(r"^(\d+)([dhmw])$")
 
+#: Default quiet-hours window (22:00-08:00) applied when an event specifies no
+#: per-event quiet hours (issue #62, M4-T3A).
+_DEFAULT_QUIET_HOURS_START = "22:00"
+_DEFAULT_QUIET_HOURS_END = "08:00"
+
+#: Marker used in a repeat-until-ack occurrence id so the follow-up reminder
+#: carries a distinct dedupe key while still tracing back to the base delivery.
+_REPEAT_MARKER = "~repeat@"
+
 
 @dataclass(frozen=True)
 class PlannedReminder:
@@ -90,6 +99,9 @@ class _SchedulableEvent(Protocol):
     all_day: bool
     reminder_offsets: list[str]
     remind_time_of_day: str | None
+    repeat_until_ack: bool
+    channels: list[EventChannel]
+    snooze_allowed: bool
 
 
 def parse_offset(offset: str) -> timedelta:
@@ -125,6 +137,136 @@ def parse_dedupe_key(key: str) -> tuple[int, str, str]:
     event_id_s, rest = key.split(":", 1)
     occurrence_id, offset = rest.rsplit(":", 1)
     return int(event_id_s), occurrence_id, offset
+
+
+def _parse_hhmm(value: str) -> tuple[int, int]:
+    """Parse a ``"HH:MM"`` wall-clock string into ``(hour, minute)``."""
+    hour_s, _, minute_s = value.partition(":")
+    return int(hour_s), int(minute_s or "0")
+
+
+def in_quiet_hours(
+    run_at: datetime,
+    quiet_hours_start: str | None,
+    quiet_hours_end: str | None,
+    tz: str,
+) -> bool:
+    """Whether ``run_at`` (UTC) falls inside the quiet-hours window in ``tz``.
+
+    The window is expressed in the event's local wall clock and may wrap past
+    midnight (the default 22:00-08:00). Missing values fall back to the default
+    window. ``end`` is exclusive: a reminder exactly at quiet-hours end is not
+    deferred.
+    """
+    start = quiet_hours_start or _DEFAULT_QUIET_HOURS_START
+    end = quiet_hours_end or _DEFAULT_QUIET_HOURS_END
+    local = run_at.astimezone(ZoneInfo(tz))
+    start_h, start_m = _parse_hhmm(start)
+    end_h, end_m = _parse_hhmm(end)
+    start_min = start_h * 60 + start_m
+    end_min = end_h * 60 + end_m
+    local_min = local.hour * 60 + local.minute
+    if start_min < end_min:
+        # Same-day window, e.g. 08:00-22:00.
+        return start_min <= local_min < end_min
+    # Overnight window, e.g. 22:00-08:00.
+    return local_min >= start_min or local_min < end_min
+
+
+def defer_to_morning_digest(
+    run_at: datetime,
+    quiet_hours_end: str | None,
+    tz: str,
+) -> datetime:
+    """Return the next local morning after quiet-hours end, strictly after ``run_at``.
+
+    The digest is the quiet-hours end wall-clock on the day of ``run_at`` (or the
+    next day when that instant is not later than ``run_at``), converted to UTC.
+    """
+    end = quiet_hours_end or _DEFAULT_QUIET_HOURS_END
+    end_h, end_m = _parse_hhmm(end)
+    local = run_at.astimezone(ZoneInfo(tz))
+    digest = local.replace(hour=end_h, minute=end_m, second=0, microsecond=0)
+    if digest <= local:
+        digest += timedelta(days=1)
+    return digest.astimezone(UTC)
+
+
+def quiet_hours_run_time(
+    run_at: datetime,
+    quiet_hours_start: str | None,
+    quiet_hours_end: str | None,
+    tz: str,
+) -> datetime:
+    """Defer ``run_at`` to the next morning digest when it falls inside quiet hours.
+
+    Reminders whose run time lands inside quiet hours are batched into a morning
+    digest (the next morning after quiet-hours end) instead of pushing
+    immediately. Run times outside quiet hours are returned unchanged.
+    """
+    if in_quiet_hours(run_at, quiet_hours_start, quiet_hours_end, tz):
+        return defer_to_morning_digest(run_at, quiet_hours_end, tz)
+    return run_at
+
+
+def channel_allows(channels: list[EventChannel], channel: EventChannel) -> bool:
+    """Whether an event's configured channels include ``channel``.
+
+    Outbound delivery only pushes to channels the event is configured for; a
+    channel that is absent (e.g. a Telegram-only event with email disabled) is
+    never delivered on.
+    """
+    return channel in channels
+
+
+def should_repeat_until_ack(repeat_until_ack: bool, acked: bool) -> bool:
+    """Whether a reminder should be re-scheduled because it wasn't acknowledged.
+
+    A ``repeat_until_ack`` event keeps re-scheduling a delivered reminder until
+    the recipient acknowledges it; once acked (or when the flag is off) no
+    further repeat is scheduled.
+    """
+    return repeat_until_ack and not acked
+
+
+def base_occurrence_id(occurrence_id: str) -> str:
+    """Return the base occurrence id, stripping any repeat/snooze markers.
+
+    Follow-up deliveries (repeat-until-ack, snooze) use suffixed occurrence ids
+    so their dedupe keys don't collide with the original; this strips the suffix
+    so ack/state lookups can trace back to the base delivery.
+    """
+    for marker in (_REPEAT_MARKER, "~snooze@"):
+        if marker in occurrence_id:
+            return occurrence_id.split(marker, 1)[0]
+    return occurrence_id
+
+
+def repeat_until_ack_plan(
+    event: _SchedulableEvent,
+    occurrence_id: str,
+    offset: str,
+    delivered_at: datetime,
+    *,
+    repeat_interval: timedelta | None = None,
+) -> PlannedReminder | None:
+    """Return the follow-up reminder for a repeat-until-ack event, or None.
+
+    When ``event.repeat_until_ack`` is set, a delivered reminder is re-scheduled
+    ``repeat_interval`` (default one hour) later with a distinct occurrence id so
+    it keeps firing until the recipient acknowledges. Returns None for events
+    that don't repeat.
+    """
+    if not event.repeat_until_ack:
+        return None
+    interval = repeat_interval or timedelta(hours=1)
+    repeat_occurrence = f"{occurrence_id}{_REPEAT_MARKER}{delivered_at:%Y%m%d%H%M%S}"
+    return PlannedReminder(
+        event_id=event.id,
+        occurrence_id=repeat_occurrence,
+        offset=offset,
+        run_at=delivered_at + interval,
+    )
 
 
 def reminder_run_time(
@@ -172,12 +314,15 @@ def schedule_plan(
         return []
     occurrences = next_occurrences(event, max_occurrences, after=now)
     horizon = now + timedelta(days=horizon_days)
+    quiet_start = getattr(event, "quiet_hours_start", None)
+    quiet_end = getattr(event, "quiet_hours_end", None)
     plan: list[PlannedReminder] = []
     for occ in occurrences:
         for offset in offsets:
             run_at = reminder_run_time(
                 occ.start, offset, event.remind_time_of_day, event.tz
             )
+            run_at = quiet_hours_run_time(run_at, quiet_start, quiet_end, event.tz)
             if run_at < now or run_at > horizon:
                 continue
             plan.append(

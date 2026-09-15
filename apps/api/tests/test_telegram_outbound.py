@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import models
 from app.config import Settings
 from app.db import create_engine_from_settings, make_session_factory
-from app.enums import EventPriority, EventSource, EventStatus, EventType
+from app.enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
 from app.models import DeliveryLog, Event
 from app.scheduler import build_scheduler, dedupe_key
 from app.telegram_outbound import (
@@ -48,6 +48,7 @@ from app.telegram_outbound import (
     parse_callback_data,
     priority_emoji,
     should_push,
+    snooze_allowed_for_event,
     snooze_delivery,
 )
 
@@ -177,6 +178,14 @@ def test_build_reply_markup_has_three_buttons() -> None:
     assert row[0]["callback_data"].startswith("ack|7|")
     assert row[1]["callback_data"].startswith("snooze|7|")
     assert row[2]["callback_data"].startswith("delete|7|")
+
+
+def test_build_reply_markup_omits_snooze_when_disallowed() -> None:
+    """When snooze_allowed is False the Snooze button is omitted (issue #62)."""
+    markup = build_reply_markup(7, "occ", "1h", snooze_allowed=False)
+    row = markup["inline_keyboard"][0]
+    assert [b["text"] for b in row] == ["✅ Ack", "🗑 Delete"]
+    assert all("snooze" not in b["callback_data"] for b in row)
 
 
 # --- action state transitions -------------------------------------------------
@@ -602,6 +611,194 @@ def test_make_telegram_job_func_skips_low_priority(
 
     assert job_func(event_id, "occ", "1h") is True  # recorded, but not pushed
     assert sent == []
+
+
+def test_make_telegram_job_func_skips_disallowed_channel(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """An event not configured for Telegram is not pushed (channel filter)."""
+    with session_factory() as session:
+        event = _event(channels=[EventChannel.EMAIL])
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[object] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(text)
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+
+    assert job_func(event_id, "occ", "1h") is True  # recorded, but not pushed
+    assert sent == []
+
+
+def test_make_telegram_job_func_omits_snooze_button_when_disallowed(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The card omits Snooze when the event's snooze_allowed is False."""
+    with session_factory() as session:
+        event = _event(snooze_allowed=False)
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[dict[str, object]] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append({"text": text, "markup": reply_markup})
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+
+    assert job_func(event_id, "occ", "1h") is True
+    assert len(sent) == 1
+    row = sent[0]["markup"]["inline_keyboard"][0]
+    assert [b["text"] for b in row] == ["✅ Ack", "🗑 Delete"]
+
+
+def test_make_telegram_job_func_repeat_until_ack_schedules_followup(
+    session_factory: sessionmaker[Session], tmp_path: Path
+) -> None:
+    """A repeat-until-ack event re-schedules a follow-up reminder."""
+    with session_factory() as session:
+        event = _event(repeat_until_ack=True)
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[object] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(text)
+
+    settings = Settings(
+        data_dir=tmp_path, db_name="telegram.db", telegram_user_id="123"
+    )
+    scheduler = build_scheduler(settings)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FakeBot(), settings, now=_now(), scheduler=scheduler
+        )
+        assert job_func(event_id, "occ", "1h") is True
+        assert len(sent) == 1
+        # A follow-up job with a distinct occurrence id was scheduled.
+        jobs = scheduler.get_jobs()
+        assert len(jobs) == 1
+        assert "~repeat@" in jobs[0].id
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_make_telegram_job_func_no_repeat_when_acked(
+    session_factory: sessionmaker[Session], tmp_path: Path
+) -> None:
+    """An acknowledged reminder is not re-scheduled (repeat stops on ack)."""
+    with session_factory() as session:
+        event = _event(repeat_until_ack=True)
+        session.add(event)
+        session.flush()
+        session.add(
+            DeliveryLog(
+                event_id=event.id,
+                occurrence_id="occ",
+                offset="1h",
+                status="acked",
+            )
+        )
+        session.commit()
+        event_id = event.id
+
+    sent: list[object] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(text)
+
+    settings = Settings(
+        data_dir=tmp_path, db_name="telegram.db", telegram_user_id="123"
+    )
+    scheduler = build_scheduler(settings)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FakeBot(), settings, now=_now(), scheduler=scheduler
+        )
+        # Base delivery already acked -> no repeat scheduled.
+        assert job_func(event_id, "occ", "1h") is True
+        assert scheduler.get_jobs() == []
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_ack_delivery_acks_base_of_repeat(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Acknowledging a repeat delivery acks its base occurrence (stops loop)."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.flush()
+        session.add(
+            DeliveryLog(
+                event_id=event.id, occurrence_id="occ", offset="1h", status="sent"
+            )
+        )
+        session.commit()
+        event_id = event.id
+
+    with session_factory() as session:
+        ok = ack_delivery(session, event_id, "occ~repeat@20260101090000", "1h")
+        assert ok is True
+        session.commit()
+    with session_factory() as session:
+        assert session.query(DeliveryLog).one().status == "acked"
+
+
+def test_snooze_allowed_for_event(session_factory: sessionmaker[Session]) -> None:
+    """snooze_allowed_for_event reflects the per-event flag."""
+    with session_factory() as session:
+        allowed = _event(snooze_allowed=True)
+        disallowed = _event(snooze_allowed=False)
+        session.add_all([allowed, disallowed])
+        session.commit()
+        allowed_id = allowed.id
+        disallowed_id = disallowed.id
+
+    with session_factory() as session:
+        assert snooze_allowed_for_event(session, allowed_id) is True
+        assert snooze_allowed_for_event(session, disallowed_id) is False
+        assert snooze_allowed_for_event(session, 99999) is False
+
+
+def test_handle_callback_snooze_rejected_when_disallowed(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A Snooze callback for a snooze-disabled event is refused."""
+    with session_factory() as session:
+        event = _event(snooze_allowed=False)
+        session.add(event)
+        session.flush()
+        _add_sent_log(session, event.id)
+        session.commit()
+        event_id = event.id
+
+    with session_factory() as session:
+        msg = handle_callback(
+            data=callback_data("snooze", event_id, "occ", "1h"),
+            session=session,
+            scheduler=None,
+            job_func=lambda *a, **k: None,
+        )
+        assert msg == "Snooze not allowed"
+        # The delivery is left untouched (not snoozed).
+        assert session.query(DeliveryLog).one().status == "sent"
 
 
 def test_make_telegram_job_func_denies_unconfigured_user(

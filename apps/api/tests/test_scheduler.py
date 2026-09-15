@@ -32,20 +32,27 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import models
 from app.config import Settings
 from app.db import create_engine_from_settings, make_session_factory
-from app.enums import EventPriority, EventSource, EventStatus, EventType
+from app.enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
 from app.models import DeliveryLog, Event
 from app.scheduler import (
     PlannedReminder,
     add_reminder_job,
+    base_occurrence_id,
     build_scheduler,
+    channel_allows,
     dedupe_key,
+    defer_to_morning_digest,
     deliver_reminder,
     drain_schedule,
+    in_quiet_hours,
     parse_dedupe_key,
     parse_offset,
+    quiet_hours_run_time,
     reminder_run_time,
+    repeat_until_ack_plan,
     requeue_failed,
     schedule_plan,
+    should_repeat_until_ack,
     with_retry,
 )
 
@@ -165,6 +172,161 @@ def test_reminder_run_time_timezone_aware() -> None:
     assert run.utcoffset() == timedelta(0)  # UTC
 
 
+# --- quiet hours (issue #62, M4-T3A) ----------------------------------------
+
+
+def test_in_quiet_hours_overnight_window() -> None:
+    """The default 22:00-08:00 window defers overnight reminders."""
+    # 23:00 UTC is inside the default window.
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 23, 0, tzinfo=UTC), None, None, "UTC")
+        is True
+    )
+    # 02:00 UTC is inside (past midnight).
+    assert (
+        in_quiet_hours(datetime(2026, 1, 2, 2, 0, tzinfo=UTC), None, None, "UTC")
+        is True
+    )
+    # 09:00 UTC is outside.
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 9, 0, tzinfo=UTC), None, None, "UTC")
+        is False
+    )
+
+
+def test_in_quiet_hours_end_is_exclusive() -> None:
+    """A reminder exactly at quiet-hours end is not deferred."""
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 8, 0, tzinfo=UTC), None, None, "UTC")
+        is False
+    )
+    # Start boundary (22:00) is inclusive.
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 22, 0, tzinfo=UTC), None, None, "UTC")
+        is True
+    )
+
+
+def test_in_quiet_hours_custom_window() -> None:
+    """A same-day custom window (e.g. 12:00-14:00) is honored."""
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 13, 0, tzinfo=UTC), "12:00", "14:00", "UTC")
+        is True
+    )
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 11, 0, tzinfo=UTC), "12:00", "14:00", "UTC")
+        is False
+    )
+    assert (
+        in_quiet_hours(datetime(2026, 1, 1, 15, 0, tzinfo=UTC), "12:00", "14:00", "UTC")
+        is False
+    )
+
+
+def test_in_quiet_hours_respects_timezone() -> None:
+    """The window is evaluated in the event's local timezone."""
+    # 22:00 UTC is 23:00 in Europe/Berlin (+1) -> inside default window.
+    assert (
+        in_quiet_hours(
+            datetime(2026, 1, 1, 22, 0, tzinfo=UTC), None, None, "Europe/Berlin"
+        )
+        is True
+    )
+
+
+def test_defer_to_morning_digest_overnight() -> None:
+    """A 23:00 reminder defers to the next morning after quiet-hours end."""
+    run = datetime(2026, 1, 1, 23, 0, tzinfo=UTC)
+    digest = defer_to_morning_digest(run, None, "UTC")
+    # Next morning 08:00 UTC (quiet hours end) on the following day.
+    assert digest == datetime(2026, 1, 2, 8, 0, tzinfo=UTC)
+
+
+def test_defer_to_morning_digest_same_day() -> None:
+    """A 06:00 reminder defers to the same-day 08:00 digest (still later)."""
+    run = datetime(2026, 1, 1, 6, 0, tzinfo=UTC)
+    digest = defer_to_morning_digest(run, None, "UTC")
+    assert digest == datetime(2026, 1, 1, 8, 0, tzinfo=UTC)
+
+
+def test_quiet_hours_run_time_outside_unchanged() -> None:
+    """Run times outside quiet hours are returned unchanged."""
+    run = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+    assert quiet_hours_run_time(run, None, None, "UTC") == run
+
+
+def test_quiet_hours_run_time_defers_inside() -> None:
+    """Run times inside quiet hours defer to the next morning digest."""
+    run = datetime(2026, 1, 1, 23, 0, tzinfo=UTC)
+    assert quiet_hours_run_time(run, None, None, "UTC") == datetime(
+        2026, 1, 2, 8, 0, tzinfo=UTC
+    )
+
+
+# --- channels / repeat-until-ack (issue #62, M4-T3A) -------------------------
+
+
+def test_channel_allows() -> None:
+    """Delivery only happens on configured channels."""
+    assert channel_allows([EventChannel.TELEGRAM], EventChannel.TELEGRAM) is True
+    assert channel_allows([EventChannel.EMAIL], EventChannel.TELEGRAM) is False
+    assert channel_allows([], EventChannel.TELEGRAM) is False
+    assert (
+        channel_allows([EventChannel.TELEGRAM, EventChannel.EMAIL], EventChannel.EMAIL)
+        is True
+    )
+
+
+def test_should_repeat_until_ack() -> None:
+    """Repeat only while unacknowledged and the flag is set."""
+    assert should_repeat_until_ack(True, False) is True
+    assert should_repeat_until_ack(True, True) is False
+    assert should_repeat_until_ack(False, False) is False
+    assert should_repeat_until_ack(False, True) is False
+
+
+def test_base_occurrence_id_strips_repeat_marker() -> None:
+    """Repeat/snooze suffixes are stripped to trace back to the base delivery."""
+    assert base_occurrence_id("occ~repeat@20260101120000") == "occ"
+    assert base_occurrence_id("occ~snooze@20260101120000") == "occ"
+    assert base_occurrence_id("occ") == "occ"
+
+
+def test_repeat_until_ack_plan_returns_none_when_disabled() -> None:
+    """An event without repeat_until_ack schedules no follow-up."""
+    event = SimpleNamespace(id=1, repeat_until_ack=False)
+    assert (
+        repeat_until_ack_plan(
+            event, "occ", "1h", datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+        )
+        is None
+    )
+
+
+def test_repeat_until_ack_plan_schedules_followup() -> None:
+    """A repeat-until-ack event schedules a distinct follow-up one hour later."""
+    event = SimpleNamespace(id=1, repeat_until_ack=True)
+    delivered = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+    plan = repeat_until_ack_plan(event, "occ", "1h", delivered)
+    assert plan is not None
+    assert plan.event_id == 1
+    assert plan.offset == "1h"
+    assert plan.run_at == delivered + timedelta(hours=1)
+    assert plan.occurrence_id != "occ"
+    assert base_occurrence_id(plan.occurrence_id) == "occ"
+
+
+def test_repeat_until_ack_plan_custom_interval() -> None:
+    """A custom repeat interval is honored."""
+    event = SimpleNamespace(id=1, repeat_until_ack=True)
+    delivered = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
+    plan = repeat_until_ack_plan(
+        event, "occ", "1h", delivered, repeat_interval=timedelta(days=1)
+    )
+    assert plan is not None
+    assert plan.run_at == delivered + timedelta(days=1)
+
+
 def _plan_event(**overrides: object) -> SimpleNamespace:
     """A minimal schedulable-event input for schedule_plan."""
     values: dict[str, object] = {
@@ -176,6 +338,9 @@ def _plan_event(**overrides: object) -> SimpleNamespace:
         "all_day": False,
         "reminder_offsets": ["1h"],
         "remind_time_of_day": None,
+        "repeat_until_ack": False,
+        "channels": [EventChannel.TELEGRAM],
+        "snooze_allowed": True,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -225,6 +390,36 @@ def test_schedule_plan_recurrent() -> None:
     assert len(plan) > 1
     occurrence_ids = {p.occurrence_id for p in plan}
     assert len(occurrence_ids) == len(plan)  # unique occurrence per reminder
+
+
+def test_schedule_plan_applies_quiet_hours() -> None:
+    """A reminder run time inside quiet hours is deferred to the morning digest."""
+    now = datetime(2025, 12, 1, tzinfo=UTC)
+    # Event at 23:00 with a 1h offset -> run time 22:00 (inside quiet hours).
+    event = _plan_event(
+        start_at=datetime(2026, 1, 1, 23, 0, tzinfo=UTC),
+        reminder_offsets=["1h"],
+        remind_time_of_day=None,
+    )
+    plan = schedule_plan(event, now)
+    assert len(plan) == 1
+    # Deferred to the next morning 08:00 UTC after quiet hours end.
+    assert plan[0].run_at == datetime(2026, 1, 2, 8, 0, tzinfo=UTC)
+
+
+def test_schedule_plan_respects_custom_quiet_hours() -> None:
+    """Per-event quiet hours override the default window."""
+    now = datetime(2025, 12, 1, tzinfo=UTC)
+    # Custom window 00:00-06:00; run time 22:00 is outside -> unchanged.
+    event = _plan_event(
+        start_at=datetime(2026, 1, 1, 23, 0, tzinfo=UTC),
+        reminder_offsets=["1h"],
+        quiet_hours_start="00:00",
+        quiet_hours_end="06:00",
+    )
+    plan = schedule_plan(event, now)
+    assert len(plan) == 1
+    assert plan[0].run_at == datetime(2026, 1, 1, 22, 0, tzinfo=UTC)
 
 
 # --- retry wrapper (at-least-once) -------------------------------------------
