@@ -137,6 +137,16 @@ def test_events_today_skips_other_days() -> None:
     assert events_today([tomorrow], _now()) == []
 
 
+def test_events_today_naive_now_treated_as_utc() -> None:
+    """A naive ``now`` is interpreted as UTC (defensive ``_as_utc`` branch)."""
+    event = _event(start_at=_now() + timedelta(hours=1))
+    naive_now = _now().replace(tzinfo=None)
+    assert naive_now.tzinfo is None
+    items = events_today([event], naive_now)
+    assert len(items) == 1
+    assert items[0][0] is event
+
+
 def test_events_today_recurrent() -> None:
     """A daily recurrent event is listed by /today."""
     event = _event(start_at=_now() - timedelta(days=10), rrule="FREQ=DAILY;COUNT=30")
@@ -427,3 +437,63 @@ def test_build_telegram_inbound_application() -> None:
     )
     assert app is not None
     assert app.bot.token == "123:abc"
+
+
+def test_build_telegram_inbound_application_replies(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The handler replies to a private command via ``reply_text``."""
+    import asyncio
+
+    with session_factory() as session:
+        session.add(_event(start_at=_now() + timedelta(hours=1)))
+        session.commit()
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    app = build_telegram_inbound_application(
+        settings, session_factory, now=_now()
+    )
+    assert app is not None
+
+    # Grab the nested handler off the MessageHandler it is registered on.
+    handler = app.handlers[0][0].callback
+
+    replied: list[str] = []
+
+    class _ReplyMessage(_FakeMessage):
+        async def reply_text(self, text: str) -> None:
+            replied.append(text)
+
+    update = _FakeUpdate(
+        _ReplyMessage(_FakeChat(123, "private"), _FakeUser(42), "/today")
+    )
+    asyncio.run(handler(update, None))
+
+    assert len(replied) == 1
+    assert "📅 Today" in replied[0]
+    assert "Team standup" in replied[0]
+
+
+def test_build_telegram_inbound_application_no_reply_for_ignored(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The handler sends nothing for a message the DM gate ignores."""
+    import asyncio
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    app = build_telegram_inbound_application(settings, session_factory, now=_now())
+    assert app is not None
+    handler = app.handlers[0][0].callback
+
+    replied: list[str] = []
+
+    class _ReplyMessage(_FakeMessage):
+        async def reply_text(self, text: str) -> None:
+            replied.append(text)
+
+    # Group message from the allowed user is ignored -> no reply.
+    update = _FakeUpdate(
+        _ReplyMessage(_FakeChat(123, "group"), _FakeUser(42), "/today")
+    )
+    asyncio.run(handler(update, None))
+    assert replied == []

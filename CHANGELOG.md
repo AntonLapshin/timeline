@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Full line coverage for the Telegram inbound bot (PR #72 review, issue #69):**
+  brings `apps/api/app/telegram_inbound.py` to 100% line coverage. Adds a test
+  that invokes the registered inbound handler (via the `Application`'s
+  `MessageHandler` callback) with a fake message, asserting `reply_text` is
+  called with the expected reply and that ignored (non-DM) messages produce no
+  reply; and a test covering the naive-datetime defensive branch in `_as_utc`
+  (a naive `now` is treated as UTC).
+
 - **Telegram inbound DM command bot (issue #69, M5-T1):** adds a
   python-telegram-bot v21 polling updater in `apps/api/app/telegram_inbound.py`
   that answers the owner's private-chat commands. Messages from
