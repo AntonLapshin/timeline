@@ -76,6 +76,23 @@ class Settings:
     telegram_user_id: str | None = field(
         default_factory=lambda: _optional_env("TELEGRAM_USER_ID")
     )
+    #: Email feature flag (v1 default OFF). When off no email is ever sent,
+    #: regardless of event channels (issue #61, M4-T3B).
+    email_enabled: bool = field(
+        default_factory=lambda: _bool_env("EMAIL_ENABLED", False)
+    )
+    #: SMTP host for the email sender (local .env only, never committed).
+    smtp_host: str | None = field(default_factory=lambda: _optional_env("SMTP_HOST"))
+    #: SMTP port (default 587 for STARTTLS).
+    smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "587")))
+    #: SMTP username.
+    smtp_user: str | None = field(default_factory=lambda: _optional_env("SMTP_USER"))
+    #: SMTP password (secret).
+    smtp_pass: str | None = field(default_factory=lambda: _optional_env("SMTP_PASS"))
+    #: "From" address for reminder emails.
+    smtp_from: str | None = field(default_factory=lambda: _optional_env("SMTP_FROM"))
+    #: Default "To" address for reminder emails.
+    smtp_to: str | None = field(default_factory=lambda: _optional_env("SMTP_TO"))
 
     @property
     def database_url(self) -> str:
