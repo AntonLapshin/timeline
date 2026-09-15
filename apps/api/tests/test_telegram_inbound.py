@@ -675,7 +675,9 @@ def test_handle_update_add_presents_draft_card(
     session_factory: sessionmaker[Session],
 ) -> None:
     """/add parses and returns a draft card with buttons; draft is stored."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
+    )
     store = DraftStore()
     http = _FakeHttp(_parse_response())
     update = _FakeUpdate(
@@ -736,7 +738,9 @@ def test_handle_update_add_unavailable() -> None:
 
 def test_handle_update_add_needs_clarification() -> None:
     """/add that needs clarification replies with the message and stores nothing."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
+    )
     store = DraftStore()
     http = _FakeHttp({"needs_clarification": True, "message": "When is it?"})
     update = _FakeUpdate(
@@ -767,7 +771,9 @@ def test_handle_update_add_no_parse_client() -> None:
 
 def test_handle_update_add_parse_error() -> None:
     """/add with a failing parse returns the error and stores nothing."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
+    )
     store = DraftStore()
     http = _FakeHttp({"events": []}, status_code=500)
     update = _FakeUpdate(
@@ -813,7 +819,9 @@ def test_build_telegram_inbound_application_draft_card(
     """The handler sends a draft card with an inline keyboard for /add."""
     import asyncio
 
-    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    settings = Settings(
+        telegram_bot_token="123:abc", telegram_user_id="42", llm_api_key="test-key"
+    )
     store = DraftStore()
     http = _FakeHttp(_parse_response())
     app = build_telegram_inbound_application(
