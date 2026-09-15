@@ -18,6 +18,7 @@ so callers (and tests) supply a fake.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -25,6 +26,9 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field, ValidationError
 
 from .config import Settings
+from .redaction import redact_text
+
+logger = logging.getLogger(__name__)
 
 #: The OpenAI-compatible chat completions path appended to the base URL.
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
@@ -222,6 +226,9 @@ def parse_events(
     """
     if not settings.llm_api_key:
         return ParseResult(ok=False, unavailable=True, error="LLM key not configured")
+
+    # Log only a content-free reference — never the raw text or prompt body.
+    logger.info("parse_events called ref=%s", redact_text(text))
 
     request = build_request(text, now, tz, settings)
     try:

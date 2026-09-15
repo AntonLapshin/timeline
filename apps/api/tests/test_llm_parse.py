@@ -8,6 +8,7 @@ critical-financial guard, ``needs_clarification``, and the unavailable-key path.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 import pytest
@@ -248,6 +249,25 @@ def test_parse_success_single_event() -> None:
     assert result.outcome.drafts[0].title == "Dentist"
     assert client.last_url.endswith("/chat/completions")
     assert client.last_json["response_format"] == {"type": "json_object"}
+
+
+def test_parse_logs_only_redacted_reference(caplog: pytest.LogCaptureFixture) -> None:
+    """A parse call never writes raw text or prompt bodies to logs."""
+    client = _FakeClient(
+        _FakeResponse(
+            200,
+            {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]},
+        )
+    )
+    with caplog.at_level(logging.INFO):
+        result = parse_events("pay rent tomorrow 9am", NOW, TZ, _settings(), client)
+    assert result.ok is True
+    records = [r.getMessage() for r in caplog.records]
+    # The log records exist but contain only a content-free reference.
+    assert any("parse_events called" in r for r in records)
+    assert "pay rent tomorrow" not in "\n".join(records)
+    assert "9am" not in "\n".join(records)
+    assert any("sha=" in r and "len=" in r for r in records)
 
 
 def test_parse_success_multi_event() -> None:
