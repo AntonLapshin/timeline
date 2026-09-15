@@ -995,6 +995,22 @@ def test_handle_callback_query_no_pending_draft() -> None:
     assert "That draft is no longer available" in reply.text
 
 
+def test_handle_callback_query_out_of_range_index() -> None:
+    """A callback index >= len(drafts) replies the draft is gone.
+
+    Exercises the ``action.index >= len(pending.drafts)`` guard directly (not
+    via the ``pending is None`` short-circuit): a chat has a pending draft with
+    a single draft, but the callback asks for index 5.
+    """
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("draft:save:5", 42, 123)
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "That draft is no longer available" in reply.text
+
+
 def test_handle_callback_query_bad_payload() -> None:
     """A malformed callback payload is ignored."""
     settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
