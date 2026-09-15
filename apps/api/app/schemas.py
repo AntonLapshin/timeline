@@ -210,4 +210,3 @@ class EventParseResponse(BaseModel):
     message: str | None = None
     unavailable: bool = False
     error: str | None = None
-

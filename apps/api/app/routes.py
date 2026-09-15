@@ -214,5 +214,3 @@ def parse_event_text(
     return EventParseResponse(
         events=[d.model_dump(exclude_none=True) for d in result.outcome.drafts or []],
     )
-
-

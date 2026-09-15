@@ -239,11 +239,7 @@ def test_parse_success_single_event() -> None:
     client = _FakeClient(
         _FakeResponse(
             200,
-            {
-                "events": [
-                    {"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}
-                ]
-            },
+            {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]},
         )
     )
     result = parse_events("dentist tomorrow", NOW, TZ, _settings(), client)

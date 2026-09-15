@@ -95,7 +95,9 @@ class Settings:
     smtp_to: str | None = field(default_factory=lambda: _optional_env("SMTP_TO"))
     #: JoinGonka / OpenAI-compatible base URL for LLM parsing (issue #70).
     llm_base_url: str = field(
-        default_factory=lambda: os.getenv("LLM_BASE_URL", "https://gate.joingonka.ai/openai/v1")
+        default_factory=lambda: os.getenv(
+            "LLM_BASE_URL", "https://gate.joingonka.ai/openai/v1"
+        )
     )
     #: LLM model name for parsing (local .env only).
     llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", ""))

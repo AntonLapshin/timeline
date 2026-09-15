@@ -241,9 +241,7 @@ def test_get_event_deliveries_scoped_to_event(client: TestClient) -> None:
 
 def test_parse_endpoint_unavailable_without_key(client: TestClient) -> None:
     """Without an LLM key, POST /api/events/parse returns 503 (unavailable)."""
-    client.app.dependency_overrides[get_settings] = lambda: Settings(
-        llm_api_key=None
-    )
+    client.app.dependency_overrides[get_settings] = lambda: Settings(llm_api_key=None)
     try:
         resp = client.post(
             "/api/events/parse",

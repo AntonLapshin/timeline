@@ -62,9 +62,7 @@ def build_prompt(text: str, now: datetime, tz: str) -> tuple[str, str]:
     the user is in.
     """
     user_prompt = (
-        f"Current date/time: {now.isoformat()}\n"
-        f"Timezone: {tz}\n"
-        f"User text: {text}\n"
+        f"Current date/time: {now.isoformat()}\nTimezone: {tz}\nUser text: {text}\n"
     )
     return _SYSTEM_PROMPT, user_prompt
 
@@ -193,9 +191,7 @@ def validate_parse_response(data: Any) -> ParseOutcome:
 class HttpClient(Protocol):
     """The subset of an HTTP client ``parse_events`` needs (duck-typed)."""
 
-    def post(
-        self, url: str, *, headers: dict[str, str], json: dict[str, Any]
-    ) -> Any:
+    def post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> Any:
         """POST JSON and return a response object with ``status_code``/``json``."""
         ...
 
@@ -225,9 +221,7 @@ def parse_events(
     ``http_client`` (no real network in tests), then validates the response.
     """
     if not settings.llm_api_key:
-        return ParseResult(
-            ok=False, unavailable=True, error="LLM key not configured"
-        )
+        return ParseResult(ok=False, unavailable=True, error="LLM key not configured")
 
     request = build_request(text, now, tz, settings)
     try:
