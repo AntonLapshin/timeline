@@ -86,12 +86,18 @@ M5 — Telegram inbound + STT + AI parsing (merged this cycle):
 - [x] #70 #M5-T3 — POST /api/events/parse: JoinGonka OpenAI-compatible AI parsing (merged via #73).
 - [x] #71 #M5-T2 — Local STT: Telegram voice → whisper.cpp, 2-min cap, no audio leaves machine (merged via #74).
 
-M5 — remaining slice + M6 hardening (planned this turn, `pi:ready`):
-- [ ] #75 #M5-T4A — Telegram draft flow: /add → parse → Save/Edit/Discard buttons (pi:ready, p1).
-- [ ] #76 #M5-T4B — Parse eval set (20 samples) + redacted logs by default (pi:ready, p2).
-- [ ] #77 #M6-T1 — Omarchy hardening: loopback bind guard, systemd enable, log rotation, /healthz (pi:ready, p1).
-- [ ] #M6-T2 — Nightly SQLite dump + backups rotation + one-command restore; README runbook (planned on a later PM turn).
-- [ ] #M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no IDs/keys in docs; README privacy disclosure (planned on a later PM turn).
+M5 — remaining slice + M6 hardening (merged this cycle):
+- [x] #75 #M5-T4A — Telegram draft flow: /add → parse → Save/Edit/Discard buttons (merged via #78).
+- [x] #76 #M5-T4B — Parse eval set (20 samples) + redacted logs by default (merged via #81).
+- [x] #77 #M6-T1 — Omarchy hardening: loopback bind guard, systemd enable, log rotation, /healthz (merged via #80).
+- [x] #79 — Add out-of-range draft index boundary test (merged via #82).
+
+M6/M7 — planned this turn (`pi:ready`):
+- [ ] #85 #M6-T2 — Nightly SQLite dump + backups rotation + one-command restore; README runbook (pi:ready, p1).
+- [ ] #83 #M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no IDs/keys in docs; README privacy disclosure (pi:ready, p2).
+- [ ] #84 #M7-T1 — UI polish: empty/loading/error states, humanized dates, print month view, Showcase (pi:ready, p3).
+- [ ] #M7-T2 — README complete (Omarchy quickstart, env table, voxtype notes, cost, troubleshooting) + ROADMAP.md (planned on a later PM turn).
+- [ ] #M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week (planned on a later PM turn).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).

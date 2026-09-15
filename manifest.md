@@ -141,10 +141,10 @@ A personal, local-first global schedule that remembers everything: capture one-t
 - [x] M5-T1 — Bot polling, DM-only, single-user allowlist; commands /add, /today, /upcoming [7d|30d], /low, /ask; ignores group/channel noise. (merged via #72)
 - [x] M5-T2 — Local STT: Telegram voice.ogg → ffmpeg → wav 16k → whisper.cpp (reuse voxtype install/model if present) with 2-min cap; no audio leaves the machine. (merged via #74)
 - [x] M5-T3 — POST /api/events/parse: thin direct JoinGonka OpenAI-compatible fetch (configurable base/model/key, JSON mode, now+tz injection, multi-event, needs_clarification follow-up); default medium if uncertain, low on maybe/series/idea, never silently save critical financial events. (merged via #73)
-- [ ] M5-T4 — Draft Save/Edit/Discard flow via Telegram buttons; web smart-input reuses endpoint; eval set of 20 samples; redacted logs by default.
+- [x] M5-T4 — Draft Save/Edit/Discard flow via Telegram buttons; web smart-input reuses endpoint; eval set of 20 samples; redacted logs by default. (merged via #75/#76/#78/#81)
 
 ### M6 — Omarchy hardening, autostart, local backups
-- [ ] M6-T1 — Enforce 127.0.0.1 bind + startup guard refusing 0.0.0.0; systemd --user enable + restart-on-failure; log rotation; /healthz endpoint.
+- [x] M6-T1 — Enforce 127.0.0.1 bind + startup guard refusing 0.0.0.0; systemd --user enable + restart-on-failure; log rotation; /healthz endpoint. (merged via #77/#80)
 - [ ] M6-T2 — Nightly SQLite dump + ./backups rotation (keep ~30d) + one-command restore; README runbook (start/stop/logs/backup/restore/update).
 - [ ] M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no Telegram IDs/keys/emails in docs; README privacy disclosure.
 
