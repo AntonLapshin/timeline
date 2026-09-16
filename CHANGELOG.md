@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **README: Omarchy quickstart + full env table (issue #89, M7-T2A):** adds a
+  new **Omarchy quickstart** section to `README.md` that takes a fresh Omarchy
+  machine from scratch to a running app at `http://127.0.0.1:8123` — clone,
+  `apps/api` venv + `pip install`, `apps/web` `npm ci` + `npm run build`, copy
+  `.env.example` → `.env`, and `systemd --user` enable + start — plus a
+  verification step (health probe + browser). Adds a single consolidated
+  **Environment variables** table listing every env key the app reads, grouped
+  by concern (local host/port/data/log/backup/timezone, LLM/JoinGonka,
+  Telegram, SMTP/email, and local STT) with a one-line purpose and default for
+  each, sourced from `.env.example` (placeholders only, no secrets). Docs-only
+  change; `.env.example` already documents every key the API reads, so the
+  committed secret-hygiene pytest guard and the full API/web test suites pass
+  unchanged with 100% `src/core` coverage maintained.
+
 - **UI polish: empty/loading/error states, humanized dates, print month view, Showcase (issue #84, M7-T1):** adds friendly empty states with a create CTA (Timeline), loading skeletons for the Timeline and Calendar views, and error states with a **Retry** button (via new `retry` on the `useTimeline`/`useCalendar` view models). Adds a pure `src/core` `relativeLabel` helper (100% covered) and surfaces humanized relative date badges ("today", "tomorrow", "in 3 weeks") on Timeline rows, the Calendar day-drawer occurrence rows, and agenda rows. Adds print-friendly CSS (`@media print`) so the Calendar month grid prints cleanly (interactive chrome hidden, day cells never split across pages). The component Showcase gains Timeline/Calendar loading states and a create-CTA on the empty Timeline. 11 new/updated tests; full suite passes with 100% `src/core` coverage maintained.
 
 - **Secrets hygiene audit for the public repo (issue #83, M6-T3):** adds a
