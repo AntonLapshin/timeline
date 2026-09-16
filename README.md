@@ -1,6 +1,12 @@
 # timeline
 
-# Timeline — Project Plan (v2, clarified)
+
+**timeline** is a personal, local-first global schedule that remembers everything:
+capture one-time and recurrent future events in under 30 seconds via a local web UI
+or Telegram (text/voice, AI-parsed), view them on a timeline + calendar at home on
+localhost, and get configurable Telegram reminders from everywhere. Private by
+construction — public code, locally-stored data.
+
 
 ## Repository layout (monorepo)
 
@@ -56,8 +62,8 @@ Two ways to run timeline locally, both bound to loopback only
 > from your host system / another machine on your LAN you must explicitly set
 > `TIMELINE_ALLOW_NON_LOOPBACK=1` **and** `TIMELINE_HOST=0.0.0.0` (and whitelist
 > the port in the firewall). This exposes the app to the LAN with **no auth** —
-> anyone on the network can read/write events — so it stays off by default. See
-> [Security](#security) below.
+> anyone on the network can read/write events — so it stays off by default.
+> See [Host-system / LAN access](#host-system--lan-access-opt-in-issue-97) below.
 
 **1. Docker Compose (recommended for dev).** One command starts web + api and
 keeps the SQLite database in a named volume:
@@ -443,192 +449,6 @@ JoinGonka (OpenAI-compatible) call per parse:
   backups seem to vanish, verify the timer ran
   (`systemctl --user list-timers timeline-backup`).
 
----
-
-**Repo:** `ws/timeline` → **public** GitHub repo (code only, no data, no secrets — see §7)
-**Vision:** A personal, local-first global schedule that remembers everything: one-time future events (e.g. “Season 2 of X comes out June next year”), recurrent obligations (e.g. “Pay HRA every quarter”, check-ups), with timeline + calendar views, monthly summaries, and configurable Telegram / Email reminders. New events via Web UI or Telegram (text or voice, natural language → AI extraction).
-
-**Serving model (clarified):**
-- App + DB run **locally on Omarchy OS machine**, website bound to loopback only (`http://127.0.0.1:8123`), **no web auth** — visible only at home / on that machine.
-- **Telegram + Email are the remote interfaces** — available from everywhere via Telegram cloud / SMTP, no server rental, no hosting, no tunnel, no domain.
-- Bot uses **long-polling** (no webhook, no open ports).
-
-Reference projects (per owner):
-- Web: React + TypeScript + TailwindCSS + `showcase` lib (`https://github.com/AntonLapshin/showcase`), Atomic design, Context injection — see `natalies-corner` for the pattern.
-- LLM: direct call to **JoinGonka (configurable)** provider — see `natalies-corner` for the call pattern. `natalies-corner` URL currently 404 for agent (likely private/renamed) — need access via Issue.
-- STT: lightweight local efficient like **voxtype / Omarchy STT** (local Whisper, no cloud).
-
----
-
-## 1. Goals & Non-Goals
-
-### Goals
-1. Never forget: capture any future / recurrent event in <30 seconds.
-2. See everything at home: timeline + calendar views, monthly counts, search/filter on localhost web.
-3. Remind from anywhere: per-event configurable reminders via Telegram bot + optionally email (both work outside home because they go through Telegram/SMTP clouds, app polls/sends from home machine).
-4. Add from anywhere: Web form/wizard (home) + Telegram text/voice in natural language (anywhere), AI-parsed into structured event(s).
-5. Local & private by construction: public code, private data (`./data/` + `.env` gitignored, never committed); web not exposed to LAN/internet.
-6. Low maintenance on Omarchy: systemd user service + one-command Docker Compose or native run, SQLite, local backups.
-
-### Non-Goals (v1)
-- Multi-user / family sharing / collaboration.
-- Remote web access / hosting / password login / TLS / tunnels / VPS.
-- Public sharing links.
-- Mobile native apps (responsive web is enough for v1).
-- Full email/calendar sync (Google Calendar import/export is v2 stretch).
-
-### Example user stories
-- “I pay HRA every quarter” → recurrent event, reminder e.g. 7d + 1d before via Telegram.
-- “Season 2 of my series comes out June next year” → low-priority one-time, no proactive ping, visible in June view.
-- “Pay X / check-up schedule for Y” → medium/critical event, reminder day-before + day-of via Telegram (+ optional email).
-- “Voice message in Telegram while walking” → locally transcribed → AI creates draft event(s) → confirm via Telegram buttons.
-
----
-
-## 2. Functional Requirements
-
-### 2.1 Events
-- CRUD with fields (see §5).
-- Types: `one_time`, `recurrent`.
-- Recurrence: daily / weekly / monthly / quarterly / yearly / custom + RFC5545 `RRULE` (e.g. “every 3 months on the 15th”), end: never / after N / until date.
-- Occurrences materialized on read (no DB explosion); `next_occurrences(n)` cached.
-- Timezones: store UTC + display tz (system tz, confirm via issue). All-day vs timed.
-- Notes/links/tags; search, filter by tag / priority / date / text; bulk edit/delete.
-
-### 2.2 Priorities & Reminder Config (per-event)
-| Level | Meaning | Default policy (tunable) |
-|---|---|---|
-| `critical` | cannot miss | Telegram T-7d, T-1d, T-day 09:00; repeat until ack; optional email |
-| `medium` | should not miss | Telegram T-1d + T-day |
-| `low` | FYI / passive | No push; visible in web + on-demand via `/upcoming`, `/today`, `/ask`, `/low` |
-
-Per-event: `channels`, `offsets` (`7d/1d/2h/0m`), `remind_time_of_day`, `repeat_until_ack`, `snooze_allowed`, `quiet_hours` (e.g. 22:00–08:00 → morning digest), per-event email opt-in (`email_enabled`, `email_to`, separate offsets). Global email default OFF.
-
-### 2.3 Web UI — localhost only, no login
-- **Timeline view:** vertical feed grouped by month/week, infinite scroll past↔future, color/icon by priority/tag, recurrence badge.
-- **Calendar view:** month / week / agenda; day drawer.
-- **Summary bar:** “N events this month (X critical, Y medium, Z low)”, “Next 7 days”, overdue highlight.
-- **Event drawer:** full fields + next occurrences + reminder preview (“will ping via Telegram in 6d, 1d”).
-- **Create/edit wizard (3 steps):** 1) What/When (natural + structured) → 2) Recurrence → 3) Priority & Reminders (smart defaults + “send test Telegram now”).
-- **No auth page** (bind `127.0.0.1` only). Keyboard: `c` = create, `/` = search. Dark/light, responsive.
-- **Stack (fixed per owner):** React + TypeScript + TailwindCSS + `showcase` lib for component gallery/dev. **Atomic design** (`atoms/molecules/organisms/templates/pages`), **Context injection** (services via React context, no prop-drilling, mockable in Showcase/Vitest) — mirror `natalies-corner` structure. Vite + Vitest + ESLint (`max-warnings 0`), `src/core` (pure, 100% coverage) / `src/ui` (thin) split per Showcase convention.
-
-### 2.4 Telegram — Outbound (works from anywhere)
-- Private bot, DM-only + single-user allowlist (`TELEGRAM_USER_ID`); polling (no webhook).
-- Card: priority emoji, title, date/time, countdown, notes/link, buttons [Acknowledge] [Snooze 1d] [Delete/Discard where safe].
-- Delivery log per reminder visible in local web UI.
-
-### 2.5 Telegram — Inbound (works from anywhere)
-- Free text → AI extracts 1..N candidates → draft cards + [Save] [Edit] [Discard].
-- Voice/audio → **local STT** (see §4) → same pipeline.
-- Commands: `/add <text>`, `/today`, `/upcoming [7d|30d]`, `/low`, `/ask <q>`.
-- Defaults: `medium` if uncertain, `low` on “maybe/series/idea”; never silently auto-save critical financial events — always confirm.
-- Ignore group/channel noise; DM-only.
-
-### 2.6 AI Extraction — JoinGonka direct call (configurable)
-- Direct `fetch` to JoinGonka OpenAI-compatible endpoint — **no LangChain/LiteLLM wrapper**, same minimal pattern as `natalies-corner` (thin `createLlmClient({baseUrl, apiKey, model})` injected via context, prompt + JSON Schema versioned in repo).
-- Config via env: `LLM_BASE_URL` (default `https://gate.joingonka.ai/openai/v1` — confirm exact path via issue, brokers vary `/v1` vs `/openai`), `LLM_API_KEY`, `LLM_MODEL` (cheap JSON-capable, e.g. DeepSeek-V3-Flash / Qwen / Kimi — confirm model ID via issue).
-- Input: free text (+ `now + tz` injected for relative dates). Output: strict JSON array `{title, description, date|datetime, tz, all_day, recurrence_rule, priority_guess, reminder_guess, tags, confidence, needs_clarification?}`.
-- Ambiguous → `needs_clarification` + bot follow-up question, never hallucinate year.
-
-### 2.7 Email Reminders (optional per-event, sent from home machine)
-- SMTP from local (Gmail app-password / Resend / plain SMTP — confirm via issue): same card as HTML+text.
-- Per-event toggle + offsets; test button in web.
-
-### 2.8 Privacy (public repo!)
-- Repo is **public** but contains **only code + docs + prompts + schemas**. Never commit: `.env`, `./data/`, `./backups/`, logs, transcripts, Telegram IDs, API keys, email addresses.
-- **Data never leaves the machine except Telegram/LLM outbound:** the only outbound network calls are Telegram Bot API (poll + send), the JoinGonka HTTPS LLM call, and optional SMTP email (feature-flag, off by default). Everything else — events, reminders, transcripts, logs, backups — stays local under `./data`/`./backups` and is never committed.
-- `.gitignore` covers all of the above + `*.db*`, `*.ogg`, `*.wav`. Pre-commit secret scan (gitleaks) + CI check that no `.env`/`data/` is tracked.
-- Logs redact message text by default (opt-in full log locally). Web has no auth because it never leaves localhost — firewall note in README (bind `127.0.0.1`, do not `--host 0.0.0.0`).
-
----
-
-## 3. Non-Functional (local Omarchy)
-- Run: `docker compose up` **or** native `systemd --user` service → web `http://127.0.0.1:8123`, data in `./data` (SQLite WAL). Autostart on login/boot; survives sleep → catch-up digest on wake.
-- No hosting/TLS/tunnel/VPS. Outbound only: Telegram Bot API (poll + send), JoinGonka HTTPS, SMTP out. No inbound ports.
-- Backup: nightly SQLite dump + `./backups` rotation (local only, e.g. keep 30d); one-command restore. Reminder queue survives restart (persistent store, at-least-once + dedupe `(event_id, occurrence_id, offset)`).
-- Maintainability: monorepo, typed, linted, tested; README with Omarchy runbook.
-
----
-
-## 4. Tech Stack (fixed per owner clarifications)
-
-- **Monorepo:** `ws/timeline/` with `apps/web` (React+TS), `apps/api` (Python FastAPI) + `apps/bot` merged into api process (polling thread) or separate service in same Compose, `packages/shared` (JSON schemas, prompt version).
-  - Alt considered: full-TS backend — rejected for v1 because Python has best Telegram (`python-telegram-bot` v21) + local STT (`whisper.cpp` bindings) ecosystem; web stays TS.
-- **DB:** SQLite (WAL) only. No Postgres (no server). SQLAlchemy 2.0 + Pydantic v2 + Alembic. Scheduler: APScheduler persistent jobstore on SQLite.
-- **Frontend:** React + Vite + TypeScript + TailwindCSS + `showcase` (`AntonLapshin/showcase`) for isolated component gallery (`npm run dev:showcase` / `?file=..&showcase=..` deep links). Atomic design + Context injection per `natalies-corner`. `src/core` pure logic (100% Vitest coverage) / `src/ui` thin views. FullCalendar or custom month grid (decide in M2, prefer custom for beauty + Tailwind control).
-- **Bot:** `python-telegram-bot` v21, **polling only**. Allowlist `TELEGRAM_USER_ID`.
-- **STT (fixed): voxtype-like local, lightweight, efficient — no cloud Whisper API.**
-  - Default: local `whisper.cpp` (base/small English, ~150MB, same as Omarchy `Install > AI > Dictation`), CPU 9–11× realtime; reuse existing `voxtype` install if present (`~/.config/voxtype/config.toml`, `~/.local/share/voxtype/models/`).
-  - Implementation: Telegram `voice.ogg` → `ffmpeg` → `wav 16k` → `whisper.cpp` CLI/sidecar → text + confidence. Cap 2 min audio. Optional ONNX engines (Parakeet/Moonshine/Cohere) later — config flag.
-  - No audio leaves the machine.
-- **LLM (fixed): JoinGonka direct OpenAI-compatible call, configurable.** Thin TS-or-Python `fetch` client (`POST {baseUrl}/chat/completions` with `Bearer` key, `response_format: json_object`), timeouts + retry + model override per request. No vendor lock: swapping broker = changing env.
-- **Email:** Python `smtplib` + env (`SMTP_HOST/PORT/USER/PASS/FROM/TO`) or Resend API — confirm via issue.
-- **Deploy/run:** Docker Compose (web+api+bot+scheduler in 2 containers) **or** native systemd unit for Omarchy (preferred for autostart) — provide both, Compose for dev, systemd for daily use. `/healthz` for monitoring.
-- **Testing:** pytest (api/bot/recurrence), Vitest (web core 100%), Playwright smoke (localhost), ruff + mypy + eslint, gitleaks.
-
----
-
-## 5. Data Model (v1 draft, no User password table — single local user)
-
-```
-AppConfig(id=1, tz, quiet_hours, telegram_user_id, default_remind_time)
-Event(id, title, description, location/url, tags[],
-      type: one_time|recurrent,
-      start_at: timestamptz, end_at?, all_day: bool, tz,
-      rrule: str? (RFC5545),
-      priority: critical|medium|low,
-      channels: [telegram,email],
-      reminder_offsets: [...], remind_time_of_day: "09:00",
-      repeat_until_ack: bool, snooze_allowed: bool,
-      email_enabled: bool, email_to?,
-      source: web|telegram_text|telegram_voice|ai,
-      raw_input?, ai_confidence?, status: draft|active|archived,
-      created_at, updated_at)
-Reminder(id, event_id, occurrence_id, channel, scheduled_for, sent_at?, status, dedupe_key unique, acked_at?)
-DeliveryLog(reminder_id, attempt, result, error?, at)
-TelegramInbound(id, telegram_msg_id, from_id, kind, raw_text, transcription?, parsed_json?, created_event_ids[], at)
-```
-
-API sketch (localhost only, no auth):
-- `GET /api/events?from&to&priority&tag&q` (expanded occurrences)
-- `POST /api/events`, `PATCH /api/events/:id`, `DELETE /api/events/:id`
-- `GET /api/summary?month=YYYY-MM`
-- `POST /api/events/parse` (JoinGonka extraction; used by web smart-input + bot)
-- `POST /api/reminders/test`, `GET /api/reminders/log`
-- `GET /healthz`
-
----
-
-## 6. GitHub Workflow (public repo + owner-in-the-loop)
-
-- Repo **public** `timeline`. Default `main`. Secrets **never** in repo/issues/PRs — only local `.env`. `.env.example` holds placeholders.
-- Labels: `need-owner`, `web`, `api`, `reminder`, `ai`, `deploy-local`, `bug`.
-- Template `need-owner.md`: “What / Why / Where (local `.env` key) / Fallback”. Rule: **any manual input the agent cannot do itself MUST be a GitHub issue**.
-- Starter issues: #1–#7 in M0 + #8 UAT checklist (M6).
-
----
-
-## 7. Risks & Mitigations
-- **Public repo leak** → gitignore + gitleaks + CI untracked-check; docs use placeholders (`BOT_TOKEN=***`, `user_id=123…`).
-- **No web auth** → localhost-bind enforced + startup guard; README warns against exposing; Telegram allowlist remains (bot is internet-facing via Telegram cloud).
-- **Date mis-parse** → resolved-date always shown + confirm for critical; eval set + confidence gate.
-- **Spammy reminders** → low=silent default, quiet hours, dedupe, digest.
-- **Local STT accuracy/perf** → whisper base/small local, 2-min cap, reuse voxtype model; optional bigger model flag.
-- **JoinGonka availability/variance** → configurable base/model, timeouts+retry, pinned model ID, raw→parsed eval; fallback: manual wizard entry always works offline.
-- **Recurrence bugs** → `rrule` lib, property tests, no hand-rolled math.
-- **Scope creep (beautiful vs simple)** → Tailwind + Showcase-driven atoms, no design-system rebuild.
-- **`natalies-corner` inaccessible (404)** → Issue #2; proceed with Showcase defaults + JoinGonka OpenAI-compatible `fetch` until reference lands.
-
----
-
-## 8. Immediate Next Steps
-1. Owner: confirm license (MIT?) + grant `natalies-corner` access / local path (Issue #2) so web + JoinGonka mirror your pattern exactly.
-2. Owner: JoinGonka base URL + model ID + key → local `.env` (Issue #3); Telegram bot token + user id → `.env` (Issue #4); email decision (Issue #5); tz/locale/quiet-hours (Issue #6); voxtype present? (Issue #7).
-3. Agent: scaffold M0 (public repo layout + Showcase + atomic + context + FastAPI + Compose + systemd + gitleaks) with defaults where unblocked, then M1→M6 via PRs + localhost screenshots + Telegram voice→event demo.
-
-> Generated and maintained by [auto-pi](https://github.com/AntonLapshin/auto-pi) — an
-> autonomous engineering team harness for Pi.
 
 ## Demo
 
@@ -676,21 +496,3 @@ The project enforces a strict **core / UI split** (plan.md §19.1):
 - [`project-state.md`](project-state.md) — current state and progress
 - [`ROADMAP.md`](ROADMAP.md) — v2 / post-v1 stretch goals (out of scope for v1)
 - [`CHANGELOG.md`](CHANGELOG.md) — versioned change log
-
-
-## Shaping decisions (from /loop-seed)
-
-
-- **This is a fully elaborated v2 plan. Should I treat it as the authoritative spec (all sections fixed) and only ask about the remaining open points, or do you want to re-open any section (e.g. scope, stack, or non-goals) for revision?** — Treat v2 plan as authoritative spec; only resolve open points *(assumed)*
-
-- **For local STT, what is your preference given the plan's 'reuse voxtype if present' default?** — Reuse existing voxtype/whisper.cpp if present, else install via Omarchy dictation *(assumed)*
-
-- **Email reminders are optional for v1. Do you want email in the initial release, or keep it as a flagged/skipped feature until after core Telegram flow is proven?** — Skip email in v1 (feature-flag only; Telegram-first) *(assumed)*
-
-- **The plan defers the calendar view decision to M2: custom month grid vs FullCalendar. Which should the scaffold target?** — Custom month/week/agenda grid (Tailwind-controlled) *(assumed)*
-
-- **Both Docker Compose (dev) and systemd --user (daily) are planned. Which should be the default daily-driver path that gets priority in M0/M5?** — systemd --user (native) as daily driver; Compose for dev *(assumed)*
-
-- **Several items are listed as non-goals/v2-stretch (Google Calendar sync, /ask over history, PWA, multi-user). Should any of these be pulled into the v1 scope, or confirmed as out-of-scope for this build?** — All confirmed out-of-scope for v1 (ROADMAP.md only) *(assumed)*
-
-
