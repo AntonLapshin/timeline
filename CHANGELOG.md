@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Secrets hygiene audit for the public repo (issue #83, M6-T3):** adds a
+  committed pytest guard `apps/api/tests/test_secrets_hygiene.py` that scans every
+  git-tracked file (via `git ls-files`) for real secret patterns — Telegram bot
+  tokens, JoinGonka/OpenAI API keys, GitHub PATs, AWS keys, high-entropy tokens,
+  and personal email addresses — and asserts only placeholders appear. It also
+  verifies `.env.example` is tracked, holds placeholders only, and documents every
+  env key the API reads (now including `TIMELINE_BACKUPS_DIR` / `TIMELINE_BACKUP_KEEP`
+  from the backup work), and that `.env`, `./data/`, `./backups/`, logs and
+  transcripts are never tracked. README's privacy disclosure (§2.8) now states
+  explicitly that data never leaves the machine except Telegram/LLM/SMTP-outbound
+  and that `./data`, `./backups`, `.env`, logs and transcripts are never committed.
+  4 new pytest cases; full suite passes with 100% `src/core` coverage maintained.
+
 - **Nightly SQLite backups + rotation + one-command restore (issue #85, M6-T2):**
   adds a pure, unit-tested backup module `apps/api/app/backup.py` that dumps the
   SQLite DB (via SQLite's online backup API, WAL-safe) into `./backups/` under a
