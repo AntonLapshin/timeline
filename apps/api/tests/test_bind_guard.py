@@ -55,6 +55,30 @@ def test_guard_error_message_mentions_loopback_fix() -> None:
         assert_loopback_host("0.0.0.0")
 
 
+def test_guard_error_message_mentions_optin() -> None:
+    """The error points to the explicit non-loopback opt-in (issue #97)."""
+    with pytest.raises(BindGuardError, match="TIMELINE_ALLOW_NON_LOOPBACK"):
+        assert_loopback_host("0.0.0.0")
+
+
+def test_non_loopback_allowed_with_optin() -> None:
+    """0.0.0.0 is allowed when non-loopback binding is explicitly opted in."""
+    assert_loopback_host("0.0.0.0", allow_non_loopback=True)  # must not raise
+    assert_loopback_host("192.168.1.10", allow_non_loopback=True)  # must not raise
+
+
+def test_loopback_hosts_still_pass_with_optin() -> None:
+    """Opting in must not break the safe loopback default."""
+    for host in ("127.0.0.1", "localhost", "::1"):
+        assert_loopback_host(host, allow_non_loopback=True)  # must not raise
+
+
+def test_optin_default_is_false() -> None:
+    """Without the opt-in, non-loopback hosts are still refused."""
+    with pytest.raises(BindGuardError):
+        assert_loopback_host("0.0.0.0", allow_non_loopback=False)
+
+
 # --- Startup integration (fail-closed) ---------------------------------------
 
 
@@ -71,3 +95,47 @@ def test_create_app_accepts_loopback_host(tmp_path: Path) -> None:
     client = TestClient(create_app(settings))
     resp = client.get("/healthz")
     assert resp.status_code == 200
+
+
+# --- Startup opt-in (issue #97) ---------------------------------------------
+
+
+def test_create_app_refuses_non_loopback_without_optin(tmp_path: Path) -> None:
+    """0.0.0.0 without the opt-in still fails closed."""
+    settings = Settings(
+        data_dir=tmp_path,
+        db_name="test.db",
+        host="0.0.0.0",
+        allow_non_loopback=False,
+    )
+    with pytest.raises(BindGuardError):
+        create_app(settings)
+
+
+def test_create_app_allows_non_loopback_with_optin(tmp_path: Path) -> None:
+    """0.0.0.0 with TIMELINE_ALLOW_NON_LOOPBACK=1 builds successfully."""
+    settings = Settings(
+        data_dir=tmp_path,
+        db_name="test.db",
+        host="0.0.0.0",
+        allow_non_loopback=True,
+    )
+    client = TestClient(create_app(settings))
+    resp = client.get("/healthz")
+    assert resp.status_code == 200
+
+
+def test_settings_allow_non_loopback_default_is_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TIMELINE_ALLOW_NON_LOOPBACK defaults to off (safe by default)."""
+    monkeypatch.delenv("TIMELINE_ALLOW_NON_LOOPBACK", raising=False)
+    assert Settings().allow_non_loopback is False
+
+
+def test_settings_allow_non_loopback_env_is_honoured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TIMELINE_ALLOW_NON_LOOPBACK=1 turns the opt-in on."""
+    monkeypatch.setenv("TIMELINE_ALLOW_NON_LOOPBACK", "1")
+    assert Settings().allow_non_loopback is True

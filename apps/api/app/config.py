@@ -58,6 +58,12 @@ class Settings:
     )
     #: Host to bind. Must stay loopback-only (no auth); refuse 0.0.0.0.
     host: str = field(default_factory=lambda: os.getenv("TIMELINE_HOST", "127.0.0.1"))
+    #: Explicit opt-in to bind to a non-loopback host (e.g. 0.0.0.0) for
+    #: host-system / LAN access (issue #97). Off by default — the app has no
+    #: auth, so exposing it to the network is opt-in only.
+    allow_non_loopback: bool = field(
+        default_factory=lambda: _bool_env("TIMELINE_ALLOW_NON_LOOPBACK", False)
+    )
     #: Port to bind.
     port: int = field(default_factory=lambda: int(os.getenv("TIMELINE_PORT", "8123")))
     #: Enable SQLite WAL mode (durable + concurrent readers).

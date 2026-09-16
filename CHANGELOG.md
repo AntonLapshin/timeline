@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Allow web/API bind to `0.0.0.0` for host-system access, with firewall port
+  whitelist (issue #97, M8-T1):** adds an explicit opt-in to bind the web/API
+  to `0.0.0.0` via `TIMELINE_ALLOW_NON_LOOPBACK=1` (alongside
+  `TIMELINE_HOST=0.0.0.0`) so the owner can reach the app from their host
+  system / LAN. The fail-closed loopback-only bind guard (`bind_guard.py`,
+  issue #77) is preserved as the default — non-loopback binds are still
+  refused unless the opt-in is present. `apps/api/app/config.py` gains the
+  `allow_non_loopback` setting (default off) and `apps/api/app/main.py` wires
+  it into the startup guard. `systemd/timeline.service` documents the opt-in
+  path (env vars + commented example) and the firewall rule to whitelist the
+  port (`firewall-cmd --add-port=8123/tcp` / `ufw allow 8123/tcp`), while
+  keeping the loopback default safe; `README.md` "Local run paths" gains a
+  "Host-system / LAN access (opt-in)" section and the security trade-off
+  (binding to `0.0.0.0` exposes the app to the LAN with no auth, so it is
+  opt-in only); `.env.example` documents the new var. Backend guard logic is
+  pure and unit-tested in `apps/api/tests/test_bind_guard.py` (loopback
+  default still passes, `0.0.0.0` without opt-in refused, `0.0.0.0` with
+  opt-in allowed). `make test` passes; web `npm test` / `npm run
+  test:coverage` pass with 100% `src/core` coverage maintained.
+
 - **ROADMAP.md for v2 / post-v1 stretch goals (issue #90, M7-T2C):** adds a new
   [`ROADMAP.md`](ROADMAP.md) at the repo root capturing v2 / post-v1 stretch
   goals so future direction is stored in-repo, and links it from `README.md`
