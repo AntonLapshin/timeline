@@ -5,6 +5,19 @@
 ## Status
 
 **Engineering + docs complete — awaiting only owner action (#8, #95).**
+(PM revisit 2026-09-16 (13th), blocked-only dispatch: re-checked #8 and #95 —
+still zero comments, no owner input, no owner reply; both blocks remain
+genuinely valid (owner-gated email decision #8 and owner UAT #95); no unblock
+possible. Verified repo docs are consistent — `milestone.md` has no stale
+records (remaining ⏳ markers correctly point at owner-gated UAT #95), CI
+green on main, no open PRs. The manifest backlog has **no remaining non-human
+unchecked sub-issues** — the only unchecked item is M7-T3, already filed as
+`pi:needs-human` #95, and the success-criteria checkboxes are validated by
+that owner UAT, not engineer work. Filing new issues would only duplicate
+owner-gated work (#8/#95) or invent scope absent from the manifest, so none
+are created. `completed.json` remains `status: done`; project awaits only
+owner action on #8/#95.)
+
 (PM revisit 2026-09-16 (12th), blocked-only dispatch: #103 (M8-T4) merged via
 PR #104 — `milestone.md` now records M8-T3 as done and the M7–M8 follow-ups
 row is ✅; all M8 owner-follow-up scope (#97/#98/#99) is merged. Re-checked
