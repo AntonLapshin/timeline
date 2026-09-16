@@ -87,7 +87,7 @@ owner-blocked).
 
 - [x] M8-T1 — Allow web/API bind to `0.0.0.0` opt-in with firewall port whitelist (issue #97). *(merged via #100)*
 - [x] M8-T2 — Create this `milestone.md` with milestone records; check off all completed items (issue #98). *— this file*
-- [ ] M8-T3 — Clean up README: remove project-plan text, keep app description + useful steps (issue #99). *— pending (open #99)*
+- [x] M8-T3 — Clean up README: remove project-plan text, keep app description + useful steps (issue #99). *(merged via #102)*
 
 ---
 
@@ -106,7 +106,7 @@ owner-blocked).
 | M4 — Telegram inbound + local STT + JoinGonka parsing | ✅ done |
 | M5 — Omarchy hardening + autostart + local backups | ✅ done |
 | M6 — Polish, docs, handover | ⏳ done except owner UAT (M7-T3, #95) |
-| M7 — M8 owner follow-ups | ⏳ in progress (M8-T3 #99 open) |
+| M7 — M8 owner follow-ups | ✅ done |
 
 Only the **owner-gated** items remain open: **M6 owner UAT (#95)** and the **email
 decision (#8)** — both require owner action and are not engineer scope.

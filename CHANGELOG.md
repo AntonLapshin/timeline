@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Update `milestone.md`: check off M8-T3 and mark M7–M8 follow-ups done (issue
+  #103, M8-T4):** the M8-T3 record (README cleanup, issue #99) is now checked
+  off as `*(merged via #102)*`, and the "Status summary" table row for
+  `M7 — M8 owner follow-ups` flips from `⏳ in progress (M8-T3 #99 open)` to
+  `✅ done`. The closing paragraph is unchanged and remains accurate: only the
+  owner-gated items (owner UAT #95, email decision #8) remain open. Docs-only
+  change; no behavioural tests required.
+
 - **Clean up `README.md`: remove project-plan text, keep app description +
   useful steps (issue #99, M8-T3):** strips the unrelated project-plan sections
   (Goals & Non-Goals, Functional Requirements, Non-Functional, Tech Stack, Data
