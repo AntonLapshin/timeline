@@ -10,6 +10,11 @@
 owner-gated with valid blocks. The manifest backlog has no remaining non-human
 scope; M7-T3 is already filed as #95. No new Engineer issues to plan; project
 remains `status: done`.)
+(PM revisit 2026-09-16 (2nd): re-checked #8 and #95 — neither has comments or
+new owner input; both blocks remain valid (owner-gated email decision and owner
+UAT). No unblock possible, and no non-human unchecked milestone scope exists to
+plan. `completed.json` remains `status: done`; project awaits only owner action
+on #8/#95.)
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
