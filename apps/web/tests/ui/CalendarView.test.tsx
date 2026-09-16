@@ -168,6 +168,55 @@ describe("CalendarView", () => {
     );
   });
 
+  it("retries the failed load when Retry is clicked", async () => {
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const getOccurrences = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce([
+        makeOccurrence({ event_id: 1, title: "Recovered", start_at: `${todayIso}T10:00:00` }),
+      ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Failed to load occurrences")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText(`${todayIso}, 1 event`)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByLabelText(`${todayIso}, 1 event`));
+    await waitFor(() => expect(screen.getByText("Recovered")).toBeInTheDocument());
+    expect(getOccurrences).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a loading skeleton while fetching", async () => {
+    let resolve!: (v: EventOccurrence[]) => void;
+    const getOccurrences = vi
+      .fn()
+      .mockReturnValue(new Promise<EventOccurrence[]>((r) => {
+        resolve = r;
+      }));
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    renderWithServices(services, <CalendarView />);
+
+    expect(screen.getByTestId("calendar-loading")).toBeInTheDocument();
+    resolve([]);
+    await waitFor(() =>
+      expect(screen.getByText(/September 2026/)).toBeInTheDocument(),
+    );
+  });
+
   it("switches to the week grid and places events by day", async () => {
     // Place occurrences on today's date so they always fall in the current
     // week and the fetched (current) month, regardless of when the suite runs.

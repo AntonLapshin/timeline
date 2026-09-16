@@ -104,6 +104,18 @@ describe("timeline core module", () => {
       const row = toEventRow(makeEvent({ tags: [] }));
       expect(row.tagColor).toContain("slate");
     });
+
+    it("derives a humanized relative label for the event start", () => {
+      const row = toEventRow(
+        makeEvent({ start_at: "2026-09-05T10:00:00" }),
+      );
+      expect(row.relativeLabel).toBeTypeOf("string");
+    });
+
+    it("yields a null relative label for an unparseable start", () => {
+      const row = toEventRow(makeEvent({ start_at: "not-a-date" }));
+      expect(row.relativeLabel).toBeNull();
+    });
   });
 
   describe("eventTimeLabel", () => {

@@ -296,6 +296,16 @@ describe("calendar core module", () => {
       expect(row.timeLabel).toBe("not-a-date");
       expect(row.nextOccurrenceLabel).toBe("also-bad");
     });
+
+    it("derives a humanized relative label for the occurrence start", () => {
+      const row = toOccurrenceRow(makeOccurrence({ start_at: "2026-09-05T10:00:00" }));
+      expect(row.relativeLabel).toBeTypeOf("string");
+    });
+
+    it("yields a null relative label for an unparseable start", () => {
+      const row = toOccurrenceRow(makeOccurrence({ start_at: "not-a-date" }));
+      expect(row.relativeLabel).toBeNull();
+    });
   });
 
   describe("weekStart", () => {
@@ -584,6 +594,11 @@ describe("calendar core module", () => {
     it("falls back to the raw start for an unparseable date label", () => {
       const row = toAgendaRow(makeOccurrence({ start_at: "not-a-date" }));
       expect(row.dateLabel).toBe("not-a-date");
+    });
+
+    it("derives a humanized relative label for the occurrence start", () => {
+      const row = toAgendaRow(makeOccurrence({ start_at: "2026-09-05T10:00:00" }));
+      expect(row.relativeLabel).toBeTypeOf("string");
     });
   });
 });

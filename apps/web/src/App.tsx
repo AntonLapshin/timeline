@@ -114,6 +114,7 @@ export default function App() {
           <TimelineView
             onEventClick={drawer.openDrawer}
             filter={search.filter}
+            onCreate={wizard.openCreate}
           />
         ) : (
           <CalendarView

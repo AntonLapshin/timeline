@@ -6,6 +6,7 @@ import {
   startOfDay,
   daysBetween,
   humanizeRelative,
+  relativeLabel,
   monthLabel,
   weekdayShort,
 } from "../../src/core/dateFmt";
@@ -75,6 +76,18 @@ describe("dateFmt core module", () => {
   it("humanizes a single week", () => {
     const now = new Date(2026, 8, 10, 12, 0);
     expect(humanizeRelative(new Date(2026, 8, 24, 8, 0), now)).toBe("in 2 weeks");
+  });
+
+  it("derives a short relative label from an ISO string", () => {
+    const now = new Date(2026, 8, 10, 12, 0);
+    expect(relativeLabel("2026-09-10T08:00:00", now)).toBe("today");
+    expect(relativeLabel("2026-09-11T08:00:00", now)).toBe("tomorrow");
+    expect(relativeLabel("2026-10-01T08:00:00", now)).toBe("in 3 weeks");
+    expect(relativeLabel("2026-09-07T08:00:00", now)).toBe("3 days ago");
+  });
+
+  it("returns null for an unparseable relative label input", () => {
+    expect(relativeLabel("not-a-date", new Date(2026, 8, 10))).toBeNull();
   });
 
   it("builds full and short month labels", () => {

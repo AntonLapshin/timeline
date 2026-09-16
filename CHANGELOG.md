@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **UI polish: empty/loading/error states, humanized dates, print month view, Showcase (issue #84, M7-T1):** adds friendly empty states with a create CTA (Timeline), loading skeletons for the Timeline and Calendar views, and error states with a **Retry** button (via new `retry` on the `useTimeline`/`useCalendar` view models). Adds a pure `src/core` `relativeLabel` helper (100% covered) and surfaces humanized relative date badges ("today", "tomorrow", "in 3 weeks") on Timeline rows, the Calendar day-drawer occurrence rows, and agenda rows. Adds print-friendly CSS (`@media print`) so the Calendar month grid prints cleanly (interactive chrome hidden, day cells never split across pages). The component Showcase gains Timeline/Calendar loading states and a create-CTA on the empty Timeline. 11 new/updated tests; full suite passes with 100% `src/core` coverage maintained.
+
 - **Secrets hygiene audit for the public repo (issue #83, M6-T3):** adds a
   committed pytest guard `apps/api/tests/test_secrets_hygiene.py` that scans every
   git-tracked file (via `git ls-files`) for real secret patterns — Telegram bot

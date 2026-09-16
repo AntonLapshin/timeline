@@ -1,3 +1,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Print-friendly month view (issue #84, M7-T1).
+ *
+ * When printing the Calendar month grid, hide the interactive chrome (header,
+ * view switcher, mode tabs, nav arrows, day drawer) and let the month grid
+ * flow across pages cleanly without splitting individual day cells.
+ */
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .print-month-grid {
+    display: block !important;
+  }
+
+  .print-month-grid .print-month-cell {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

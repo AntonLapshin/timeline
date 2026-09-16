@@ -11,7 +11,7 @@
 
 import type { EventPriority, EventRead } from "./eventTypes";
 import { formatRecurrence } from "./recurrenceFormat";
-import { parseIso, toLocalDate, weekdayShort } from "./dateFmt";
+import { parseIso, relativeLabel, toLocalDate, weekdayShort } from "./dateFmt";
 
 /** Display styling for a priority level. */
 export interface PriorityStyle {
@@ -45,6 +45,8 @@ export interface EventRow {
   recurrenceBadge: string | null;
   /** Human time label for the event's start. */
   timeLabel: string;
+  /** Humanized relative label vs now, e.g. "today", "in 3 weeks". */
+  relativeLabel: string | null;
 }
 
 /** A week bucket within a month (week 1..5 by calendar day). */
@@ -122,6 +124,7 @@ export function toEventRow(event: EventRead): EventRow {
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
     timeLabel: eventTimeLabel(event),
+    relativeLabel: relativeLabel(event.start_at, new Date()),
   };
 }
 
