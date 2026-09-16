@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ROADMAP.md for v2 / post-v1 stretch goals (issue #90, M7-T2C):** adds a new
+  [`ROADMAP.md`](ROADMAP.md) at the repo root capturing v2 / post-v1 stretch
+  goals so future direction is stored in-repo, and links it from `README.md`
+  "Project documents". Covers the v2/stretch items from the manifest non-goals
+  — Google Calendar import/export sync, `/ask` over history (conversational
+  querying of past events), PWA (installable/offline), and usage stats — each
+  with a short description, a rough priority (P1–P3), the problem it solves,
+  and an explicit "out-of-scope for v1" marker. Contains no secrets, IDs, or
+  emails and is consistent with the manifest's non-goals. Docs-only change; no
+  code, schema, or behavior changed, so the full API/web test suites pass
+  unchanged with 100% `src/core` coverage maintained.
+
 - **README: voxtype reuse notes, cost notes, troubleshooting (issue #91, M7-T2B):**
   adds three new README sections. **Local STT / voxtype reuse notes** documents
   how the app reuses the existing Omarchy voxtype install
