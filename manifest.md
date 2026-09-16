@@ -4,6 +4,12 @@
 > auto-pi PM persona as the project evolves. The milestones below are the
 > backbone of the project: the PM plans issues against them.
 
+**Status: done** (engineering complete + deployed; final owner UAT M7-T3 is
+`pi:needs-human` #95 and the email decision is `need-owner` #8 — both
+explicitly owner-blocked).
+
+**completed_at:** 2026-09-16T04:50:00Z
+
 ## Purpose
 
 A personal, local-first global schedule that remembers everything: capture one-time and recurrent future events in under 30 seconds, view them on a timeline + calendar at home on localhost, add them from anywhere via Telegram text/voice (AI-parsed), and get configurable Telegram reminders from everywhere — all private by construction with public code and locally-stored data on the Omarchy machine.
