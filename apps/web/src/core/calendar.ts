@@ -10,7 +10,7 @@
  */
 
 import type { EventOccurrence } from "./eventTypes";
-import { parseIso, startOfDay, toLocalDate, weekdayShort } from "./dateFmt";
+import { parseIso, relativeLabel, startOfDay, toLocalDate, weekdayShort } from "./dateFmt";
 import { formatRecurrence } from "./recurrenceFormat";
 import { priorityStyle, tagStyle } from "./timeline";
 
@@ -192,6 +192,8 @@ export interface OccurrenceRow {
   timeLabel: string;
   /** A human "next occurrence" hint, or null when none is available. */
   nextOccurrenceLabel: string | null;
+  /** Humanized relative label vs now, e.g. "today", "in 3 weeks". */
+  relativeLabel: string | null;
 }
 
 /** Format an occurrence's start for display, e.g. "Sat, Sep 5 · 10:00 AM". */
@@ -246,6 +248,7 @@ export function toOccurrenceRow(o: EventOccurrence): OccurrenceRow {
     recurrenceBadge: badge.known ? badge.label : null,
     timeLabel: occurrenceTimeLabel(o),
     nextOccurrenceLabel: nextOccurrenceLabel(o.next_occurrence),
+    relativeLabel: relativeLabel(o.start_at, new Date()),
   };
 }
 
@@ -391,6 +394,8 @@ export interface AgendaRow {
   tagIcon: string;
   /** Human recurrence badge, or null for a one-time event. */
   recurrenceBadge: string | null;
+  /** Humanized relative label vs now, e.g. "today", "in 3 weeks". */
+  relativeLabel: string | null;
 }
 
 /** Derive a single agenda row from an occurrence. */
@@ -410,6 +415,7 @@ export function toAgendaRow(o: EventOccurrence): AgendaRow {
     tagColor: tag?.color ?? "text-slate-500 bg-transparent border-transparent",
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
+    relativeLabel: relativeLabel(o.start_at, new Date()),
   };
 }
 

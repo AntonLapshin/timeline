@@ -49,6 +49,8 @@ export interface CalendarState {
   loading: boolean;
   /** A human error message, or null when there is none. */
   error: string | null;
+  /** Re-run the current month's occurrence fetch (e.g. after a failure). */
+  retry: () => void;
   /** Go to the previous month. */
   prevMonth: () => void;
   /** Go to the next month. */
@@ -138,6 +140,23 @@ export function useCalendar(filter?: EventFilter): CalendarState {
     return null;
   }, [grid, selectedIso]);
 
+  const retry = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    apiClient
+      .getOccurrences(key)
+      .then((list) => {
+        setOccurrences(list);
+        setError(null);
+      })
+      .catch(() => {
+        setError("Failed to load occurrences");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [apiClient, key]);
+
   const prevMonth = useCallback(
     () => setCursor((c) => navigateMonth(c.year, c.month, -1)),
     [],
@@ -174,5 +193,6 @@ export function useCalendar(filter?: EventFilter): CalendarState {
     nextWeek,
     selectDay,
     closeDrawer,
+    retry,
   };
 }

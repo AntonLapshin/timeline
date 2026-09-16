@@ -67,6 +67,8 @@ describe("TimelineView", () => {
     expect(screen.getByText("Week 1")).toBeInTheDocument();
     expect(screen.getByText(/every quarter/)).toBeInTheDocument();
     expect(screen.getByText("# health")).toBeInTheDocument();
+    // Humanized relative date badge is rendered for the event start.
+    expect(screen.getAllByTestId("relative-label").length).toBeGreaterThan(0);
   });
 
   it("shows the error message when the load fails", async () => {
@@ -80,12 +82,57 @@ describe("TimelineView", () => {
     );
   });
 
+  it("retries the failed load when Retry is clicked", async () => {
+    const listEvents = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce([makeEvent({ id: 1, title: "Recovered" })]);
+    const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
+
+    renderWithServices(services, <TimelineView />);
+
+    await waitFor(() =>
+      expect(screen.getByText("Failed to load events")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("Recovered")).toBeInTheDocument());
+    expect(listEvents).toHaveBeenCalledTimes(2);
+  });
+
   it("shows an empty state when there are no events", async () => {
     const listEvents = vi.fn().mockResolvedValue([]);
     const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
+    await waitFor(() => expect(screen.getByText("No events yet.")).toBeInTheDocument());
+  });
+
+  it("calls onCreate from the empty state CTA", async () => {
+    const listEvents = vi.fn().mockResolvedValue([]);
+    const onCreate = vi.fn();
+    const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
+
+    renderWithServices(services, <TimelineView onCreate={onCreate} />);
+
+    await waitFor(() =>
+      expect(screen.getByText("No events yet.")).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /create your first event/i }));
+    expect(onCreate).toHaveBeenCalled();
+  });
+
+  it("shows a loading skeleton while fetching", async () => {
+    let resolve!: (v: EventRead[]) => void;
+    const listEvents = vi.fn().mockReturnValue(new Promise<EventRead[]>((r) => {
+      resolve = r;
+    }));
+    const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
+
+    renderWithServices(services, <TimelineView />);
+
+    expect(screen.getByTestId("timeline-loading")).toBeInTheDocument();
+    resolve([]);
     await waitFor(() => expect(screen.getByText("No events yet.")).toBeInTheDocument());
   });
 

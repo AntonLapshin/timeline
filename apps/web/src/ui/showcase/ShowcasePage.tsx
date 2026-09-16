@@ -224,10 +224,10 @@ export function ShowcasePage() {
         </ShowcaseState>
       </ShowcaseSection>
 
-      {/* TimelineView — populated + empty + error */}
+      {/* TimelineView — populated + empty + loading + error */}
       <ShowcaseSection
         title="TimelineView"
-        caption="The month/week grouped event list: populated, empty and error states."
+        caption="The month/week grouped event list: populated, empty (with create CTA), loading and error (with retry) states."
       >
         <ShowcaseState label="Populated">
           <ShowcaseServicesProvider scenario="populated">
@@ -236,6 +236,11 @@ export function ShowcasePage() {
         </ShowcaseState>
         <ShowcaseState label="Empty">
           <ShowcaseServicesProvider scenario="empty">
+            <TimelineView onCreate={noop} />
+          </ShowcaseServicesProvider>
+        </ShowcaseState>
+        <ShowcaseState label="Loading">
+          <ShowcaseServicesProvider scenario="loading">
             <TimelineView />
           </ShowcaseServicesProvider>
         </ShowcaseState>
@@ -249,10 +254,20 @@ export function ShowcasePage() {
       {/* CalendarView — month grid with mode switcher */}
       <ShowcaseSection
         title="CalendarView"
-        caption="The month grid (use the Month / Week / Agenda tabs to switch sub-modes)."
+        caption="The month grid (use the Month / Week / Agenda tabs to switch sub-modes), plus loading and error (with retry) states. The month grid prints cleanly via print styles."
       >
         <ShowcaseState label="Populated">
           <ShowcaseServicesProvider scenario="populated">
+            <CalendarView />
+          </ShowcaseServicesProvider>
+        </ShowcaseState>
+        <ShowcaseState label="Loading">
+          <ShowcaseServicesProvider scenario="loading">
+            <CalendarView />
+          </ShowcaseServicesProvider>
+        </ShowcaseState>
+        <ShowcaseState label="Error">
+          <ShowcaseServicesProvider scenario="error">
             <CalendarView />
           </ShowcaseServicesProvider>
         </ShowcaseState>

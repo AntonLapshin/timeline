@@ -150,6 +150,7 @@ describe("EventDrawer", () => {
               recurrenceBadge: "every quarter",
               timeLabel: "Sat, Sep 5 · 10:00 AM",
               nextOccurrenceLabel: "Next: Sat, Dec 5",
+              relativeLabel: "in 3 weeks",
             },
           },
         ],

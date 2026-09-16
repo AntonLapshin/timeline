@@ -30,15 +30,23 @@ import {
  * - `"populated"` — the api returns sample events/occurrences/summary.
  * - `"empty"` — the api returns empty collections.
  * - `"error"` — the api rejects, so the component shows its error state.
+ * - `"loading"` — the api never resolves, so the component shows its loading
+ *   skeleton (pending forever is fine for a static gallery preview).
  */
-export type ShowcaseScenario = "populated" | "empty" | "error";
+export type ShowcaseScenario = "populated" | "empty" | "error" | "loading";
 
 /** Build a fake `ApiClient` whose methods resolve per the given scenario. */
 function createShowcaseApiClient(
   scenario: ShowcaseScenario,
 ): ApiClient {
   const reject = (): Promise<never> => Promise.reject(new Error("offline"));
-  const events = scenario === "populated" ? SHOWCASE_EVENTS : scenario === "empty" ? [] : null;
+  const pending = (): Promise<never> => new Promise<never>(() => {});
+  const events =
+    scenario === "populated"
+      ? SHOWCASE_EVENTS
+      : scenario === "empty"
+        ? []
+        : null;
   const occurrences =
     scenario === "populated"
       ? SHOWCASE_OCCURRENCES
@@ -53,30 +61,32 @@ function createShowcaseApiClient(
         : null;
   const deliveries: DeliveryLog[] | null =
     scenario === "populated" ? SHOWCASE_DELIVERIES : scenario === "empty" ? [] : null;
+  const fail = (): Promise<never> =>
+    scenario === "loading" ? pending() : reject();
 
   return {
     listEvents: () =>
-      events === null ? reject() : Promise.resolve(events as EventRead[]),
+      events === null ? fail() : Promise.resolve(events as EventRead[]),
     getEvent: (id: number) =>
       events === null
-        ? reject()
+        ? fail()
         : Promise.resolve(
             (events as EventRead[]).find((e) => e.id === id) ??
               (events as EventRead[])[0],
           ),
     createEvent: () =>
-      events === null ? reject() : Promise.resolve(SHOWCASE_EVENTS[0]),
+      events === null ? fail() : Promise.resolve(SHOWCASE_EVENTS[0]),
     updateEvent: () =>
-      events === null ? reject() : Promise.resolve(SHOWCASE_EVENTS[0]),
+      events === null ? fail() : Promise.resolve(SHOWCASE_EVENTS[0]),
     getSummary: () =>
-      summary === null ? reject() : Promise.resolve(summary),
+      summary === null ? fail() : Promise.resolve(summary),
     getOccurrences: () =>
       occurrences === null
-        ? reject()
+        ? fail()
         : Promise.resolve(occurrences as EventOccurrence[]),
     getEventDeliveries: () =>
       deliveries === null
-        ? reject()
+        ? fail()
         : Promise.resolve(deliveries as DeliveryLog[]),
   };
 }

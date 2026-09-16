@@ -116,6 +116,22 @@ export function humanizeRelative(date: Date, now: Date): string {
   return [prefix, `${years} ${label}`, suffix].filter(Boolean).join(" ");
 }
 
+/**
+ * A short humanized relative label for an ISO start vs "now".
+ *
+ * Thin wrapper over `humanizeRelative` that accepts an ISO string and returns
+ * null (rather than throwing) when it cannot be parsed, so callers can render
+ * a relative badge like "today", "tomorrow", "in 3 weeks" or "2 days ago"
+ * without branching on parse success themselves.
+ */
+export function relativeLabel(iso: string, now: Date): string | null {
+  const date = parseIso(iso);
+  if (!date) {
+    return null;
+  }
+  return humanizeRelative(date, now);
+}
+
 /** Build full and short month labels for a YYYY-MM string. */
 export function monthLabel(month: string): MonthLabel {
   const match = /^(\d{4})-(\d{2})$/.exec(month);

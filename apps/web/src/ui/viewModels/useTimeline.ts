@@ -30,6 +30,8 @@ export interface TimelineState {
   error: string | null;
   /** Reveal the next page of events. */
   loadMore: () => void;
+  /** Re-run the initial fetch (e.g. after a failed load). */
+  retry: () => void;
 }
 
 /**
@@ -48,6 +50,7 @@ export function useTimeline(filter?: EventFilter): TimelineState {
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
     apiClient
       .listEvents()
       .then((list) => {
@@ -66,6 +69,24 @@ export function useTimeline(filter?: EventFilter): TimelineState {
     return () => {
       cancelled = true;
     };
+  }, [apiClient]);
+
+  const retry = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    apiClient
+      .listEvents()
+      .then((list) => {
+        setEvents(list);
+        setPage(0);
+        setError(null);
+      })
+      .catch(() => {
+        setError("Failed to load events");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [apiClient]);
 
   const loadMore = useCallback(() => {
@@ -96,5 +117,6 @@ export function useTimeline(filter?: EventFilter): TimelineState {
     loading,
     error,
     loadMore,
+    retry,
   };
 }

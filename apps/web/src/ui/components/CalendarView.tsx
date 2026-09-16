@@ -38,7 +38,7 @@ export function DayCell({
       type="button"
       onClick={() => onSelect(day)}
       aria-label={`${day.isoDate}, ${day.count} event${day.count === 1 ? "" : "s"}`}
-      className={`flex h-16 flex-col items-center justify-start rounded-lg border p-1 text-sm transition-colors ${
+      className={`print-month-cell flex h-16 flex-col items-center justify-start rounded-lg border p-1 text-sm transition-colors ${
         day.inMonth
           ? "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
           : "border-transparent bg-slate-50 text-slate-300 dark:bg-slate-800/40 dark:text-slate-600"
@@ -106,6 +106,14 @@ export function OccurrenceRowView({
               </div>
               <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                 <span>{row.timeLabel}</span>
+                {row.relativeLabel && (
+                  <span
+                    data-testid="relative-label"
+                    className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                  >
+                    {row.relativeLabel}
+                  </span>
+                )}
                 {row.nextOccurrenceLabel && (
                   <span className="text-slate-400 dark:text-slate-500">{row.nextOccurrenceLabel}</span>
                 )}
@@ -218,6 +226,11 @@ export function AgendaRowView({
           <span>{row.dateLabel}</span>
           <span>·</span>
           <span>{row.timeLabel}</span>
+          {row.relativeLabel && (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+              {row.relativeLabel}
+            </span>
+          )}
         </div>
       </div>
       {row.occurrence.tag && (
@@ -287,6 +300,7 @@ export function CalendarView({
     selectedDay,
     loading,
     error,
+    retry,
     prevMonth,
     nextMonth,
     prevWeek,
@@ -302,7 +316,7 @@ export function CalendarView({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1">
+      <div className="flex gap-1 print-hidden">
         {MODES.map((tab) => (
           <button
             key={tab.id}
@@ -320,7 +334,7 @@ export function CalendarView({
         ))}
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between print-hidden">
         <button
           type="button"
           onClick={navigation.prev}
@@ -340,12 +354,54 @@ export function CalendarView({
         </button>
       </div>
 
-      {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-      {loading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading calendar…</p>}
+      {error && (
+        <div
+          className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/40"
+          role="alert"
+        >
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-3 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {loading && (
+        <div
+          className="space-y-3"
+          role="status"
+          aria-label="Loading calendar"
+          data-testid="calendar-loading"
+        >
+          <div className="grid grid-cols-7 gap-1">
+            {WEEKDAY_HEADERS.map((day) => (
+              <div
+                key={day}
+                className="h-3 animate-pulse rounded bg-slate-200 dark:bg-slate-700"
+              />
+            ))}
+          </div>
+          <div className="space-y-1">
+            {Array.from({ length: 5 }, (_, i) => (
+              <div key={i} className="grid grid-cols-7 gap-1">
+                {Array.from({ length: 7 }, (_, j) => (
+                  <div
+                    key={j}
+                    className="h-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700"
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!loading && !error && mode === "month" && (
         <>
-          <div className="grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-1 print-hidden">
             {WEEKDAY_HEADERS.map((day) => (
               <div
                 key={day}
@@ -355,7 +411,7 @@ export function CalendarView({
               </div>
             ))}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 print-month-grid">
             {grid.weeks.map((weekRow) => (
               <div key={weekRow.key} className="grid grid-cols-7 gap-1">
                 {weekRow.days.map((day) => (
@@ -380,7 +436,7 @@ export function CalendarView({
 
       {selectedDay && (
         <div
-          className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+          className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm print-hidden dark:border-slate-700 dark:bg-slate-800"
           role="dialog"
           aria-label={`Events on ${selectedDay.isoDate}`}
         >
