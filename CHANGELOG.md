@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Clean up `README.md`: remove project-plan text, keep app description +
+  useful steps (issue #99, M8-T3):** strips the unrelated project-plan sections
+  (Goals & Non-Goals, Functional Requirements, Non-Functional, Tech Stack, Data
+  Model, Milestones & Breakdown, GitHub Workflow, Risks, Immediate Next Steps,
+  Shaping decisions, and the old Repo/Vision/Serving-model block) from
+  `README.md`, leaving only a short app description, repository layout,
+  quickstart (Docker Compose + systemd + Omarchy), env table, runbook
+  (start/stop/logs/backup/restore/update), troubleshooting, demo URL, stack,
+  scripts, architecture, and project-documents links. Milestone records remain
+  in `milestone.md` (M8-T2) and `manifest.md` remains the charter, both already
+  linked from the README. Also fixes a pre-existing broken `[Security](#security)`
+  anchor to point at the Host-system / LAN access section. Docs-only change; no
+  behavioural tests required.
+
 ### Added
 
 - **Add `milestone.md` with milestone records; check off all completed items
