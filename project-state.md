@@ -4,7 +4,7 @@
 
 ## Status
 
-**In progress (M5 — Telegram inbound + local STT + AI parsing).**
+**In progress (M7 — Polish, docs, handover).**
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
@@ -12,7 +12,13 @@ merged. M4 (reminder engine + Telegram outbound) is **fully done**: M4-T1
 (persistent APScheduler jobstore, #57/#58), M4-T2 (Telegram outbound sender
 with Ack/Snooze/Delete, #55/#59), and M4-T3 (per-event reminder config +
 quiet-hours digest + email feature-flag sender + delivery-log/preview UI +
-tests) merged via #61/#62/#63/#64/#65/#67/#68. GitHub Pages is **enabled**
+tests) merged via #61/#62/#63/#64/#65/#67/#68. M5 (Telegram inbound + local
+STT + AI parsing) is **fully done** via #72/#73/#74/#78/#81. M6 (Omarchy
+hardening, autostart, local backups) is **fully done**: M6-T1 (#77/#80), M6-T2
+(nightly backups + restore, #85/#86), M6-T3 (secrets hygiene audit, #83/#87).
+M7-T1 (UI polish: empty/loading/error states, humanized dates, print month
+view) merged via #84/#88. Remaining: M7-T2 (README complete + ROADMAP.md,
+planned #89/#91/#90) and M7-T3 (owner UAT). GitHub Pages is **enabled**
 (owner action, #49) — the `Deploy to GitHub Pages` workflow on `main` is
 green and the demo URL `https://antonlapshin.github.io/timeline/` returns
 HTTP 200. The `CI` workflow passes independently.
@@ -92,11 +98,15 @@ M5 — remaining slice + M6 hardening (merged this cycle):
 - [x] #77 #M6-T1 — Omarchy hardening: loopback bind guard, systemd enable, log rotation, /healthz (merged via #80).
 - [x] #79 — Add out-of-range draft index boundary test (merged via #82).
 
-M6/M7 — planned this turn (`pi:ready`):
-- [ ] #85 #M6-T2 — Nightly SQLite dump + backups rotation + one-command restore; README runbook (pi:ready, p1).
-- [ ] #83 #M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no IDs/keys in docs; README privacy disclosure (pi:ready, p2).
-- [ ] #84 #M7-T1 — UI polish: empty/loading/error states, humanized dates, print month view, Showcase (pi:ready, p3).
-- [ ] #M7-T2 — README complete (Omarchy quickstart, env table, voxtype notes, cost, troubleshooting) + ROADMAP.md (planned on a later PM turn).
+M6/M7 — planned batch (merged this cycle):
+- [x] #85 #M6-T2 — Nightly SQLite dump + backups rotation + one-command restore; README runbook (merged via #86).
+- [x] #83 #M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no IDs/keys in docs; README privacy disclosure (merged via #87).
+- [x] #84 #M7-T1 — UI polish: empty/loading/error states, humanized dates, print month view, Showcase (merged via #88).
+
+M7 — docs planned this turn (`pi:ready`):
+- [ ] #89 #M7-T2A — README: Omarchy quickstart + full env table (JoinGonka/Telegram/SMTP/STT) (pi:ready, p1).
+- [ ] #91 #M7-T2B — README: voxtype reuse notes + cost notes + troubleshooting (pi:ready, p2).
+- [ ] #90 #M7-T2C — ROADMAP.md for v2 (Google Calendar sync, /ask over history, PWA, stats) (pi:ready, p3).
 - [ ] #M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week (planned on a later PM turn).
 
 M1 (owner-in-the-loop):

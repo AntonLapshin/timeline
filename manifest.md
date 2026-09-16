@@ -145,10 +145,10 @@ A personal, local-first global schedule that remembers everything: capture one-t
 
 ### M6 — Omarchy hardening, autostart, local backups
 - [x] M6-T1 — Enforce 127.0.0.1 bind + startup guard refusing 0.0.0.0; systemd --user enable + restart-on-failure; log rotation; /healthz endpoint. (merged via #77/#80)
-- [ ] M6-T2 — Nightly SQLite dump + ./backups rotation (keep ~30d) + one-command restore; README runbook (start/stop/logs/backup/restore/update).
-- [ ] M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no Telegram IDs/keys/emails in docs; README privacy disclosure.
+- [x] M6-T2 — Nightly SQLite dump + ./backups rotation (keep ~30d) + one-command restore; README runbook (start/stop/logs/backup/restore/update). (merged via #85/#86)
+- [x] M6-T3 — Secrets hygiene audit: gitleaks CI, clean .env.example, no Telegram IDs/keys/emails in docs; README privacy disclosure. (merged via #83/#87)
 
 ### M7 — Polish, docs, handover
-- [ ] M7-T1 — Empty/loading/error states, humanized dates ('in 3 weeks'), print month view, Showcase polish.
+- [x] M7-T1 — Empty/loading/error states, humanized dates ('in 3 weeks'), print month view, Showcase polish. (merged via #84/#88)
 - [ ] M7-T2 — README: Omarchy quickstart, env table, voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2.
 - [ ] M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders; need-owner issues closed.
