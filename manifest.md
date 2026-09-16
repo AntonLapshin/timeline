@@ -150,5 +150,5 @@ A personal, local-first global schedule that remembers everything: capture one-t
 
 ### M7 — Polish, docs, handover
 - [x] M7-T1 — Empty/loading/error states, humanized dates ('in 3 weeks'), print month view, Showcase polish. (merged via #84/#88)
-- [ ] M7-T2 — README: Omarchy quickstart, env table, voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2.
-- [ ] M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders; need-owner issues closed.
+- [x] M7-T2 — README: Omarchy quickstart, env table, voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2. (merged via #92/#93/#94)
+- [ ] M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders; need-owner issues closed. (owner-gated; filed as pi:needs-human #95)

@@ -4,7 +4,7 @@
 
 ## Status
 
-**In progress (M7 — Polish, docs, handover).**
+**Engineering complete — awaiting final owner UAT (M7-T3).**
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
@@ -17,21 +17,24 @@ STT + AI parsing) is **fully done** via #72/#73/#74/#78/#81. M6 (Omarchy
 hardening, autostart, local backups) is **fully done**: M6-T1 (#77/#80), M6-T2
 (nightly backups + restore, #85/#86), M6-T3 (secrets hygiene audit, #83/#87).
 M7-T1 (UI polish: empty/loading/error states, humanized dates, print month
-view) merged via #84/#88. Remaining: M7-T2 (README complete + ROADMAP.md,
-planned #89/#91/#90) and M7-T3 (owner UAT). GitHub Pages is **enabled**
-(owner action, #49) — the `Deploy to GitHub Pages` workflow on `main` is
-green and the demo URL `https://antonlapshin.github.io/timeline/` returns
-HTTP 200. The `CI` workflow passes independently.
+view) merged via #84/#88. M7-T2 (README complete + ROADMAP.md) is **fully
+done** — #89/#91/#90 merged via #92/#93/#94 (Omarchy quickstart, env table,
+voxtype reuse, cost, troubleshooting, backup/restore, privacy disclosure,
+ROADMAP.md). Only **M7-T3 (owner UAT)** remains, and it is **owner-gated**: it
+requires the owner to create 10 real events across web/Telegram-text/voice and
+do a week of daily use. Filed as `pi:needs-human` issue #95. GitHub Pages is
+**enabled** (owner action, #49) — the `Deploy to GitHub Pages` workflow on
+`main` is green and the demo URL `https://antonlapshin.github.io/timeline/`
+returns HTTP 200. The `CI` workflow passes independently.
 
 The `Deploy to GitHub Pages` CI workflow is now **passing** — GitHub Pages is
 enabled (owner action) and the demo URL is live; issue #49 is closed. The `CI`
 workflow (build/lint/test/coverage) passes independently.
-Owner-gated need-owner issues: #5 (natalies-corner access) and #10 (voxtype)
-are **resolved and closed** — the owner cloned natalies-corner to
-`/home/monarch/ws/natalies-corner` (local reference), and voxtype 1.0.1 is
-confirmed installed with the whisper.cpp base-en model present. #6 (JoinGonka),
-#7 (Telegram), and #8 (email) still await owner input (secrets/decisions) and
-are `pi:blocked` need-owner issues. None of these block M3.
+Owner-gated need-owner issues: #5 (natalies-corner access), #10 (voxtype),
+#6 (JoinGonka), and #7 (Telegram bot/user id) are **resolved and closed**.
+Only #8 (email decision — SMTP/Resend creds or skip email) still awaits owner
+input and is `pi:blocked` need-owner. None of these block the merged
+engineering work.
 
 ## What's here
 
@@ -104,18 +107,19 @@ M6/M7 — planned batch (merged this cycle):
 - [x] #84 #M7-T1 — UI polish: empty/loading/error states, humanized dates, print month view, Showcase (merged via #88).
 
 M7 — docs planned this turn (`pi:ready`):
-- [ ] #89 #M7-T2A — README: Omarchy quickstart + full env table (JoinGonka/Telegram/SMTP/STT) (pi:ready, p1).
-- [ ] #91 #M7-T2B — README: voxtype reuse notes + cost notes + troubleshooting (pi:ready, p2).
-- [ ] #90 #M7-T2C — ROADMAP.md for v2 (Google Calendar sync, /ask over history, PWA, stats) (pi:ready, p3).
-- [ ] #M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week (planned on a later PM turn).
+- [x] #89 #M7-T2A — README: Omarchy quickstart + full env table (JoinGonka/Telegram/SMTP/STT) (merged via #92).
+- [x] #91 #M7-T2B — README: voxtype reuse notes + cost notes + troubleshooting (merged via #93).
+- [x] #90 #M7-T2C — ROADMAP.md for v2 (Google Calendar sync, /ask over history, PWA, stats) (merged via #94).
+- [ ] #95 #M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week (pi:needs-human, owner-gated).
 
 M1 (owner-in-the-loop):
 - [x] #5 — natalies-corner access / local path (resolved & closed; reference at `/home/monarch/ws/natalies-corner`).
 - [x] #10 — voxtype install / confirm (resolved & closed; voxtype 1.0.1 + base-en model present).
-- [ ] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (pi:blocked; owner input invalid — token leaked publicly, needs rotation via @BotFather + numeric user id + polling OK; re-routed to owner).
-- [x] #9 — tz / locale / quiet hours / license (MIT?) (pi:ready; owner confirmed defaults).
-- [ ] #6 — JoinGonka LLM_BASE_URL / LLM_MODEL / API key (pi:blocked, p1).
-- [ ] #8 — Email decision for v1 (SMTP/Resend or skip) (pi:blocked, p2).
+- [x] #7 — Telegram bot + BOT_TOKEN / TELEGRAM_USER_ID (resolved & closed).
+- [x] #9 — tz / locale / quiet hours / license (MIT?) (resolved & closed; owner confirmed defaults).
+- [x] #6 — JoinGonka LLM_BASE_URL / LLM_MODEL / API key (resolved & closed).
+- [ ] #8 — Email decision for v1 (SMTP/Resend or skip) (pi:blocked, need-owner, p2).
+- [ ] #95 — Owner UAT M7-T3: 10 real events + week of daily use (pi:needs-human, need-owner).
 
 Need-owner (blocked on owner input; do not block M3/M4 code work):
 - [x] #49 — Enable GitHub Pages (Actions source) so the demo URL goes live (resolved & closed; Pages enabled, deploy workflow green, demo URL HTTP 200).
