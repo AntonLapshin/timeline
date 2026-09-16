@@ -5,6 +5,18 @@
 ## Status
 
 **Engineering + docs complete — awaiting only owner action (#8, #95).**
+(PM revisit 2026-09-16 (14th), blocked-only dispatch: re-checked #8 and #95 —
+still zero comments, no owner input, no owner reply; both blocks remain
+genuinely valid (owner-gated email decision #8 and owner UAT #95); no unblock
+possible. No PM notes and no owner replies to triage. The manifest backlog has
+**no remaining non-human unchecked sub-issues** — the only unchecked item is
+M7-T3, already filed as `pi:needs-human` #95, and the success-criteria
+checkboxes are validated by that owner UAT, not engineer work. Filing new
+issues would only duplicate owner-gated work (#8/#95) or invent scope absent
+from the manifest, so none are created. CI green on main, Pages deployed,
+`completed.json` remains `status: done`; project awaits only owner action on
+#8/#95.)
+
 (PM revisit 2026-09-16 (13th), blocked-only dispatch: re-checked #8 and #95 —
 still zero comments, no owner input, no owner reply; both blocks remain
 genuinely valid (owner-gated email decision #8 and owner UAT #95); no unblock
