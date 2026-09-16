@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **README: voxtype reuse notes, cost notes, troubleshooting (issue #91, M7-T2B):**
+  adds three new README sections. **Local STT / voxtype reuse notes** documents
+  how the app reuses the existing Omarchy voxtype install
+  (`~/.config/voxtype/config.toml`, `~/.local/share/voxtype/models/`), how
+  `STT_VOXTYPE_PATH` / `STT_MODEL_PATH` point at it, the whisper.cpp
+  base/small model + 2-min cap behavior, and the `ogg → ffmpeg → wav →
+  voxtype transcribe` pipeline. **Cost notes** cover the JoinGonka LLM cost
+  (~$0.02/1M tokens for the `/parse` extraction path) and note that local STT
+  is free/offline and Telegram is free. **Troubleshooting** covers app-won't-
+  start (bind guard / port 8123 in use / boot failure), `/healthz` not
+  responding, Telegram reminders not arriving (bot token / user id /
+  allowlist / poll errors), voice not transcribing (voxtype path / ffmpeg /
+  model / 2-min cap), and backup/restore failure. Docs-only change; the
+  committed secret-hygiene pytest guard and the full API/web test suites pass
+  unchanged with 100% `src/core` coverage maintained.
+
 - **README: Omarchy quickstart + full env table (issue #89, M7-T2A):** adds a
   new **Omarchy quickstart** section to `README.md` that takes a fresh Omarchy
   machine from scratch to a running app at `http://127.0.0.1:8123` — clone,

@@ -300,6 +300,113 @@ PRs; they live in the local `.env` only.**
 
 ---
 
+### Local STT / voxtype reuse notes
+
+Voice messages sent to the Telegram bot are transcribed **locally** — no audio
+ever leaves the machine. The app reuses the **voxtype** install that ships with
+Omarchy (`Install > AI > Dictation`) instead of bundling its own whisper.cpp
+binary or model:
+
+- **Reuse the existing voxtype install** — voxtype keeps its config and models
+  under `~/.config/voxtype/config.toml` and `~/.local/share/voxtype/models/`.
+  The app simply shells out to the `voxtype` CLI (`voxtype transcribe <wav>`),
+  which loads the installed whisper model for you — no duplicate model download.
+- **`STT_VOXTYPE_PATH`** — path to the `voxtype` binary. Defaults to `voxtype`
+  on `PATH`. Set it to the absolute path of your local install (e.g. the one
+  provisioned by Omarchy dictation) when it is not on `PATH`.
+- **`STT_MODEL_PATH`** — optional path to a specific whisper model (e.g.
+  `ggml-base.en.bin`). Leave empty to let voxtype use its installed default
+  model. The default model is whisper.cpp **base/small (English)**, ~150 MB,
+  which runs ~9–11× realtime on CPU.
+- **Pipeline**: Telegram `voice.ogg` → `ffmpeg` → 16 kHz mono WAV →
+  `voxtype transcribe` → text. If voxtype/whisper is unavailable the bot
+  degrades gracefully (returns “unavailable” instead of crashing).
+- **2-minute cap**: voice messages over `STT_MAX_SECONDS` (default `120`) are
+  rejected before any conversion/transcription is attempted.
+
+If voxtype is not installed, install it via Omarchy **Install > AI >
+Dictation** (or confirm `voxtype --version` and that a model is present under
+`~/.local/share/voxtype/models/`).
+
+---
+
+### Cost notes
+
+The only paid, metered dependency is the **LLM extraction** path used by
+`/parse` (web smart-input and Telegram text/voice drafts). It makes a single
+JoinGonka (OpenAI-compatible) call per parse:
+
+- **JoinGonka LLM cost** is on the order of **~$0.02 per 1M tokens** for the
+  cheap JSON-capable models used for extraction (see `LLM_MODEL`). A typical
+  single-event parse is a few hundred tokens, so per-event cost is fractions of
+  a cent; even heavy daily use is well under a dollar a month.
+- **Local STT is free and offline** — voxtype/whisper.cpp transcription runs
+  entirely on the machine with no cloud API, no metering, and no network
+  egress. Only the resulting text (not the audio) is sent onward for parsing.
+- **Telegram is free** for bot polling + messaging; **email** is only used when
+  `EMAIL_ENABLED=1` and incurs whatever your SMTP provider charges.
+
+---
+
+### Troubleshooting
+
+#### App won't start
+
+- **Bind guard refuses `0.0.0.0`/LAN host**: timeline has no auth, so startup
+  fails closed if `TIMELINE_HOST` is not loopback-only. Set `TIMELINE_HOST` to
+  `127.0.0.1` (or `localhost`/`::1`) in `.env` and restart.
+- **Port 8123 already in use**: another process is bound to `127.0.0.1:8123`.
+  Find and stop it (`systemctl --user stop timeline`, `ss -ltnp | grep 8123`)
+  or change `TIMELINE_PORT` in `.env` (and the copied `systemd/timeline.service`
+  `ExecStart`/`Environment`).
+- **Service fails on boot**: check `journalctl --user -u timeline -e` — the
+  unit's `ExecStart`/`WorkingDirectory` paths (clone location, venv) must match
+  your install; edit the copied `~/.config/systemd/user/timeline.service` and
+  `systemctl --user daemon-reload`.
+
+#### `/healthz` not responding
+
+- `curl http://127.0.0.1:8123/healthz` should return `{"status":"ok","uptime_seconds":N}`.
+- If it times out, confirm the service is active (`systemctl --user status
+  timeline`) and bound (`ss -ltnp | grep 8123`). If nothing is listening, the
+  app failed to start — see “App won't start” above.
+
+#### Telegram reminders not arriving
+
+- **Bot token / user id**: confirm `.env` has a real `BOT_TOKEN` (from
+  @BotFather) and `TELEGRAM_USER_ID` (your numeric DM id). The bot is
+  **DM-only** and enforces a **single-user allowlist** — messages to
+  non-allowlisted ids are ignored.
+- **Bot not running**: the bot polls from the API process; if the service isn't
+  running, no reminders are sent. Check `journalctl --user -u timeline -f` for
+  poll errors and that the token is valid.
+- **Test**: send a message to your bot and watch the logs; use the web UI's
+  “send test Telegram now” button in the reminder editor to verify end-to-end.
+
+#### Voice not transcribing
+
+- **voxtype not found**: set `STT_VOXTYPE_PATH` to the absolute path of the
+  voxtype binary (or install via Omarchy **Install > AI > Dictation**).
+- **ffmpeg missing**: the `ogg → wav` conversion needs `ffmpeg` installed.
+- **Model missing**: confirm a whisper model exists under
+  `~/.local/share/voxtype/models/`; set `STT_MODEL_PATH` if voxtype isn't
+  finding it.
+- **Message too long**: voice messages over `STT_MAX_SECONDS` (default 120 s)
+  are rejected — send a shorter clip.
+
+#### Backup / restore failure
+
+- **Backup dir missing/wrong**: confirm `TIMELINE_BACKUPS_DIR` (default
+  `./backups`) is writable and exists.
+- **Restore**: stop the service first (`systemctl --user stop timeline`), then
+  `python -m app.backup restore backups/timeline-<timestamp>.db`, then start
+  again. Restoring into a live DB is not supported — stop before restoring.
+- **Rotation**: `TIMELINE_BACKUP_KEEP` (default 30) prunes older backups; if
+  backups seem to vanish, verify the timer ran
+  (`systemctl --user list-timers timeline-backup`).
+
+---
+
 **Repo:** `ws/timeline` → **public** GitHub repo (code only, no data, no secrets — see §7)
 **Vision:** A personal, local-first global schedule that remembers everything: one-time future events (e.g. “Season 2 of X comes out June next year”), recurrent obligations (e.g. “Pay HRA every quarter”, check-ups), with timeline + calendar views, monthly summaries, and configurable Telegram / Email reminders. New events via Web UI or Telegram (text or voice, natural language → AI extraction).
 
