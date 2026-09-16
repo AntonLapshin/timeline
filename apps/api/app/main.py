@@ -32,8 +32,9 @@ _START_MONOTONIC = time.monotonic()
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the FastAPI application (or app factory)."""
     settings = settings or get_settings()
-    # Fail-closed: never bind to a non-loopback host (no auth).
-    assert_loopback_host(settings.host)
+    # Fail-closed: never bind to a non-loopback host (no auth) unless the
+    # operator explicitly opted in via TIMELINE_ALLOW_NON_LOOPBACK (issue #97).
+    assert_loopback_host(settings.host, allow_non_loopback=settings.allow_non_loopback)
     configure_logging(settings)
     engine = create_engine_from_settings(settings)
     session_factory = make_session_factory(engine)

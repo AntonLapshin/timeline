@@ -5,6 +5,22 @@
 # NEVER bind to 0.0.0.0 or a LAN/internet interface — the app enforces this at
 # startup with a fail-closed guard and refuses to start otherwise.
 #
+# OPT-IN: host-system / LAN access (issue #97). To expose the app to the LAN
+# (e.g. from the owner's host system), bind to 0.0.0.0 AND explicitly opt in:
+#
+#   # in the [Service] section of your copied unit, replace the host lines:
+#   ExecStart=/home/USER/timeline/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8123
+#   Environment=TIMELINE_HOST=0.0.0.0
+#   Environment=TIMELINE_ALLOW_NON_LOOPBACK=1
+#
+#   # and whitelist the port in the firewall (firewalld or ufw):
+#   sudo firewall-cmd --permanent --add-port=8123/tcp && sudo firewall-cmd --reload
+#   # or: sudo ufw allow 8123/tcp
+#
+# WARNING: this exposes the timeline app to your LAN with NO auth (anyone on
+# the network can read/write events). It is opt-in only; the default below
+# stays loopback-only and safe.
+#
 # Install (per-user, autostarts on login):
 #
 #   mkdir -p ~/.config/systemd/user
