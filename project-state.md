@@ -15,6 +15,14 @@ new owner input; both blocks remain valid (owner-gated email decision and owner
 UAT). No unblock possible, and no non-human unchecked milestone scope exists to
 plan. `completed.json` remains `status: done`; project awaits only owner action
 on #8/#95.)
+(PM revisit 2026-09-16 (3rd): re-checked #8 and #95 again — still no comments,
+no owner input, no owner reply. Both blocks remain genuinely valid (owner-gated
+email decision #8 and owner UAT #95). No unblock possible. The manifest backlog
+has no remaining non-human unchecked sub-issues — M7-T3 is already filed as
+`pi:needs-human` #95, and M1–M7-T2 are all implemented+merged. CI green, Pages
+deployed, `completed.json` remains `status: done`. No new Engineer issues to
+plan without duplicating owner-gated work; project awaits only owner action on
+#8/#95.)
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
