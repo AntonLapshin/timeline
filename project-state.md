@@ -4,6 +4,23 @@
 
 ## Status
 
+**M8-T5 planned — owner pushed dev-server 0.0.0.0 fix directly; docs filed as #105.**
+(PM revisit 2026-09-16 (15th), blocked-only dispatch: re-checked #8 and #95 —
+still zero comments, no owner input; both blocks remain genuinely valid
+(owner-gated email decision #8 and owner UAT #95 — the owner is in fact
+actively using the app, see below). New since last turn: the **owner pushed
+`3ccc3a5` directly to main** — `fix(web): bind Vite dev server to 0.0.0.0 for
+LAN access` (one line in `apps/web/vite.config.ts`) — leaving the surrounding
+docs/comments contradicting the code (`vite.config.ts` comment still says
+"loopback-only by design"; README still claims both run paths are "bound to
+loopback only, no `0.0.0.0`" and "LAN exposure is opt-in only"). CI green on
+`3ccc3a5`, Pages deployed. Filed **#105** (M8-T5, size:xs, type:refactor,
+milestone:m8, priority:p2, `pi:ready`) to align the docs/comments with the
+owner's change — explicitly *not* reverting or gating it. Manifest backlog
+still has no non-human unchecked sub-issues (M7-T3 = owner-gated #95);
+`completed.json` remains `status: done`. Owner-gated items remain: #8 (email
+decision), #95 (UAT).)
+
 **Engineering + docs complete — awaiting only owner action (#8, #95).**
 (PM revisit 2026-09-16 (14th), blocked-only dispatch: re-checked #8 and #95 —
 still zero comments, no owner input, no owner reply; both blocks remain
