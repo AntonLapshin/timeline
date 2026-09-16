@@ -600,61 +600,7 @@ API sketch (localhost only, no auth):
 
 ---
 
-## 6. Milestones & Breakdown
-
-> Manual inputs / secrets / account creations → GitHub issues labeled `need-owner` (public repo → never paste secrets in issues; secrets go to local `.env` only).
-
-### M0 — Public repo, scaffolding, Omarchy baseline — 0.5–1 day
-- [ ] `git init ws/timeline`, create **public** GitHub repo `timeline`, push, `.gitignore` (`.env`, `data/`, `backups/`, `*.db*`, audio, logs) + `LICENSE` (MIT — confirm via issue) + README + `.env.example` (no real values).
-- [ ] Monorepo skeleton: `apps/web` (Vite+React+TS+Tailwind+showcase, atomic folders, context injection, `src/core`+`src/ui`), `apps/api` (FastAPI+SQLAlchemy+Alembic), `packages/shared` (event JSON schema v1).
-- [ ] Tooling: ruff, mypy, pytest, eslint (`max-warnings 0`), pre-commit + gitleaks, Vitest coverage gate on `src/core`.
-- [ ] Local run skeleton: `docker-compose.yml` + `systemd/timeline.service` example (bind `127.0.0.1:8123`).
-- [ ] Reference access issues (`need-owner`):
-  - #1 Repo created + pushed (public) — done/verify.
-  - #2 Provide `natalies-corner` access (private? local path? confirm JoinGonka call snippet + Showcase/atomic/context layout to mirror).
-  - #3 JoinGonka: exact `LLM_BASE_URL` (+`/v1`?), `LLM_MODEL` ID for JSON extraction, API key → local `.env` (never in issue; confirm model + quota/bonus).
-  - #4 Telegram: bot via @BotFather → `BOT_TOKEN` + `TELEGRAM_USER_ID` (numeric DM id) → local `.env`; confirm polling OK.
-  - #5 Email (optional v1): SMTP host/user or Resend key + sender/receiver → local `.env`, else skip email in v1.
-  - #6 Confirm tz + locale + quiet hours + license (MIT?).
-  - #7 Confirm `voxtype` already installed? (`voxtype --version`, model present?) — else install via Omarchy `Install > AI > Dictation`.
-- **Done when:** `docker compose up` or `systemctl --user start timeline` opens placeholder localhost web; issues #1–#7 filed; gitleaks clean.
-
-### M1 — Core domain: events + recurrence + local API + SQLite — 2–3 days
-- Same as before minus User/auth: models (AppConfig, Event, Reminder, DeliveryLog, TelegramInbound) + Alembic; `dateutil.rrule` expansion + tz/all-day; CRUD + `/summary`; seed (HRA quarterly, series June-next-year, check-up); pytest incl. DST/leap/quarterly-drift.
-- **Done when:** HRA-quarterly expands 2y correctly; summary counts correct; data lands in `./data/` (gitignored).
-
-### M2 — Web UI (React+TS+Tailwind+Showcase, atomic, context-injected) — 3–5 days
-- [ ] App shell (no login), Timeline + Calendar month/week/agenda + day drawer + summary header + wizard (3 steps) + smart-input box (`/parse`) + search/filter + dark/light.
-- [ ] Atomic folders: `atoms/ molecules/ organisms/ templates/ pages/`; services (`apiClient`, `llmParse`, `dateFmt`) via Context; every organism has Showcase file (`src/ui/showcases/*.tsx`, `?file=EventCard&showcase=Critical`).
-- [ ] Vitest 100% `src/core` (recurrence-format, summary-counts, parse-guards); Playwright smoke on `127.0.0.1`.
-- **Done when:** owner CRUDs events locally, sees both views + summary; Showcase gallery runs.
-
-### M3 — Reminder engine + Telegram outbound + Email opt-in — 2–3 days
-- [ ] APScheduler persistent; dedupe key; quiet-hours digest; catch-up on boot/wake; Telegram sender (card + Ack/Snooze callbacks, allowlist); email sender behind flag; reminder preview + delivery log UI; tests.
-- **Done when:** critical test event pings Telegram at T-1m test offset with Ack/Snooze; low sends nothing; email only when enabled.
-
-### M4 — Telegram inbound + local STT + JoinGonka parsing — 3–4 days
-- [ ] Bot polling, DM-only, `/add /today /upcoming /low /ask`; `voice.ogg → ffmpeg → whisper.cpp local` transcription (reuse voxtype model where possible); `POST /api/events/parse` → JoinGonka direct call (configurable base/model/key, JSON mode, `now+tz` injection, multi-event, `needs_clarification`); draft Save/Edit/Discard; web smart-input reuses endpoint; eval set of 20 samples; redacted logs.
-- **Done when:** “HRA every quarter from Oct” + voice “series season 2 next June low priority” → correct drafts → Save → visible in web.
-
-### M5 — Omarchy hardening + autostart + local backups (replaces old hosting milestone) — 1–2 days
-- [ ] Bind `127.0.0.1` enforce + startup check (refuse `0.0.0.0`); `systemd --user` enable + restart-on-failure; log rotation; `/healthz`.
-- [ ] Nightly SQLite dump + `./backups` rotation (30d) + one-command restore; README runbook (start/stop/logs/backup/restore/update).
-- [ ] Secrets hygiene audit for public repo (gitleaks CI, `.env.example` clean, no IDs in docs).
-- **Done when:** reboot → service auto-starts → catch-up digest works; backup+restore tested; repo public + clean.
-
-### M6 — Polish, docs, handover — 1–2 days
-- [ ] Empty/loading/error states, human dates (“in 3 weeks”), print month view, Showcase polish.
-- [ ] README: Omarchy quickstart, env table (JoinGonka/Telegram/SMTP/STT), voxtype reuse notes, cost notes (~$0.02/1M tokens Gonka), backup/restore, troubleshooting, “data never leaves machine except Telegram/LLM/Email” disclosure.
-- [ ] `ROADMAP.md` v2 ideas: Google Calendar sync, `/ask` over history, PWA, stats.
-- [ ] Owner UAT: 10 real events via web + Telegram text + voice.
-- **Done when:** daily use for a week, zero missed critical in test window, issues closed.
-
-**Rough total: ~12–19 days solo pace, mostly gated on owner secrets (JoinGonka key/model, Telegram bot). No hosting waits.**
-
----
-
-## 7. GitHub Workflow (public repo + owner-in-the-loop)
+## 6. GitHub Workflow (public repo + owner-in-the-loop)
 
 - Repo **public** `timeline`. Default `main`. Secrets **never** in repo/issues/PRs — only local `.env`. `.env.example` holds placeholders.
 - Labels: `need-owner`, `web`, `api`, `reminder`, `ai`, `deploy-local`, `bug`.
@@ -663,7 +609,7 @@ API sketch (localhost only, no auth):
 
 ---
 
-## 8. Risks & Mitigations
+## 7. Risks & Mitigations
 - **Public repo leak** → gitignore + gitleaks + CI untracked-check; docs use placeholders (`BOT_TOKEN=***`, `user_id=123…`).
 - **No web auth** → localhost-bind enforced + startup guard; README warns against exposing; Telegram allowlist remains (bot is internet-facing via Telegram cloud).
 - **Date mis-parse** → resolved-date always shown + confirm for critical; eval set + confidence gate.
@@ -676,7 +622,7 @@ API sketch (localhost only, no auth):
 
 ---
 
-## 9. Immediate Next Steps
+## 8. Immediate Next Steps
 1. Owner: confirm license (MIT?) + grant `natalies-corner` access / local path (Issue #2) so web + JoinGonka mirror your pattern exactly.
 2. Owner: JoinGonka base URL + model ID + key → local `.env` (Issue #3); Telegram bot token + user id → `.env` (Issue #4); email decision (Issue #5); tz/locale/quiet-hours (Issue #6); voxtype present? (Issue #7).
 3. Agent: scaffold M0 (public repo layout + Showcase + atomic + context + FastAPI + Compose + systemd + gitleaks) with defaults where unblocked, then M1→M6 via PRs + localhost screenshots + Telegram voice→event demo.
@@ -726,6 +672,7 @@ The project enforces a strict **core / UI split** (plan.md §19.1):
 ## Project documents
 
 - [`manifest.md`](manifest.md) — project charter / intent (purpose, goals, milestones)
+- [`milestone.md`](milestone.md) — milestone records (M0–M7) with completed items checked off
 - [`project-state.md`](project-state.md) — current state and progress
 - [`ROADMAP.md`](ROADMAP.md) — v2 / post-v1 stretch goals (out of scope for v1)
 - [`CHANGELOG.md`](CHANGELOG.md) — versioned change log
