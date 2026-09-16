@@ -5,6 +5,11 @@
 ## Status
 
 **Engineering complete — awaiting final owner UAT (M7-T3).**
+(PM revisit 2026-09-16: the only remaining open issues are #95 (owner UAT,
+`pi:needs-human`) and #8 (email decision, `need-owner`) — both genuinely
+owner-gated with valid blocks. The manifest backlog has no remaining non-human
+scope; M7-T3 is already filed as #95. No new Engineer issues to plan; project
+remains `status: done`.)
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
