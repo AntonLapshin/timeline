@@ -158,6 +158,148 @@ and `docker-compose.yml` for details.
 
 ---
 
+### Omarchy quickstart (fresh machine → running app)
+
+This is the end-to-end path to get **timeline** running on a fresh **Omarchy**
+machine from scratch, as the daily-driver `systemd --user` service. It assumes
+nothing is installed yet (no repo, no venv, no node_modules). The app ends up
+serving the web UI at **http://127.0.0.1:8123** (loopback only, no auth).
+
+**1. Prerequisites on Omarchy**
+
+```bash
+# Python 3.11+ and Node 20+ are expected on a stock Omarchy install. Verify:
+python3 --version
+node --version
+npm --version
+```
+
+**2. Clone the repo**
+
+```bash
+git clone https://github.com/AntonLapshin/timeline.git ~/timeline
+cd ~/timeline
+```
+
+**3. Set up the API (apps/api)**
+
+```bash
+cd apps/api
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+# (optional) apply any pending DB migrations:
+make migrate
+```
+
+**4. Build the web app (apps/web)**
+
+```bash
+cd ../../apps/web
+npm ci
+npm run build
+```
+
+**5. Configure secrets — copy `.env.example` → `.env`**
+
+```bash
+cd ~/timeline
+cp .env.example .env
+# Edit .env and fill in your local values (Telegram bot token / user id,
+# JoinGonka API key + model, optional SMTP). Secrets stay local — .env is
+# gitignored and never committed.
+```
+
+**6. Install + start the systemd --user service**
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp systemd/timeline.service ~/.config/systemd/user/
+# Edit the copied unit: set USER, the clone location (~/timeline), and the
+# venv path (~/timeline/apps/api/.venv) in ExecStart / WorkingDirectory.
+systemctl --user daemon-reload
+systemctl --user enable --now timeline.service   # enable + start (autostarts on login)
+```
+
+**7. Verify**
+
+```bash
+systemctl --user status timeline                 # active (running)
+curl http://127.0.0.1:8123/healthz               # {"status":"ok","uptime_seconds":N}
+# Open http://127.0.0.1:8123 in a browser — the timeline web UI loads.
+```
+
+That's it — a fresh Omarchy machine now runs the full app at
+`http://127.0.0.1:8123`. See the **Runbook** above for daily start/stop/logs/
+backup/restore/update, and the **Environment variables** table below for every
+knob the app reads.
+
+---
+
+### Environment variables
+
+Every env key the app reads, grouped by concern. All keys are documented in
+[`.env.example`](.env.example) with placeholders — copy that file to `.env` and
+fill in your local values. **Never put real secrets in the repo, issues, or
+PRs; they live in the local `.env` only.**
+
+#### Local — host / port / data / log / backup / timezone
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| `TIMELINE_HOST` | Loopback bind host (no auth — never `0.0.0.0`) | `127.0.0.1` |
+| `TIMELINE_PORT` | Web/API port | `8123` |
+| `TIMELINE_DATA_DIR` | Directory where the SQLite DB lives (gitignored) | `./data` |
+| `TIMELINE_DB_NAME` | SQLite database filename | `timeline.db` |
+| `TIMELINE_WAL` | Enable SQLite WAL journal mode (`1` = on) | `1` |
+| `TIMELINE_SEED` | Seed initial example events on first run (`1` = on) | `1` |
+| `TIMELINE_LOG_FILE` | API log file (rotated, bounded); empty ⇒ stderr | `./data/timeline.log` |
+| `TIMELINE_LOG_MAX_BYTES` | Max log file size before rotation | `5242880` (5 MB) |
+| `TIMELINE_LOG_BACKUP_COUNT` | Rotated log files kept | `5` |
+| `TIMELINE_BACKUPS_DIR` | Nightly SQLite backup directory (gitignored) | `./backups` |
+| `TIMELINE_BACKUP_KEEP` | Number of rotated backups kept | `30` |
+| `TZ` | IANA timezone for event parsing/display | `UTC` |
+| `LOCALE` | Locale used for date formatting | `en-US` |
+| `QUIET_START` | Quiet-hours start (`HH:MM`, 24h); empty = none | *(empty)* |
+| `QUIET_END` | Quiet-hours end (`HH:MM`, 24h); empty = none | *(empty)* |
+
+#### LLM extraction (JoinGonka / OpenAI-compatible)
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| `LLM_BASE_URL` | OpenAI-compatible endpoint for AI event parsing | `https://gate.joingonka.ai/openai/v1` |
+| `LLM_API_KEY` | LLM API key (local `.env` only, never committed) | *(none — parse unavailable)* |
+| `LLM_MODEL` | LLM model name for JSON extraction | *(none)* |
+
+#### Telegram (outbound + inbound)
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| `BOT_TOKEN` | Telegram bot token from @BotFather (placeholder only) | *(none)* |
+| `TELEGRAM_USER_ID` | Numeric Telegram user id for the single-user allowlist | *(none)* |
+
+#### SMTP / email (optional, feature-flag — OFF by default in v1)
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| `EMAIL_ENABLED` | Email feature flag (`1` = on; off means email is never sent) | `0` |
+| `SMTP_HOST` | SMTP server host | *(none)* |
+| `SMTP_PORT` | SMTP port (STARTTLS) | `587` |
+| `SMTP_USER` | SMTP username | *(none)* |
+| `SMTP_PASS` | SMTP password (secret) | *(none)* |
+| `SMTP_FROM` | “From” address for reminder emails | *(none)* |
+| `SMTP_TO` | Default “To” address for reminder emails | *(none)* |
+
+#### Local STT (voxtype / whisper.cpp, local-only)
+
+| Key | Purpose | Default |
+|-----|---------|---------|
+| `STT_VOXTYPE_PATH` | Path to the local voxtype binary for whisper.cpp transcription | `voxtype` (on PATH) |
+| `STT_MODEL_PATH` | Local whisper model path; empty ⇒ voxtype default model | *(empty)* |
+| `STT_MAX_SECONDS` | Max voice-message duration in seconds (2-min cap) | `120` |
+
+---
+
 **Repo:** `ws/timeline` → **public** GitHub repo (code only, no data, no secrets — see §7)
 **Vision:** A personal, local-first global schedule that remembers everything: one-time future events (e.g. “Season 2 of X comes out June next year”), recurrent obligations (e.g. “Pay HRA every quarter”, check-ups), with timeline + calendar views, monthly summaries, and configurable Telegram / Email reminders. New events via Web UI or Telegram (text or voice, natural language → AI extraction).
 
