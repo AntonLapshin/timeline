@@ -4,6 +4,19 @@
 
 ## Status
 
+**M8-T4 planned — stale milestone.md record found; #103 filed.**
+(PM revisit 2026-09-16 (11th), blocked-only dispatch: re-checked #8 and #95 —
+still zero comments, no owner input; both blocks remain genuinely valid
+(owner-gated email decision #8 and owner UAT #95); no unblock possible. Found
+the first actionable non-owner scope: `milestone.md` still records M8-T3 as
+"pending (open #99)" and the status-summary table says "M7 — M8 owner
+follow-ups: in progress", but README cleanup #99 was merged via PR #102.
+Filed #103 (M8-T4, size:xs, type:refactor, milestone:m8, priority:p2,
+`pi:ready`) to check off M8-T3 *(merged via #102)* and flip the status-summary
+row to ✅ done. Manifest success-criteria checkboxes stay unchecked — they are
+validated by the owner UAT (#95), not engineer work. `completed.json` remains
+`status: done`; after #103 merges, only owner action on #8/#95 remains.)
+
 **M8 owner-follow-up planned — new owner feedback (#96) split into #97/#98/#99.**
 (PM 2026-09-16: owner filed #96 "Owner pass: follow ups" asking for (1) web/API
 bind to 0.0.0.0 for host-system access + firewall port whitelist, (2) README
