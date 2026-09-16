@@ -689,6 +689,7 @@ The project enforces a strict **core / UI split** (plan.md §19.1):
 
 - [`manifest.md`](manifest.md) — project charter / intent (purpose, goals, milestones)
 - [`project-state.md`](project-state.md) — current state and progress
+- [`ROADMAP.md`](ROADMAP.md) — v2 / post-v1 stretch goals (out of scope for v1)
 - [`CHANGELOG.md`](CHANGELOG.md) — versioned change log
 
 
