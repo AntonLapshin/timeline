@@ -4,6 +4,14 @@
 
 ## Status
 
+**M8 owner-follow-up planned — new owner feedback (#96) split into #97/#98/#99.**
+(PM 2026-09-16: owner filed #96 "Owner pass: follow ups" asking for (1) web/API
+bind to 0.0.0.0 for host-system access + firewall port whitelist, (2) README
+cleanup, (3) milestone.md with completed items checked. Split into M8 sub-issues:
+#97 M8-T1 (bind 0.0.0.0 opt-in + port whitelist, p1), #98 M8-T2 (milestone.md,
+p2), #99 M8-T3 (README cleanup, p2). Parent #96 closed. Still open owner-gated:
+#95 (UAT, pi:needs-human) and #8 (email decision, need-owner).)
+
 **Engineering complete — awaiting final owner UAT (M7-T3).**
 (PM revisit 2026-09-16: the only remaining open issues are #95 (owner UAT,
 `pi:needs-human`) and #8 (email decision, `need-owner`) — both genuinely
@@ -288,6 +296,11 @@ Need-owner (blocked on owner input; do not block M3/M4 code work):
 Further milestones (M5 Telegram inbound/STT/AI, M6 hardening/backups, M7
 polish/docs) — M5 batch #69/#70/#71 planned this turn (`pi:ready`); remaining
 M5-T4 and M6/M7 will be planned on later PM turns.
+
+M8 — owner follow-ups (planned this turn, `pi:ready`):
+- [ ] #97 #M8-T1 — Allow web/API bind to 0.0.0.0 for host-system access, with firewall port whitelist (p1).
+- [ ] #98 #M8-T2 — Create milestone.md with milestone records; check off all completed items (p2).
+- [ ] #99 #M8-T3 — Clean up README: remove project-plan text, keep app description + useful steps (p2).
 
 ## Changelog (CHANGELOG.md)
 
