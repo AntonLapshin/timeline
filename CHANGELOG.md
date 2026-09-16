@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Add `milestone.md` with milestone records; check off all completed items
+  (issue #98, M8-T2):** adds a dedicated `milestone.md` recording the project
+  milestones (M0–M7) with every completed item checked off (`- [x]`) and the
+  genuinely-incomplete, owner-gated items (owner UAT M7-T3 #95, email decision
+  #8) explicitly marked owner-gated/blocked rather than falsely checked.
+  `README.md` "Project documents" links to `milestone.md`, and the milestone
+  breakdown previously in `README.md` §6 is removed (moved to `milestone.md`),
+  with the following sections renumbered.
 - **Allow web/API bind to `0.0.0.0` for host-system access, with firewall port
   whitelist (issue #97, M8-T1):** adds an explicit opt-in to bind the web/API
   to `0.0.0.0` via `TIMELINE_ALLOW_NON_LOOPBACK=1` (alongside
