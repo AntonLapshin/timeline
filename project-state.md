@@ -23,6 +23,14 @@ has no remaining non-human unchecked sub-issues — M7-T3 is already filed as
 deployed, `completed.json` remains `status: done`. No new Engineer issues to
 plan without duplicating owner-gated work; project awaits only owner action on
 #8/#95.)
+(PM revisit 2026-09-16 (4th): re-checked #8 and #95 — still no comments, no
+owner input. Both blocks remain genuinely valid (owner-gated email decision #8
+and owner UAT #95). No unblock possible. Manifest backlog has no non-human
+unchecked sub-issues — M7-T3 is already filed as `pi:needs-human` #95; the
+success-criteria checkboxes are validated by that owner UAT, not separate
+engineer work. No new Engineer issues to plan without duplicating owner-gated
+work. CI green, Pages deployed, `completed.json` remains `status: done`;
+project awaits only owner action on #8/#95.)
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
