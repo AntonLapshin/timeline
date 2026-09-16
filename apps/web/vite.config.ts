@@ -11,7 +11,7 @@ export default defineConfig({
   // The web app is loopback-only by design: bind to 127.0.0.1:8123 (the port
   // the rest of the project uses for local runs and the Playwright smoke test).
   server: {
-    host: "127.0.0.1",
+    host: "0.0.0.0",
     port: 8123,
     strictPort: true,
   },
