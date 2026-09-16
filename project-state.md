@@ -31,6 +31,15 @@ success-criteria checkboxes are validated by that owner UAT, not separate
 engineer work. No new Engineer issues to plan without duplicating owner-gated
 work. CI green, Pages deployed, `completed.json` remains `status: done`;
 project awaits only owner action on #8/#95.)
+(PM revisit 2026-09-16 (5th): re-checked #8 and #95 again on a blocked-only
+dispatch — still no comments, no owner input, no owner reply. Both blocks
+remain genuinely valid (owner-gated email decision #8 and owner UAT #95); no
+unblock possible. The manifest backlog has **no remaining non-human unchecked
+sub-issues** — M1–M7-T2 are all implemented+merged, and M7-T3 is already filed
+as `pi:needs-human` #95. Filing new issues would only duplicate owner-gated
+work (#8/#95) or invent scope absent from the manifest, so none are created.
+CI green, Pages deployed, `completed.json` remains `status: done`; project
+awaits only owner action on #8/#95.)
 M1 (repo/scaffolding/tooling/local run paths/need-owner issues), M2 (core
 domain), M3 (full Web UI: timeline/calendar/summary/drawer/wizard/
 smart-input/search/theme — merged via #23-#60) are fully implemented and
