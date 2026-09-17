@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
 from .scheduler import build_scheduler, drain_schedule, requeue_failed
+from .telegram_allowlist import startup_warning
 from .telegram_inbound import build_telegram_inbound_application
 from .telegram_outbound import make_telegram_job_func
 
@@ -103,11 +104,17 @@ async def start_runtime(
     APScheduler reminder engine (drain + failed-requeue + outbound Telegram
     delivery) run as background tasks in this process. Any startup failure is
     logged (never silent) and leaves the API serving with the component marked
-    ``error`` on /healthz instead of taking the whole app down.
+    ``error`` on /healthz instead of taking the whole app down. An empty or
+    partially-invalid Telegram allowlist is warned about at startup (issue
+    #112): the bot still starts but an empty allowlist processes nothing (fail
+    closed).
     """
     if not settings.telegram_bot_token:
         logger.info("Telegram bot + reminder scheduler disabled (BOT_TOKEN not set).")
         return RuntimeComponents()
+    warning = startup_warning(settings.telegram_allowlist)
+    if warning is not None:
+        logger.warning("%s", warning)
     application = None
     scheduler = None
     try:

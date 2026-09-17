@@ -4,8 +4,9 @@ Covers the acceptance criteria:
 
 - **DM-only gate**: ``is_private_chat`` accepts only private chats; groups,
   supergroups and channels are ignored.
-- **Allowlist rejection**: ``_handle_update`` ignores messages from users other
-  than the configured ``TELEGRAM_USER_ID`` and from non-private chats.
+- **Allowlist rejection**: ``_handle_update`` ignores messages from users not
+  on the allowlist (``TELEGRAM_USER_IDS`` combined with the legacy
+  ``TELEGRAM_USER_ID``, issue #112) and from non-private chats.
 - **Commands**: ``/today``, ``/upcoming [7d|30d]``, ``/low``, ``/add <text>``
   and ``/ask <question>`` each produce the expected reply; unknown commands get
   a usage hint.
@@ -15,6 +16,8 @@ Covers the acceptance criteria:
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -518,6 +521,51 @@ def test_handle_update_allowlist_rejection() -> None:
     assert _handle_update(update, settings) is None
 
 
+def test_handle_update_allowlist_multi_id_allows_second_user(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A DM from any allowlisted id (TELEGRAM_USER_IDS) is processed (issue #112)."""
+    with session_factory() as session:
+        session.add(_event(start_at=_now() + timedelta(hours=1)))
+        session.commit()
+
+    settings = Settings(telegram_user_ids="42,222", telegram_bot_token="123:abc")
+    update = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(222), "/today")
+    )
+    reply = _handle_update(update, settings, session_factory, now=_now())
+    assert reply is not None
+    assert "📅 Today" in reply.text
+
+
+def test_handle_update_allowlist_denial_logs_one_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A non-allowlisted user's message is ignored with exactly one warning."""
+    settings = Settings(telegram_user_ids="42,222", telegram_bot_token="123:abc")
+    update = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(999), "/today")
+    )
+    with caplog.at_level(logging.WARNING):
+        assert _handle_update(update, settings) is None
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    # The sender id is logged for diagnostics; the message content never is.
+    assert "999" in warnings[0].getMessage()
+    assert "/today" not in warnings[0].getMessage()
+
+
+def test_handle_update_empty_allowlist_denies_everyone() -> None:
+    """With no allowlist configured every message is ignored (fail closed)."""
+    settings = Settings(
+        telegram_user_id=None, telegram_user_ids=None, telegram_bot_token="123:abc"
+    )
+    update = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/today")
+    )
+    assert _handle_update(update, settings) is None
+
+
 def test_handle_update_no_message() -> None:
     """An update with no message is ignored."""
     settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
@@ -990,6 +1038,18 @@ def test_handle_callback_query_allowlist_rejection() -> None:
     assert _handle_callback_query(query, settings, None, store, now=_now()) is None
 
 
+def test_handle_callback_query_allows_any_allowlisted_user() -> None:
+    """A callback from a second allowlisted id acts on the draft (issue #112)."""
+    settings = Settings(telegram_user_ids="42,222", telegram_bot_token="123:abc")
+    store = DraftStore()
+    store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+    query = _FakeCallback("draft:discard:0", 222, 123)
+    reply = _handle_callback_query(query, settings, None, store, now=_now())
+    assert reply is not None
+    assert "Draft discarded" in reply.text
+    assert store.get(123) is None
+
+
 def test_handle_callback_query_no_pending_draft() -> None:
     """A callback with no pending draft replies that it's gone."""
     settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
@@ -1112,7 +1172,6 @@ def test_handle_voice_update_gates() -> None:
     settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     group = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "group"), _FakeUser(42)))
     stranger = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(999)))
-    import asyncio
 
     assert asyncio.run(_handle_voice_update(group, settings)) is None
     assert asyncio.run(_handle_voice_update(stranger, settings)) is None
@@ -1122,6 +1181,29 @@ def test_handle_voice_update_gates() -> None:
         _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "hello")
     )
     assert asyncio.run(_handle_voice_update(text_update, settings)) is None
+
+
+def test_handle_voice_update_allows_any_allowlisted_user() -> None:
+    """A voice DM from a second allowlisted id passes the gate (issue #112)."""
+    settings = Settings(telegram_user_ids="42,222", telegram_bot_token="123:abc")
+    update = _FakeUpdate(
+        _FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(222), file_id=None)
+    )
+    # The gate passed: the update reaches the voice handling and replies the
+    # transcription-unavailable error (a denied user would return None).
+    reply = asyncio.run(_handle_voice_update(update, settings, bot=None))
+    assert reply is not None
+
+
+def test_handle_voice_update_denial_logs_one_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A voice message from a non-allowlisted user logs exactly one warning."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    stranger = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(999)))
+    with caplog.at_level(logging.WARNING):
+        assert asyncio.run(_handle_voice_update(stranger, settings)) is None
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
 
 
 @pytest.mark.parametrize("kwargs", [{"file_id": None}, {}, {"bot": None}])

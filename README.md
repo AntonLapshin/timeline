@@ -354,7 +354,8 @@ PRs; they live in the local `.env` only.**
 | Key | Purpose | Default |
 |-----|---------|---------|
 | `BOT_TOKEN` | Telegram bot token from @BotFather (placeholder only) | *(none)* |
-| `TELEGRAM_USER_ID` | Numeric Telegram user id for the single-user allowlist | *(none)* |
+| `TELEGRAM_USER_IDS` | Comma-separated numeric Telegram user ids allowed to talk to the bot and receive reminders (whitespace tolerated; combined with `TELEGRAM_USER_ID`) | *(none)* |
+| `TELEGRAM_USER_ID` | Legacy single numeric Telegram user id — still supported and combined with `TELEGRAM_USER_IDS` | *(none)* |
 
 #### SMTP / email (optional, feature-flag — OFF by default in v1)
 
@@ -473,9 +474,12 @@ JoinGonka (OpenAI-compatible) call per parse:
 #### Telegram reminders not arriving
 
 - **Bot token / user id**: confirm `.env` has a real `BOT_TOKEN` (from
-  @BotFather) and `TELEGRAM_USER_ID` (your numeric DM id). The bot is
-  **DM-only** and enforces a **single-user allowlist** — messages to
-  non-allowlisted ids are ignored.
+  @BotFather) and an allowlisted id (`TELEGRAM_USER_IDS`, e.g.
+  `111,222` — the legacy single-id `TELEGRAM_USER_ID` also works). The bot is
+  **DM-only** and enforces a **user allowlist** — messages from
+  non-allowlisted ids are ignored (one warning line per occurrence in the
+  API logs). With a token but an empty/invalid allowlist the bot starts but
+  processes nothing (fail closed, startup warning in the logs).
 - **Bot not running**: the bot polls from the API process; if the service isn't
   running, no reminders are sent. Check `journalctl --user -u timeline -f` for
   poll errors and that the token is valid. `/healthz` shows the live component
