@@ -204,6 +204,40 @@ def test_start_runtime_telegram_build_failure_marks_error(
     assert components.scheduler_status == "disabled"
 
 
+@pytest.mark.parametrize(
+    ("patch_target", "message"),
+    [
+        ("build_scheduler", "scheduler jobstore broken"),
+        ("drain_schedule", "drain exploded"),
+    ],
+)
+def test_start_runtime_scheduler_failure_reports_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    patch_target: str,
+    message: str,
+) -> None:
+    """A scheduler build/drain failure surfaces as telegram=error, not a crash."""
+    fake_app = _FakeTelegramApp()
+    monkeypatch.setattr(
+        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+    )
+
+    def _boom(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(runtime, patch_target, _boom)
+    components = asyncio.run(
+        runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
+    )
+    assert components.scheduler is None
+    assert components.telegram_status == "error"
+    assert message in (components.telegram_error or "")
+    # The bot got as far as initialize but was torn down again.
+    assert "initialize" in fake_app.calls
+    assert "stop" in fake_app.calls
+
+
 def test_start_runtime_failure_shuts_down_partially_started(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

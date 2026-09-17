@@ -1110,12 +1110,8 @@ def test_voice_error_reply_formats_detail() -> None:
 def test_handle_voice_update_gates() -> None:
     """Group chats, non-allowed users, and non-voice messages are ignored."""
     settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
-    group = _FakeUpdate(
-        _FakeVoiceMessage(_FakeChat(123, "group"), _FakeUser(42))
-    )
-    stranger = _FakeUpdate(
-        _FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(999))
-    )
+    group = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "group"), _FakeUser(42)))
+    stranger = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(999)))
     import asyncio
 
     assert asyncio.run(_handle_voice_update(group, settings)) is None
@@ -1140,9 +1136,7 @@ def test_handle_voice_update_missing_file_or_bot_replies_error(
     if "file_id" in kwargs:
         message.voice.file_id = kwargs["file_id"]
     update = _FakeUpdate(message)
-    reply = asyncio.run(
-        _handle_voice_update(update, settings, bot=kwargs.get("bot"))
-    )
+    reply = asyncio.run(_handle_voice_update(update, settings, bot=kwargs.get("bot")))
     assert reply is not None
     assert "voice file is unavailable" in reply.text
 
@@ -1195,6 +1189,31 @@ def test_handle_voice_update_transcription_error_replies() -> None:
     assert reply is not None
     assert "couldn't transcribe" in reply.text.lower()
     assert "ffmpeg missing" in reply.text
+
+
+def test_handle_voice_update_empty_transcription_replies_error() -> None:
+    """A 'successful' transcription with empty text gets the error reply."""
+    import asyncio
+
+    calls: list[str] = []
+    seen: list[tuple[str, float | None]] = []
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    store = DraftStore()
+    reply = asyncio.run(
+        _handle_voice_update(
+            update,
+            settings,
+            bot=_FakeBot(calls),
+            draft_store=store,
+            transcribe=_voice_transcriber(SttResult(ok=True, text=""), seen),
+        )
+    )
+    assert reply is not None
+    assert "couldn't transcribe" in reply.text.lower()
+    assert "unknown error" in reply.text
+    # An empty transcript never reaches the parse -> draft flow.
+    assert store.get(123) is None
 
 
 def test_handle_voice_update_download_failure_replies_error() -> None:
