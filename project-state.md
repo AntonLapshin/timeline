@@ -4,6 +4,31 @@
 
 ## Status
 
+**M9 planned — owner feedback round 2 (#106–#109) split; first batch filed (#111–#113).**
+(PM 2026-09-17, unplanned-work dispatch: the owner filed four new issues —
+#106 Docker/Makefile, #107 UI fixes, #108 smart-input parse error, #109 Telegram
+bot. Investigated all four in the code and split them into milestone **M9**
+(8 sub-issues, manifest backlog). Key root causes found: **(a)** the Telegram
+bot and the reminder scheduler are never started at runtime —
+`build_telegram_inbound_application` / `build_scheduler` have zero production
+callers (`main.py` lifespan only seeds), which explains #109.2 (bot never
+replies, no events in UI) and means reminders never fire; **(b)** smart-input
+parse failures are flattened to a generic message because web core *throws*
+on non-503 API errors and the 502 detail is discarded (#108); **(c)** the
+event drawer renders inline below the content, the wizard never auto-closes
+on save, has no Esc handler, and `useTimeline` never refetches after save
+(#107); **(d)** there is no root Makefile and the README runbook is long
+(#106). First batch filed as `pi:ready` p1: #111 M9-T1 (runtime wiring for
+bot + scheduler, healthz status, Docker STT limitation), #112 M9-T2
+(Telegram allowlist env, multi-ID), #113 M9-T3 (actionable parse errors +
+logging + healthz `llm_configured`). Remaining M9 sub-issues (T4 wizard
+save/Esc/refresh, T5 right-side panel, T6 full-height shell, T7 root
+Makefile dev/start/stop, T8 README simplification) are recorded in the
+manifest backlog and will be filed on the next PM turn. Parents #106–#109
+closed with split comments. Re-checked #8 and #95: still zero comments —
+blocks remain valid. Stale `.pi/state/completed.json` (M1–M8 done) cleared so
+the loop keeps dispatching until M9 + owner gates resolve.)
+
 **M8-T5 planned — owner pushed dev-server 0.0.0.0 fix directly; docs filed as #105.**
 (PM revisit 2026-09-16 (15th), blocked-only dispatch: re-checked #8 and #95 —
 still zero comments, no owner input; both blocks remain genuinely valid

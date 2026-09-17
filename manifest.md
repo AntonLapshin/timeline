@@ -4,11 +4,14 @@
 > auto-pi PM persona as the project evolves. The milestones below are the
 > backbone of the project: the PM plans issues against them.
 
-**Status: done** (engineering complete + deployed; final owner UAT M7-T3 is
-`pi:needs-human` #95 and the email decision is `need-owner` #8 — both
-explicitly owner-blocked).
+**Status: in progress** (M1–M8 engineering complete + deployed as of
+2026-09-16; owner feedback round filed as #106–#109 on 2026-09-17 and planned
+as milestone **M9** — runtime wiring for the Telegram bot/scheduler, UI fixes,
+smart-input parse errors, Docker/Makefile. Owner-gated items remain: UAT M7-T3
+is `pi:needs-human` #95 and the email decision is `need-owner` #8.)
 
-**completed_at:** 2026-09-16T04:50:00Z
+**completed_at (M1–M8):** 2026-09-16T04:50:00Z — reopened for M9 on
+2026-09-17 (owner feedback #106–#109).
 
 ## Purpose
 
@@ -116,6 +119,21 @@ A personal, local-first global schedule that remembers everything: capture one-t
   - README: Omarchy quickstart, env table (JoinGonka/Telegram/STT), voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2 (Google Calendar sync, /ask over history, PWA, stats).
   - Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders in the test window; need-owner issues closed.
 
+### M8 — Owner follow-ups: LAN bind + docs (from owner issue #96)
+
+**Goal:** Owner pass over the shipped product: LAN-accessible binds with explicit opt-in, README cleanup, and milestone records.
+
+### M9 — Owner feedback round 2: runtime wiring, UX fixes, Docker/Makefile (from #106–#109)
+
+**Goal:** Turn the owner's second feedback pass into a fully working daily driver: the Telegram bot and reminder engine actually running at runtime, actionable smart-input parse errors, the requested UI behaviours (right panel, full-height layout, save/Esc), and one-command Docker operation (`make dev/start/stop`) with a radically simplified README.
+
+**Scope:**
+  - Runtime wiring: start the reminder scheduler + Telegram bot polling in the API lifespan behind `BOT_TOKEN`; `/healthz` component status; Docker STT limitation documented (#109.2 root cause).
+  - Env-driven Telegram user allowlist (multi-ID, inbound + outbound) (#109.1).
+  - Smart-input parse failures: distinct actionable errors, API-side logging, `llm_configured` health signal, README troubleshooting (#108).
+  - UI fixes: full-viewport app shell (no page scrollbar), event click opens a right-side panel, Save closes the wizard (+ views refresh), Esc closes the wizard (#107).
+  - Docker/Makefile: root `Makefile` with `make dev` / `make start` (prod + boot autostart incl. migrations) / `make stop`; LAN-accessible and tested; README simplified around the make targets (#106).
+
 ## Backlog — planned sub-issues (tracked by PM)
 
 > Tracks the concrete, issue-sized slices the PM has planned against the
@@ -158,3 +176,20 @@ A personal, local-first global schedule that remembers everything: capture one-t
 - [x] M7-T1 — Empty/loading/error states, humanized dates ('in 3 weeks'), print month view, Showcase polish. (merged via #84/#88)
 - [x] M7-T2 — README: Omarchy quickstart, env table, voxtype reuse notes, cost notes, backup/restore, troubleshooting, privacy disclosure; ROADMAP.md for v2. (merged via #92/#93/#94)
 - [ ] M7-T3 — Owner UAT: 10 real events via web + Telegram text + voice; daily use for a week with zero missed critical reminders; need-owner issues closed. (owner-gated; filed as pi:needs-human #95)
+
+### M8 — Owner follow-ups: LAN bind + docs (from owner issue #96)
+- [x] M8-T1 — Web/API bind to 0.0.0.0 opt-in + firewall port whitelist. (merged via #100)
+- [x] M8-T2 — milestone.md with completed milestone records. (merged via #101)
+- [x] M8-T3 — README cleanup: remove project-plan text, keep app description + steps. (merged via #102)
+- [x] M8-T4 — Check off M8-T3 in milestone.md; mark M7–M8 follow-ups done. (merged via #104)
+- [x] M8-T5 — Align docs/comments with the dev-server 0.0.0.0 bind. (merged via #110)
+
+### M9 — Owner feedback round 2: runtime wiring, UX, Docker (from #106–#109)
+- [ ] M9-T1 — Wire Telegram bot + reminder scheduler into the API runtime (lifespan, behind `BOT_TOKEN`); `/healthz` component status; Docker STT limitation documented. (filed as #111)
+- [ ] M9-T2 — Telegram user allowlist via env (`TELEGRAM_USER_IDS`, multi-ID, inbound + outbound gating, docs). (filed as #112)
+- [ ] M9-T3 — Smart-input parse failures: actionable web errors, API error logging, `llm_configured` health signal, README troubleshooting. (filed as #113)
+- [ ] M9-T4 — Wizard: Save closes the modal on success and the timeline/calendar show the change without reload; Esc closes the wizard modal. (owner #107.3–4)
+- [ ] M9-T5 — Event click opens a right-side panel (slide-over on the right; responsive fallback; Esc/✕ close). (owner #107.2)
+- [ ] M9-T6 — App shell full viewport height: no page-level vertical scrollbar; timeline/calendar scroll internally. (owner #107.1)
+- [ ] M9-T7 — Root Makefile: `make dev` (compose up + all scripts, web LAN-accessible), `make start` (prod + boot autostart incl. migrations), `make stop` (stop + remove autostart); tested end-to-end on the host. (from owner #106.1–3)
+- [ ] M9-T8 — README simplification: runbook centred on the make targets; remove unnecessary instructions. (from owner #106.4)
