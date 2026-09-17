@@ -8,9 +8,11 @@ pattern) and 404 handling.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -252,6 +254,48 @@ def test_parse_endpoint_unavailable_without_key(client: TestClient) -> None:
     assert resp.status_code == 503
     body = resp.json()
     assert "detail" in body
+
+
+def test_parse_endpoint_llm_failure_returns_502_and_logs(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A real LLM failure surfaces as 502 with the cause logged (issue #113).
+
+    The LLM HTTP client is faked (no network): the gate returns 502, the API
+    responds 502 with the underlying error in ``detail`` and logs it
+    server-side — without the API key or the raw user text.
+    """
+    settings = Settings(llm_api_key="test-key", llm_model="test-model")
+    client.app.dependency_overrides[get_settings] = lambda: settings
+
+    class _FakeLlmResponse:
+        status_code = 502
+
+        def json(self) -> dict[str, object]:
+            return {"error": "invalid api key"}
+
+    class _FakeLlmClient:
+        def post(
+            self, url: str, *, headers: dict[str, str], json: dict[str, object]
+        ) -> _FakeLlmResponse:
+            return _FakeLlmResponse()
+
+    monkeypatch.setattr(httpx, "Client", lambda *a, **k: _FakeLlmClient())
+    try:
+        with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
+            resp = client.post("/api/events/parse", json={"text": "dentist tomorrow"})
+    finally:
+        client.app.dependency_overrides.clear()
+    assert resp.status_code == 502
+    assert "LLM request failed (HTTP 502)" in resp.json()["detail"]
+    # The underlying failure is in the server logs — but no secrets/text.
+    messages = "\n".join(r.getMessage() for r in caplog.records)
+    assert "LLM parse failed" in messages
+    assert "HTTP 502" in messages
+    assert "test-key" not in messages
+    assert "dentist tomorrow" not in messages
 
 
 def test_parse_endpoint_requires_text(client: TestClient) -> None:

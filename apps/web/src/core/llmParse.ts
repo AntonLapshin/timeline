@@ -3,9 +3,11 @@
  *
  * Pure service: wraps `fetch` (injected as a dependency) into a typed call to
  * `POST /api/events/parse`, which returns a structured event draft to be
- * confirmed before saving. The endpoint itself is implemented in a later
- * milestone; this module defines the contract the UI consumes. No React, no
- * browser globals.
+ * confirmed before saving. Every failure mode maps to a typed, actionable
+ * `ParseResult` (issue #113) — this module never throws for HTTP/network
+ * failures: 503 → unavailable (LLM key absent), 502 → LLM-failure guidance,
+ * network error → cannot-reach-API, any other status → unexpected-API-error.
+ * No React, no browser globals.
  */
 
 import { safePriority, validateDraft, type ParsedDraft } from "./parseGuards";
@@ -16,7 +18,7 @@ import {
 } from "./eventWizard";
 import type { EventPriority } from "./eventTypes";
 import { parseIso, toLocalDate } from "./dateFmt";
-import { ApiError, type FetchLike } from "./apiClient";
+import type { FetchLike } from "./apiClient";
 
 /** Result of a parse call: either a draft or an error message. */
 export type ParseResult =
@@ -27,6 +29,33 @@ export type ParseResult =
       /** True when the LLM key is absent / parsing is unavailable. */
       unavailable?: boolean;
     };
+
+/** Message for a failed LLM call behind the API (HTTP 502, issue #113). */
+export const LLM_FAILED_MESSAGE =
+  "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs";
+
+/** Message when the API itself cannot be reached (network failure). */
+export const NETWORK_ERROR_MESSAGE =
+  "Cannot reach the API — check that the backend is running and the address is correct.";
+
+/**
+ * Build the 502 error message, appending the server's `detail` when present
+ * (it names the underlying cause, e.g. an LLM-gate 401). Never throws.
+ */
+async function llmFailedMessage(res: {
+  json(): Promise<unknown>;
+}): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: unknown } | null;
+    const detail =
+      typeof body?.detail === "string" ? body.detail.trim() : "";
+    return detail
+      ? `${LLM_FAILED_MESSAGE} (server: ${detail})`
+      : LLM_FAILED_MESSAGE;
+  } catch {
+    return LLM_FAILED_MESSAGE;
+  }
+}
 
 /**
  * Result of converting a parsed draft into a wizard pre-fill.
@@ -65,7 +94,8 @@ export function createLlmParser(
           body: JSON.stringify({ text }),
         });
       } catch {
-        return { ok: false, error: "network error while parsing" };
+        // Distinct from a server-side LLM failure: the API itself is unreachable.
+        return { ok: false, error: NETWORK_ERROR_MESSAGE };
       }
       if (res.status === 503) {
         // The LLM key is absent — parsing is unavailable, not a hard failure.
@@ -76,8 +106,17 @@ export function createLlmParser(
             "Parsing is unavailable (LLM key not configured). You can still add the event manually.",
         };
       }
+      if (res.status === 502) {
+        // The LLM call failed server-side (bad key/model, gate error, network).
+        return { ok: false, error: await llmFailedMessage(res) };
+      }
       if (!res.ok) {
-        throw new ApiError(res.status, `API parse failed (HTTP ${res.status})`);
+        // Any other HTTP error is unexpected but must not throw (issue #113):
+        // return a typed result so the UI can render it inline.
+        return {
+          ok: false,
+          error: `Unexpected API error (HTTP ${res.status}). You can still add the event manually.`,
+        };
       }
       const data = (await res.json()) as ParsedDraft;
       return { ok: true, draft: data };

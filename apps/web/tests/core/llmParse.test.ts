@@ -44,25 +44,82 @@ describe("llmParse core module", () => {
     expect(result.draft).toEqual(draft);
   });
 
-  it("returns a network-error result when fetch rejects", async () => {
+  it("returns a distinct cannot-reach-API result when fetch rejects", async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error("offline");
     }) as unknown as FetchLike;
     const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
     const result = await parser.parse("hello");
-    expect(result).toEqual({ ok: false, error: "network error while parsing" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Not the 503 "unavailable" path — the API was simply unreachable.
+      expect(result.unavailable).toBeUndefined();
+      expect(result.error).toContain("Cannot reach the API");
+    }
   });
 
-  it("throws ApiError on a non-2xx response", async () => {
+  it("maps HTTP 502 to an actionable LLM-failure result (no throw)", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: false,
+      status: 502,
+      json: async () => ({ detail: "LLM request failed (HTTP 401)" }),
+    }));
+    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const result = await parser.parse("hello");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Not the 503 "unavailable" path — the LLM call itself failed.
+      expect(result.unavailable).toBeUndefined();
+      expect(result.error).toContain(
+        "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs",
+      );
+      // The server detail is appended so the owner sees the underlying cause.
+      expect(result.error).toContain("(server: LLM request failed (HTTP 401))");
+    }
+  });
+
+  it("returns the plain LLM-failure message when the 502 body has no detail", async () => {
     const fetchImpl = mockFetch(() => ({
       ok: false,
       status: 502,
       json: async () => ({}),
     }));
     const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    await expect(parser.parse("hello")).rejects.toMatchObject({
-      name: "ApiError",
+    const result = await parser.parse("hello");
+    expect(result).toEqual({
+      ok: false,
+      error:
+        "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs",
+    });
+  });
+
+  it("returns the plain LLM-failure message when the 502 body is not JSON", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: false,
       status: 502,
+      json: () => Promise.reject(new Error("not json")),
+    }));
+    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const result = await parser.parse("hello");
+    expect(result).toEqual({
+      ok: false,
+      error:
+        "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs",
+    });
+  });
+
+  it("maps any other HTTP error status to a typed result instead of throwing", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    }));
+    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const result = await parser.parse("hello");
+    expect(result).toEqual({
+      ok: false,
+      error:
+        "Unexpected API error (HTTP 500). You can still add the event manually.",
     });
   });
 

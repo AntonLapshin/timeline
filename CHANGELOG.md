@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Actionable smart-input parse failures + server-side diagnostics (issue
+  #113, M9-T3, fixes #108):** smart-input parse failures no longer dead-end in
+  a generic message. The API logs every LLM parse failure server-side
+  (`logger.error` with the underlying error/HTTP status — a redacted content
+  reference only; never the raw text, prompt, or key) in `app.llm_parse`.
+  The web core `llmParse.ts` no longer throws for HTTP/network failures — it
+  returns typed `ParseResult`s with distinct, actionable messages: HTTP 502 →
+  "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API
+  logs" (with the server's `detail` appended when present, e.g. a gate 401),
+  network error → "Cannot reach the API — check that the backend is running
+  and the address is correct.", any other HTTP status → "Unexpected API error
+  (HTTP N). You can still add the event manually."; the 503 "LLM key not
+  configured" message is unchanged. `useSmartInput` renders those messages
+  verbatim and only falls back to the generic one for truly unexpected
+  throws. `/healthz` now reports `llm_configured: true|false` and `llm_model`
+  (model name only — never the key) so the owner can self-diagnose at a
+  glance. The README troubleshooting gains a "Smart input says parsing
+  failed / unavailable" row (placeholder credentials, `.env` edited without
+  recreating the stack, container outbound network) and the `/healthz`
+  section documents the new fields.
+
 - **Telegram user allowlist via env var — multi-id, inbound + outbound (issue
   #112, M9-T2):** the bot's single-user gate (`TELEGRAM_USER_ID`) becomes an
   env-driven allowlist. The new `TELEGRAM_USER_IDS` variable accepts one or

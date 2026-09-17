@@ -462,14 +462,48 @@ JoinGonka (OpenAI-compatible) call per parse:
 #### `/healthz` not responding
 
 - `curl http://127.0.0.1:8123/healthz` should return
-  `{"status":"ok","uptime_seconds":N,"components":{"scheduler":"…","telegram":"…"}}`.
+  `{"status":"ok","uptime_seconds":N,"components":{"scheduler":"…","telegram":"…"},"llm_configured":…,"llm_model":"…"}`.
   The `components` field is a self-diagnosis aid (issue #111):
   `scheduler: running|disabled` (reminder engine) and
   `telegram: configured|not_configured|error` (bot polling). With no `BOT_TOKEN`
   both report `disabled` / `not_configured` — that is expected, not a fault.
+  `llm_configured: true|false` and `llm_model` (issue #113) show whether
+  smart-input parsing has an LLM key/model configured (the model name only —
+  the API key is never exposed).
 - If it times out, confirm the service is active (`systemctl --user status
   timeline`) and bound (`ss -ltnp | grep 8123`). If nothing is listening, the
   app failed to start — see “App won't start” above.
+
+#### Smart input says parsing failed / unavailable
+
+The web "Add event…" box (and Telegram text/voice drafts) shows distinct
+messages per failure mode (issue #113) instead of a single dead end:
+
+- **"Parsing is unavailable (LLM key not configured)"** (HTTP 503): `.env` has
+  no `LLM_API_KEY`. Add a real key (see the env table above) and restart.
+- **"LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API
+  logs"** (HTTP 502): the key is set but the LLM call itself failed. The
+  underlying cause is appended to the message (e.g. `(server: LLM request
+  failed (HTTP 401))`) and always logged server-side as an
+  `LLM parse failed …` line — check `journalctl --user -u timeline -e` or
+  `docker compose logs api` (the raw text and the key are never logged).
+  Likely causes and fixes:
+  - **Placeholder credentials**: `.env.example` ships `LLM_API_KEY=changeme` /
+    `LLM_MODEL=changeme` — if copied verbatim the key/model is invalid. Set a
+    real JoinGonka key and a JSON-capable model name (env table above).
+  - **`.env` edited without recreating the stack**: Docker Compose only reads
+    `.env` when containers are created — run `docker compose up -d` again after
+    editing (native service: `systemctl --user restart timeline`).
+  - **Container outbound network**: the API container must reach `LLM_BASE_URL`
+    (default `https://gate.joingonka.ai`). Test from inside the container:
+    `docker compose exec api python -c "import urllib.request as u;print(u.urlopen('https://gate.joingonka.ai', timeout=10).status)"`
+    — a connection error means DNS/firewall trouble, not a bad key.
+- **"Cannot reach the API"**: the browser could not reach the backend at all —
+  check that the API is up (`curl http://127.0.0.1:8124/healthz`) and, in the
+  Docker stack, that the web container's `TIMELINE_API_URL` points at it.
+- **Self-diagnose at a glance**: `/healthz` reports `llm_configured: true|false`
+  and `llm_model` (model name only, never the key). `llm_configured: false` ⇒
+  no key in `.env`; `true` plus failures ⇒ check the API logs.
 
 #### Telegram reminders not arriving
 
