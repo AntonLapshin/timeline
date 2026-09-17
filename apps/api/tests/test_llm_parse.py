@@ -310,6 +310,62 @@ def test_parse_http_error() -> None:
     assert "HTTP 500" in result.error
 
 
+def test_parse_http_error_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """A non-200 LLM response is logged server-side with the status (issue #113)."""
+    client = _FakeClient(_FakeResponse(502, {}))
+    with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
+        result = parse_events("dentist tomorrow", NOW, TZ, _settings(), client)
+    assert result.ok is False
+    messages = "\n".join(r.getMessage() for r in caplog.records)
+    assert any(r.levelno == logging.ERROR for r in caplog.records)
+    assert "LLM parse failed" in messages
+    assert "HTTP 502" in messages
+
+
+def test_parse_transport_error_is_logged_without_secrets(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A transport failure is logged with the error — never the key or text."""
+
+    class _RaisingClient:
+        def post(self, url: str, *, headers: dict[str, str], json: dict[str, object]):
+            raise RuntimeError("connection refused")
+
+    with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
+        result = parse_events(
+            "dentist tomorrow 9am", NOW, TZ, _settings(), _RaisingClient()
+        )
+    assert result.ok is False
+    messages = "\n".join(r.getMessage() for r in caplog.records)
+    assert "LLM parse failed" in messages
+    assert "connection refused" in messages
+    # No secrets and no raw user text in the logs.
+    assert "test-key" not in messages
+    assert "dentist tomorrow 9am" not in messages
+    # The redacted reference is included for correlation with the info line.
+    assert "sha=" in messages
+
+
+def test_parse_invalid_response_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """A malformed model response is logged with the validation error."""
+    client = _FakeClient(
+        _FakeResponse(
+            200,
+            {
+                "events": [
+                    {"title": "X", "priority": "urgent", "start_at": "2026-09-16"}
+                ]
+            },
+        )
+    )
+    with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
+        result = parse_events("x", NOW, TZ, _settings(), client)
+    assert result.ok is False
+    messages = "\n".join(r.getMessage() for r in caplog.records)
+    assert "LLM parse failed" in messages
+    assert "invalid" in messages
+
+
 def test_parse_transport_error() -> None:
     """A transport exception is surfaced as a failure."""
 

@@ -35,6 +35,24 @@ def test_healthz_returns_ok(client: TestClient) -> None:
     assert body["uptime_seconds"] >= 0
 
 
+def test_healthz_reports_llm_config_and_never_secrets(settings: Settings) -> None:
+    """The /healthz endpoint exposes the LLM config state, never the key."""
+    configured = Settings(
+        data_dir=settings.data_dir,
+        db_name="test.db",
+        llm_api_key="secret-key",
+        llm_model="test-model",
+    )
+    body = TestClient(create_app(configured)).get("/healthz").json()
+    assert body["llm_configured"] is True
+    assert body["llm_model"] == "test-model"
+
+    unconfigured = Settings(data_dir=settings.data_dir, db_name="test.db")
+    body = TestClient(create_app(unconfigured)).get("/healthz").json()
+    assert body["llm_configured"] is False
+    assert body["llm_model"] is None
+
+
 def test_healthz_creates_database_file(settings: Settings) -> None:
     """Hitting /healthz creates the SQLite database under the data dir."""
     client = TestClient(create_app(settings))

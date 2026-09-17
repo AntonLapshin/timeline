@@ -86,7 +86,9 @@ export function useSmartInput(
       setText("");
       onParsedRef.current(converted.draft);
     } catch {
-      // Network / API failure (other than the graceful 503 handled in core).
+      // Only truly unexpected errors land here: `llmParse` maps every
+      // HTTP/network failure to a typed result (issue #113), so a throw means
+      // a bug or an exotic failure — fall back to the generic message.
       setError(
         "Parsing is unavailable right now. You can still add the event manually.",
       );

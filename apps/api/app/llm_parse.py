@@ -10,7 +10,10 @@ client (no real network):
 - ``validate_parse_response`` — pure validation of the model's JSON response
   into validated ``ParsedDraft``(s) or a ``needs_clarification`` request.
 - ``parse_events`` — orchestrator that returns ``unavailable`` when the LLM key
-  is absent, otherwise POSTs via the injected HTTP client and validates.
+  is absent, otherwise POSTs via the injected HTTP client and validates. Every
+  failure path is logged server-side (``logger.error`` with the underlying
+  error/status, issue #113) — never the raw text (only a redacted reference)
+  and never any secret.
 
 No real network happens in this module's own tests; the HTTP client is injected
 so callers (and tests) supply a fake.
@@ -223,6 +226,9 @@ def parse_events(
     (matching the web ``LlmParser`` contract where a 503 means unavailable).
     Otherwise builds the JSON-mode request and POSTs it via the injected
     ``http_client`` (no real network in tests), then validates the response.
+    Every failure is logged server-side (``logger.error`` with the underlying
+    error/status — never the raw text, prompt, or any secret) so the owner can
+    diagnose bad keys/models/gate outages from the API logs (issue #113).
     """
     if not settings.llm_api_key:
         return ParseResult(ok=False, unavailable=True, error="LLM key not configured")
@@ -236,21 +242,26 @@ def parse_events(
             request.url, headers=request.headers, json=request.json
         )
     except Exception as exc:  # noqa: BLE001 — surface any transport error
-        return ParseResult(ok=False, error=f"LLM request failed: {exc}")
+        error = f"LLM request failed: {exc}"
+        logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
+        return ParseResult(ok=False, error=error)
 
     if getattr(response, "status_code", None) != 200:
-        return ParseResult(
-            ok=False, error=f"LLM request failed (HTTP {response.status_code})"
-        )
+        error = f"LLM request failed (HTTP {response.status_code})"
+        logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
+        return ParseResult(ok=False, error=error)
 
     try:
         data = response.json()
     except Exception as exc:  # noqa: BLE001 — non-JSON body
-        return ParseResult(ok=False, error=f"LLM returned non-JSON: {exc}")
+        error = f"LLM returned non-JSON: {exc}"
+        logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
+        return ParseResult(ok=False, error=error)
 
     try:
         outcome = validate_parse_response(data)
     except ValueError as exc:
+        logger.error("LLM parse failed ref=%s: %s", redact_text(text), exc)
         return ParseResult(ok=False, error=str(exc))
 
     return ParseResult(ok=True, outcome=outcome)
