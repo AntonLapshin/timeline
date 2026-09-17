@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Backend lint: fix ruff `I001` in `apps/api/app/config.py` (PR #110
+  review, unblocks issue #105 AC6 "CI green"):** insert the missing blank
+  line after the import block before `_detect_repo_root` (ruff isort
+  formatting). Pre-existing on main since the owner's direct push `5e45ed3`;
+  `ruff check app tests` now exits 0. No behavioural change.
+
 ### Changed
 
 - **Align docs/comments with the dev-server `0.0.0.0` bind (issue #105,

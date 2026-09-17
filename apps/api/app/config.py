@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+
 def _detect_repo_root() -> Path:
     """Locate the repo root used only for default path derivation.
 
