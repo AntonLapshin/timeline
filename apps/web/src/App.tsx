@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, type AppView } from "./ui/components/AppShell";
 import { TimelineView } from "./ui/components/TimelineView";
 import { CalendarView } from "./ui/components/CalendarView";
@@ -27,16 +27,31 @@ import type { EventRead } from "./core/eventTypes";
 export default function App() {
   const { apiClient } = useServices();
   const [view, setView] = useState<AppView>("timeline");
-  const wizard = useEventWizard();
+  // Bumped after a successful wizard save so every data view (timeline,
+  // calendar, summary, filter dropdowns) refetches without a reload (#121).
+  const [refreshKey, setRefreshKey] = useState(0);
   const drawer = useEventDrawer();
   const search = useSearchFilter();
+  // `close` is stable (useCallback in the view model); destructuring keeps the
+  // saved-callback identity stable for `useEventWizard`.
+  const { close: closeDrawer } = drawer;
+  // After a successful wizard save: bump the refresh key so the data views
+  // refetch, and close the drawer so it can never show stale details
+  // (issue #121).
+  const onWizardSaved = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    closeDrawer();
+  }, [closeDrawer]);
+  const wizard = useEventWizard({ onSaved: onWizardSaved });
   const smartInput = useSmartInput(wizard.openCreateWithDraft);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [events, setEvents] = useState<EventRead[]>([]);
 
-  // Fetch the full event list once so the tag/month filter dropdowns can be
-  // populated. This is best-effort (options are derived in core); failures are
-  // ignored and simply leave the dropdowns empty.
+  // Fetch the full event list so the tag/month filter dropdowns can be
+  // populated. Re-runs when `refreshKey` changes (after a wizard save) so the
+  // dropdowns reflect the change without a reload. This is best-effort
+  // (options are derived in core); failures are ignored and simply leave the
+  // dropdowns empty.
   useEffect(() => {
     let cancelled = false;
     apiClient
@@ -50,7 +65,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [apiClient]);
+  }, [apiClient, refreshKey]);
 
   const tagOptions = useMemo(() => allTags(events), [events]);
   const monthOptions = useMemo(() => allMonths(events), [events]);
@@ -84,7 +99,7 @@ export default function App() {
       <AppShell
         view={view}
         onViewChange={setView}
-        summarySlot={<SummaryBar />}
+        summarySlot={<SummaryBar refreshKey={refreshKey} />}
         searchSlot={
           <SearchFilterBar
             filter={search.filter}
@@ -115,11 +130,13 @@ export default function App() {
             onEventClick={drawer.openDrawer}
             filter={search.filter}
             onCreate={wizard.openCreate}
+            refreshKey={refreshKey}
           />
         ) : (
           <CalendarView
             onEventClick={drawer.openFromOccurrence}
             filter={search.filter}
+            refreshKey={refreshKey}
           />
         )}
       </AppShell>

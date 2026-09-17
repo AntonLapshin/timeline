@@ -72,6 +72,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Wizard: Save closes the modal on success, views refresh without reload,
+  Esc closes the modal (issue #121, M9-T4):** the wizard's Save button used to
+  dead-end in an in-modal "Event created." success state, and every data view
+  kept showing stale data until a manual reload. Now a successful save (create
+  or update) closes the modal immediately and fires a new `onSaved` callback;
+  a failed or refused save keeps the modal open with the error message. The
+  app passes an `onSaved` handler that bumps a `refreshKey`, which re-runs the
+  list fetch in `useTimeline`, the occurrence fetch in `useCalendar`, the
+  summary fetch in `useSummary`, and the app-level filter-options fetch (the
+  tag/month dropdowns) — all without a reload; stale in-flight responses are
+  ignored via the existing cancellation guards (verified by a new
+  `useSummary.test.tsx` case). The event drawer is closed along with the
+  wizard on save so it can never show stale details. Esc now also closes the
+  wizard while it is open (same window-keydown pattern as `useEventDrawer`).
+  The dead `saved` flag is removed from `EventWizardState`/`EventWizard` (the
+  in-modal success message was unreachable once the modal auto-closes).
+  Logic stays in the view models (`useEventWizard`, `useTimeline`,
+  `useCalendar`, `useSummary`); the components stay dumb and take an optional
+  `refreshKey` prop (ShowcasePage renders them unchanged).
+
 - **Wire the Telegram bot + reminder scheduler into the API runtime (issue
   #111, M9-T1):** both subsystems were built and tested as modules but never
   started in production — the API lifespan only created tables and seeded, so

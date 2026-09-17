@@ -99,6 +99,28 @@ describe("TimelineView", () => {
     expect(listEvents).toHaveBeenCalledTimes(2);
   });
 
+  it("refetches events when the refreshKey prop changes (post-save refresh)", async () => {
+    const listEvents = vi.fn().mockResolvedValue([
+      makeEvent({ id: 1, title: "HRA" }),
+    ]);
+    const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;
+
+    const { rerender } = renderWithServices(services, <TimelineView />);
+
+    await waitFor(() => expect(screen.getByText("HRA")).toBeInTheDocument());
+    expect(listEvents).toHaveBeenCalledTimes(1);
+
+    // Bumping the refresh key (e.g. after a wizard save, issue #121) re-runs
+    // the fetch without a reload.
+    rerender(
+      <ServicesContext.Provider value={services}>
+        <TimelineView refreshKey={1} />
+      </ServicesContext.Provider>,
+    );
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("HRA")).toBeInTheDocument();
+  });
+
   it("shows an empty state when there are no events", async () => {
     const listEvents = vi.fn().mockResolvedValue([]);
     const services = { apiClient: { listEvents }, llmParser: {} } as unknown as Services;

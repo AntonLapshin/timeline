@@ -41,7 +41,11 @@ export interface TimelineState {
  * `apiClient`, then delegates all grouping/styling/pagination derivation to the
  * pure `src/core/timeline` module. The component renders the resulting state.
  */
-export function useTimeline(filter?: EventFilter): TimelineState {
+export function useTimeline(
+  filter?: EventFilter,
+  /** Bump to re-run the list fetch (e.g. after a wizard save, issue #121). */
+  refreshKey = 0,
+): TimelineState {
   const { apiClient } = useServices();
   const [events, setEvents] = useState<EventRead[]>([]);
   const [page, setPage] = useState(0);
@@ -69,7 +73,9 @@ export function useTimeline(filter?: EventFilter): TimelineState {
     return () => {
       cancelled = true;
     };
-  }, [apiClient]);
+    // Re-runs when `refreshKey` changes so a wizard save is reflected in the
+    // timeline without a reload (issue #121).
+  }, [apiClient, refreshKey]);
 
   const retry = useCallback(() => {
     setLoading(true);

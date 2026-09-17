@@ -39,7 +39,6 @@ function wizardState(overrides: Partial<EventWizardState> = {}): EventWizardStat
     canNext: true,
     saving: false,
     error: null,
-    saved: false,
     openCreate: vi.fn(),
     openCreateWithDraft: vi.fn(),
     openEdit: vi.fn(),
@@ -145,11 +144,6 @@ describe("EventWizard", () => {
   it("shows the error message when present", () => {
     renderWizard(wizardState({ error: "Failed to save event" }));
     expect(screen.getByText("Failed to save event")).toBeInTheDocument();
-  });
-
-  it("shows the saved success message when present", () => {
-    renderWizard(wizardState({ step: 3, saved: true }));
-    expect(screen.getByText("Event created.")).toBeInTheDocument();
   });
 
   it("calls close when the close button is clicked", () => {
