@@ -406,6 +406,20 @@ If voxtype is not installed, install it via Omarchy **Install > AI >
 Dictation** (or confirm `voxtype --version` and that a model is present under
 `~/.local/share/voxtype/models/`).
 
+#### Voice messages in the Docker stack (no local STT in the image)
+
+The API Docker image (`apps/api/Dockerfile`) ships **no voxtype/whisper and
+no ffmpeg** — it is a slim Python image, so voice messages can never be
+transcribed there. This is explicit, not silent: the bot replies
+"🎙 Voice transcription isn't available in this deployment …" and points at
+the `/add <text>` path (issue #111). Text capture works fully in Docker.
+
+**Voice requires the native-run path**: run the API on the host (systemd
+`--user` service or `uvicorn app.main:app` from `apps/api`) where voxtype +
+ffmpeg are installed (see "Local run paths" above). The Docker stack and a
+native API can share the same `./data` directory, but run one API at a time
+against the same SQLite DB.
+
 ---
 
 ### Cost notes
@@ -446,7 +460,12 @@ JoinGonka (OpenAI-compatible) call per parse:
 
 #### `/healthz` not responding
 
-- `curl http://127.0.0.1:8123/healthz` should return `{"status":"ok","uptime_seconds":N}`.
+- `curl http://127.0.0.1:8123/healthz` should return
+  `{"status":"ok","uptime_seconds":N,"components":{"scheduler":"…","telegram":"…"}}`.
+  The `components` field is a self-diagnosis aid (issue #111):
+  `scheduler: running|disabled` (reminder engine) and
+  `telegram: configured|not_configured|error` (bot polling). With no `BOT_TOKEN`
+  both report `disabled` / `not_configured` — that is expected, not a fault.
 - If it times out, confirm the service is active (`systemctl --user status
   timeline`) and bound (`ss -ltnp | grep 8123`). If nothing is listening, the
   app failed to start — see “App won't start” above.
@@ -459,7 +478,12 @@ JoinGonka (OpenAI-compatible) call per parse:
   non-allowlisted ids are ignored.
 - **Bot not running**: the bot polls from the API process; if the service isn't
   running, no reminders are sent. Check `journalctl --user -u timeline -f` for
-  poll errors and that the token is valid.
+  poll errors and that the token is valid. `/healthz` shows the live component
+  status from the browser: `telegram: configured` (polling),
+  `not_configured` (no `BOT_TOKEN`), or `error` (startup failed — see logs).
+- **Scheduler disabled**: `/healthz` reporting `scheduler: disabled` with a
+  token set means the reminder engine failed to start — check the API logs
+  for the startup traceback (the API itself keeps serving).
 - **Test**: send a message to your bot and watch the logs; use the web UI's
   “send test Telegram now” button in the reminder editor to verify end-to-end.
 

@@ -11,6 +11,11 @@ A python-telegram-bot v21 polling updater (consistent with
   ``POST /api/events/parse`` endpoint reuses), present each parsed draft as a
   Telegram card with inline **Save / Edit / Discard** buttons, and only persist
   a confirmed draft (via the CRUD layer) when the owner taps **Save**.
+- **voice messages** — transcribed locally (``app.stt``: ffmpeg → voxtype,
+  issue #71) and routed through the same parse → draft flow as ``/add``
+  (issue #111). When local STT is unavailable (e.g. the Docker image ships no
+  voxtype/whisper) the sender gets a clear "voice transcription unavailable"
+  reply instead of silence.
 - ``/ask <question>`` — LLM query over history. The query endpoint is not
   merged yet, so this is a **stub**, wired when available.
 
@@ -26,15 +31,20 @@ parser (``parse_upcoming_days``), the event-listing helpers
 (``format_event_line``), the command dispatcher (``handle_command``), the
 inbound-record builder (``build_inbound_record``) and the draft-flow helpers
 (``format_draft_card`` / ``build_draft_keyboard`` / ``parse_draft_callback`` /
-``draft_to_event_create`` / ``DraftStore``). The impure Telegram wiring
-(``_handle_update`` / ``_handle_callback_query`` /
-``build_telegram_inbound_application`` / ``record_inbound``) is a thin adapter
-over python-telegram-bot v21 (polling) and is kept to a minimum.
+``draft_to_event_create`` / ``DraftStore``) and the voice replies
+(``voice_unavailable_reply`` / ``voice_error_reply``). The impure Telegram
+wiring (``_handle_update`` / ``_handle_voice_update`` /
+``_handle_callback_query`` / ``build_telegram_inbound_application`` /
+``record_inbound``) is a thin adapter over python-telegram-bot v21 (polling)
+and is kept to a minimum.
 """
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import os
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -50,9 +60,21 @@ from .llm_parse import ParsedDraft, parse_events
 from .models import Event, TelegramInbound
 from .recurrence import Occurrence, next_occurrences
 from .schemas import EventCreate
+from .stt import SttResult, run_command, transcribe_voice
 from .telegram_outbound import is_allowed_user, priority_emoji
 
 logger = logging.getLogger(__name__)
+
+
+class VoiceTranscriber(Protocol):
+    """The local transcription callable the voice handler uses (``app.stt``)."""
+
+    def __call__(
+        self, ogg_path: str, duration_seconds: float | None, settings: Settings
+    ) -> SttResult:
+        """Transcribe a downloaded voice file locally (no network)."""
+        ...
+
 
 #: How many occurrences to expand per event when scanning for today/upcoming.
 #: A 30-day horizon holds at most 30 daily occurrences, so this comfortably
@@ -362,6 +384,27 @@ def _reply_low(events: Sequence[_InboundEvent], now: datetime) -> CommandResult:
     lines = ["💤 Low priority"]
     lines.extend(format_event_line(e, o) for e, o in items)
     return CommandResult(reply="\n".join(lines), message_type="text")
+
+
+def voice_unavailable_reply() -> str:
+    """Clear reply when local STT is unavailable (pure).
+
+    The Docker image ships no voxtype/whisper (or ffmpeg), so a voice message
+    can never be transcribed there. The reply says so explicitly instead of
+    failing silently (issue #111) and points at the text path and the
+    native-run voice path documented in the README.
+    """
+    return (
+        "🎙 Voice transcription isn't available in this deployment "
+        "(no local voxtype/whisper installed). Send the event as text with "
+        "/add <text> instead — for voice, run the API natively (see README)."
+    )
+
+
+def voice_error_reply(error: str | None) -> str:
+    """Reply for a voice message that failed to download/transcribe (pure)."""
+    detail = (error or "unknown error").strip()
+    return f"🎙 Couldn't transcribe the voice message: {detail}"
 
 
 def _reply_add(args: str) -> CommandResult:
@@ -695,6 +738,130 @@ def _save_draft(
     return BotReply(f"✅ Saved: {event.title}")
 
 
+async def _download_voice_file(bot: Any, file_id: str) -> str:
+    """Download a Telegram voice file to a temp path (thin adapter).
+
+    The file is fetched through the bot's API into a temporary ``.ogg`` path
+    that the local STT pipeline (ffmpeg → voxtype) can read. The caller owns
+    deleting the file.
+    """
+    telegram_file = await bot.get_file(file_id)
+    fd, path = tempfile.mkstemp(prefix="timeline-voice-", suffix=".ogg")
+    os.close(fd)
+    try:
+        await telegram_file.download_to_drive(path)
+    except Exception:
+        with contextlib.suppress(OSError):
+            os.unlink(path)
+        raise
+    return path
+
+
+def _run_local_transcription(
+    ogg_path: str, duration_seconds: float | None, settings: Settings
+) -> SttResult:
+    """Run the real local transcription pipeline (ffmpeg + voxtype subprocesses)."""
+    return transcribe_voice(ogg_path, duration_seconds, settings, run_command)
+
+
+async def _transcribe_voice_message(
+    bot: Any,
+    file_id: str,
+    duration: float | None,
+    settings: Settings,
+    *,
+    transcribe: VoiceTranscriber | None = None,
+) -> SttResult:
+    """Download a voice file and transcribe it locally (thin adapter).
+
+    Downloads the file via ``bot`` and runs the local transcription pipeline
+    (``app.stt.transcribe_voice`` with the real subprocess runner) — ffmpeg +
+    voxtype only, never a network command. ``transcribe`` is injectable so
+    tests can fake transcription without any subprocess. The temp file is
+    always removed afterwards.
+    """
+    runner: VoiceTranscriber = (
+        transcribe if transcribe is not None else _run_local_transcription
+    )
+    ogg_path = await _download_voice_file(bot, file_id)
+    try:
+        return runner(ogg_path, duration, settings)
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(ogg_path)
+
+
+async def _handle_voice_update(
+    update: Any,
+    settings: Settings,
+    session_factory: sessionmaker[Session] | None = None,
+    *,
+    bot: Any | None = None,
+    now: datetime | None = None,
+    http_client: Any | None = None,
+    draft_store: DraftStore | None = None,
+    transcribe: VoiceTranscriber | None = None,
+) -> BotReply | None:
+    """Process one inbound voice update: transcribe locally, then parse (issue #111).
+
+    Applies the same DM-only + allowlist gates as text commands, downloads the
+    voice file via ``bot`` and transcribes it locally (``app.stt``). When local
+    STT is unavailable (e.g. the Docker image ships no voxtype/whisper) the
+    sender gets a clear "voice transcription unavailable" reply instead of
+    silence. A successful transcription is routed through the same /add parse →
+    draft-card flow as text. Returns ``None`` when the update is ignored.
+    """
+    message = getattr(update, "effective_message", None) or getattr(
+        update, "message", None
+    )
+    if message is None:
+        return None
+    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
+        return None
+    user = getattr(message, "from_user", None)
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not is_allowed_user(user_id, settings.telegram_user_id):
+        return None
+
+    voice = getattr(message, "voice", None)
+    if voice is None:
+        return None
+    file_id = getattr(voice, "file_id", None)
+    if file_id is None or bot is None:
+        return BotReply(voice_error_reply("voice file is unavailable"))
+
+    try:
+        result = await _transcribe_voice_message(
+            bot,
+            file_id,
+            getattr(voice, "duration", None),
+            settings,
+            transcribe=transcribe,
+        )
+    except Exception as exc:  # noqa: BLE001 — reply instead of silence (issue #111)
+        logger.warning("Voice message transcription failed: %s", exc)
+        return BotReply(voice_error_reply(str(exc) or type(exc).__name__))
+    if result.unavailable:
+        return BotReply(voice_unavailable_reply())
+    if not result.ok or not result.text:
+        return BotReply(voice_error_reply(result.error))
+
+    chat = getattr(message, "chat", None)
+    chat_id = getattr(chat, "id", None)
+    reply = _handle_add_flow(
+        result.text,
+        settings,
+        now=now,
+        http_client=http_client,
+        draft_store=draft_store,
+        chat_id=chat_id,
+    )
+    if session_factory is not None:
+        with session_factory() as session:
+            record_inbound(session, message, "draft")
+    return reply
+
+
 def build_telegram_inbound_application(
     settings: Settings,
     session_factory: sessionmaker[Session] | None = None,
@@ -702,13 +869,15 @@ def build_telegram_inbound_application(
     now: datetime | None = None,
     http_client: Any | None = None,
     draft_store: DraftStore | None = None,
+    transcribe: VoiceTranscriber | None = None,
 ) -> Any:
     """Build the python-telegram-bot Application with an inbound DM handler.
 
     Returns ``None`` when no bot token is configured so the app can start
     without Telegram (same guard as the outbound sender). Registers a text
-    handler for commands and a ``CallbackQueryHandler`` for the draft buttons.
-    The caller is responsible for ``run_polling()``.
+    handler for commands, a voice handler (local transcription → parse flow,
+    issue #111) and a ``CallbackQueryHandler`` for the draft buttons. The
+    caller is responsible for ``run_polling()`` (the API lifespan does this).
     """
     if not settings.telegram_bot_token:
         return None
@@ -744,6 +913,25 @@ def build_telegram_inbound_application(
         if message is not None:
             await _send_reply(message.reply_text, reply)
 
+    async def voice_handler(update: Any, context: Any) -> None:
+        reply = await _handle_voice_update(
+            update,
+            settings,
+            session_factory,
+            bot=getattr(context, "bot", None),
+            now=now,
+            http_client=http_client,
+            draft_store=draft_store,
+            transcribe=transcribe,
+        )
+        if reply is None:
+            return
+        message = getattr(update, "effective_message", None) or getattr(
+            update, "message", None
+        )
+        if message is not None:
+            await _send_reply(message.reply_text, reply)
+
     async def callback_handler(update: Any, _context: Any) -> None:
         query = getattr(update, "callback_query", None)
         if query is None:
@@ -761,6 +949,7 @@ def build_telegram_inbound_application(
             await _send_reply(message.reply_text, reply)
 
     app.add_handler(MessageHandler(filters.TEXT, handler))
+    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     return app
 
