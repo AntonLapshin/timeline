@@ -11,6 +11,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .telegram_allowlist import TelegramAllowlist, parse_allowlist
+
 
 def _detect_repo_root() -> Path:
     """Locate the repo root used only for default path derivation.
@@ -119,9 +121,16 @@ class Settings:
     telegram_bot_token: str | None = field(
         default_factory=lambda: _optional_env("BOT_TOKEN")
     )
-    #: Numeric Telegram user id for the single-user allowlist.
+    #: Numeric Telegram user id for the single-user allowlist (legacy variable;
+    #: still supported and combined with ``telegram_user_ids``, issue #112).
     telegram_user_id: str | None = field(
         default_factory=lambda: _optional_env("TELEGRAM_USER_ID")
+    )
+    #: Comma-separated numeric Telegram user ids (whitespace tolerated) for the
+    #: multi-user allowlist (issue #112). Combined with the legacy
+    #: ``TELEGRAM_USER_ID``; see :attr:`telegram_allowlist`.
+    telegram_user_ids: str | None = field(
+        default_factory=lambda: _optional_env("TELEGRAM_USER_IDS")
     )
     #: Email feature flag (v1 default OFF). When off no email is ever sent,
     #: regardless of event channels (issue #61, M4-T3B).
@@ -167,6 +176,16 @@ class Settings:
     stt_max_seconds: float = field(
         default_factory=lambda: float(os.getenv("STT_MAX_SECONDS", "120"))
     )
+
+    @property
+    def telegram_allowlist(self) -> TelegramAllowlist:
+        """The combined Telegram user allowlist (issue #112).
+
+        Parses ``TELEGRAM_USER_IDS`` (comma-separated) and the legacy single-id
+        ``TELEGRAM_USER_ID`` together, deduplicated and order-preserved. An
+        empty result allows nobody (fail closed).
+        """
+        return parse_allowlist(self.telegram_user_ids, self.telegram_user_id)
 
     @property
     def database_url(self) -> str:

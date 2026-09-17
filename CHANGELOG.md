@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Telegram user allowlist via env var — multi-id, inbound + outbound (issue
+  #112, M9-T2):** the bot's single-user gate (`TELEGRAM_USER_ID`) becomes an
+  env-driven allowlist. The new `TELEGRAM_USER_IDS` variable accepts one or
+  more comma-separated numeric ids (whitespace tolerated, duplicates
+  deduplicated, order preserved); the legacy `TELEGRAM_USER_ID` still works
+  and combines with `TELEGRAM_USER_IDS`. The pure parser + membership checks
+  live in `app.telegram_allowlist` (`parse_allowlist`, `TelegramAllowlist`,
+  `startup_warning`), exposed as `Settings.telegram_allowlist`. Inbound:
+  DMs, voice notes and draft-button callbacks from non-allowlisted users are
+  ignored with exactly one warning log line per occurrence (no processing, no
+  reply, no data leakage). Outbound: reminder cards go to every allowlisted
+  id (one delivery record per occurrence, not per recipient). Fail-closed:
+  with `BOT_TOKEN` set but an empty or fully-invalid allowlist the bot still
+  starts but processes nothing, with a clear startup warning naming any
+  dropped entries; reminder sends fail closed as before. `.env.example` and
+  the README env table/troubleshooting document the new variable.
+
 ### Fixed
 
 - **Wire the Telegram bot + reminder scheduler into the API runtime (issue

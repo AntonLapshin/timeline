@@ -130,6 +130,49 @@ def test_telegram_settings_accept_blank_as_disabled(
     assert settings.telegram_user_id is None
 
 
+# --- Telegram user allowlist (issue #112) ------------------------------------
+
+
+def test_telegram_user_ids_read_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TELEGRAM_USER_IDS (comma-separated) is reflected on the settings."""
+    monkeypatch.delenv("TELEGRAM_USER_IDS", raising=False)
+    monkeypatch.setenv("TELEGRAM_USER_IDS", "111, 222")
+    settings = Settings()
+    assert settings.telegram_user_ids == "111, 222"
+
+
+def test_telegram_user_ids_default_to_none_when_env_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With TELEGRAM_USER_IDS unset the setting defaults to None."""
+    monkeypatch.delenv("TELEGRAM_USER_IDS", raising=False)
+    settings = Settings()
+    assert settings.telegram_user_ids is None
+
+
+def test_telegram_allowlist_property_combines_both_vars() -> None:
+    """The allowlist property combines the multi-id and legacy vars."""
+    settings = Settings(telegram_user_ids="111, 222", telegram_user_id="222")
+    allowlist = settings.telegram_allowlist
+    assert allowlist.ids == (111, 222)
+    assert allowlist.allows(111) is True
+    assert allowlist.allows(999) is False
+
+
+def test_telegram_allowlist_property_legacy_var_only() -> None:
+    """The legacy single-id var alone still builds a working allowlist."""
+    settings = Settings(telegram_user_id="42", telegram_user_ids=None)
+    assert settings.telegram_allowlist.ids == (42,)
+    assert settings.telegram_allowlist.allows(42) is True
+
+
+def test_telegram_allowlist_property_empty_fails_closed() -> None:
+    """With neither var set the allowlist is empty (allows nobody)."""
+    settings = Settings(telegram_user_id=None, telegram_user_ids=None)
+    assert not settings.telegram_allowlist
+    assert settings.telegram_allowlist.allows(42) is False
+
+
 # --- Email outbound settings (issue #61) -------------------------------------
 
 

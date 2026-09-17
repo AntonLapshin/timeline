@@ -19,10 +19,12 @@ A python-telegram-bot v21 polling updater (consistent with
 - ``/ask <question>`` — LLM query over history. The query endpoint is not
   merged yet, so this is a **stub**, wired when available.
 
-Only private chats from the single allowlisted user (``TELEGRAM_USER_ID``) are
-answered; messages from groups/channels/other users are ignored. No bot token
-configured ⇒ the inbound updater is a no-op (never polls), same guard style as
-the outbound sender.
+Only private chats from allowlisted users (``TELEGRAM_USER_IDS`` combined
+with the legacy ``TELEGRAM_USER_ID``, issue #112) are answered; messages from
+groups/channels/other users are ignored (one warning log line per occurrence,
+no processing, no reply, no data leakage). No bot token configured ⇒ the
+inbound updater is a no-op (never polls), same guard style as the outbound
+sender.
 
 The pure business logic lives here and is fully unit-tested: the DM-only gate
 (``is_private_chat``), command parsing (``parse_command``), the upcoming-days
@@ -61,7 +63,7 @@ from .models import Event, TelegramInbound
 from .recurrence import Occurrence, next_occurrences
 from .schemas import EventCreate
 from .stt import SttResult, run_command, transcribe_voice
-from .telegram_outbound import is_allowed_user, priority_emoji
+from .telegram_outbound import priority_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +174,20 @@ def is_private_chat(chat_type: str | None) -> bool:
     group/channel noise.
     """
     return chat_type == "private"
+
+
+def _gate_user(user_id: str | int | None, settings: Settings, *, kind: str) -> bool:
+    """Allowlist gate for inbound updates (issue #112): True only if allowed.
+
+    A denied sender is ignored with exactly one warning log line per
+    occurrence — the sender's id is logged for diagnostics, never the message
+    content (no data leakage). An empty allowlist denies everyone (fail
+    closed).
+    """
+    if settings.telegram_allowlist.allows(user_id):
+        return True
+    logger.warning("Ignoring Telegram %s from non-allowlisted user %s.", kind, user_id)
+    return False
 
 
 def parse_command(text: str) -> Command | None:
@@ -593,7 +609,7 @@ def _handle_update(
         return None
     user = getattr(message, "from_user", None)
     user_id = getattr(user, "id", None) if user is not None else None
-    if not is_allowed_user(user_id, settings.telegram_user_id):
+    if not _gate_user(user_id, settings, kind="message"):
         return None
 
     text = getattr(message, "text", None) or ""
@@ -684,15 +700,15 @@ def _handle_callback_query(
 ) -> BotReply | None:
     """Route a draft-button callback (Save / Edit / Discard) to its action.
 
-    Applies the single-user allowlist (only the owner may act), parses the
-    callback payload, looks up the chat's pending draft and acts: Save persists
-    via CRUD, Edit re-prompts for corrected text, Discard drops the draft.
-    Returns ``None`` when the callback isn't a draft action or the user is not
-    allowed.
+    Applies the user allowlist (only allowlisted ids may act, issue #112),
+    parses the callback payload, looks up the chat's pending draft and acts:
+    Save persists via CRUD, Edit re-prompts for corrected text, Discard drops
+    the draft. Returns ``None`` when the callback isn't a draft action or the
+    user is not allowed.
     """
     user = getattr(query, "from_user", None)
     user_id = getattr(user, "id", None) if user is not None else None
-    if not is_allowed_user(user_id, settings.telegram_user_id):
+    if not _gate_user(user_id, settings, kind="callback"):
         return None
 
     action = parse_draft_callback(getattr(query, "data", None))
@@ -820,7 +836,7 @@ async def _handle_voice_update(
         return None
     user = getattr(message, "from_user", None)
     user_id = getattr(user, "id", None) if user is not None else None
-    if not is_allowed_user(user_id, settings.telegram_user_id):
+    if not _gate_user(user_id, settings, kind="voice message"):
         return None
 
     voice = getattr(message, "voice", None)

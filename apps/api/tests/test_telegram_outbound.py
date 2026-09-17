@@ -4,8 +4,8 @@ Covers the acceptance criteria:
 
 - **Priority card**: ``format_reminder_card`` renders emoji, title, date/time,
   countdown and notes for a delivered reminder.
-- **Single allowed user**: ``is_allowed_user`` enforces the allowlist (fail
-  closed when either side is unset).
+- **Multi-user allowlist**: cards go only to the allowlisted ids (issue #112);
+  an empty/invalid allowlist fails closed.
 - **Low priority suppressed**: ``should_push`` never pushes low-priority events.
 - **Ack / Snooze / Delete buttons**: the callback codec
   (``callback_data`` / ``parse_callback_data``), the reply markup, and the
@@ -13,7 +13,7 @@ Covers the acceptance criteria:
   ``delete_delivery``) plus the dispatch ``handle_callback``.
 
 Plus the pure helpers (``priority_emoji``, ``countdown_text``) and the impure
-wiring (``make_telegram_job_func``, ``_parse_chat_id``, ``build_telegram_application``).
+wiring (``make_telegram_job_func``, ``build_telegram_application``).
 """
 
 from __future__ import annotations
@@ -33,7 +33,6 @@ from app.enums import EventChannel, EventPriority, EventSource, EventStatus, Eve
 from app.models import DeliveryLog, Event
 from app.scheduler import build_scheduler, dedupe_key
 from app.telegram_outbound import (
-    _parse_chat_id,
     _run_send,
     ack_delivery,
     build_reply_markup,
@@ -43,7 +42,6 @@ from app.telegram_outbound import (
     delete_delivery,
     format_reminder_card,
     handle_callback,
-    is_allowed_user,
     make_telegram_job_func,
     parse_callback_data,
     priority_emoji,
@@ -101,18 +99,6 @@ def test_should_push_suppresses_low() -> None:
     assert should_push(EventPriority.CRITICAL) is True
     assert should_push(EventPriority.MEDIUM) is True
     assert should_push(EventPriority.LOW) is False
-
-
-def test_is_allowed_user_allowlist() -> None:
-    """Only the configured single user is allowed; unset fails closed."""
-    assert is_allowed_user("123", "123") is True
-    assert is_allowed_user("123", "456") is False
-    # Unset on either side -> nothing allowed.
-    assert is_allowed_user(None, "123") is False
-    assert is_allowed_user("123", None) is False
-    assert is_allowed_user(None, None) is False
-    # Numeric-string comparison.
-    assert is_allowed_user(123, "123") is True  # type: ignore[arg-type]
 
 
 def test_countdown_text() -> None:
@@ -478,13 +464,6 @@ def test_handle_callback_delete_noop_when_missing(
 
 
 # --- impure wiring ------------------------------------------------------------
-
-
-def test_parse_chat_id() -> None:
-    """The allowlisted user id is parsed into an int chat id."""
-    assert _parse_chat_id("123") == 123
-    assert _parse_chat_id(None) is None
-    assert _parse_chat_id("abc") is None
 
 
 def test_run_send_raises_without_chat_id() -> None:
@@ -878,6 +857,110 @@ def test_make_telegram_job_func_denies_unconfigured_user(
             sent.append(text)
 
     settings = Settings(telegram_user_id=None, telegram_bot_token="token")
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+
+    with pytest.raises(PermissionError):
+        job_func(event_id, "occ", "1h")
+    assert sent == []
+    with session_factory() as session:
+        assert session.query(DeliveryLog).one().status == "failed"
+
+
+def test_make_telegram_job_func_sends_to_all_allowlisted_ids(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Every allowlisted user id receives the card (issue #112)."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[int] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(chat_id)
+
+    settings = Settings(telegram_user_ids="111,222", telegram_bot_token="token")
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+
+    assert job_func(event_id, "occ", "1h") is True
+    assert sent == [111, 222]
+    # One delivery record for the occurrence, not one per recipient.
+    with session_factory() as session:
+        assert session.query(DeliveryLog).one().status == "sent"
+
+
+def test_make_telegram_job_func_combines_legacy_and_multi_vars(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """TELEGRAM_USER_IDS and the legacy TELEGRAM_USER_ID combine (issue #112)."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[int] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(chat_id)
+
+    settings = Settings(
+        telegram_user_ids="111",
+        telegram_user_id="222",
+        telegram_bot_token="token",
+    )
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+
+    assert job_func(event_id, "occ", "1h") is True
+    assert sent == [111, 222]
+
+
+def test_make_telegram_job_func_dedupes_allowlisted_ids(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Duplicate ids across both vars send once (deduped allowlist)."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[int] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(chat_id)
+
+    settings = Settings(
+        telegram_user_ids="111, 111", telegram_user_id="111", telegram_bot_token="t"
+    )
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+
+    assert job_func(event_id, "occ", "1h") is True
+    assert sent == [111]
+
+
+def test_make_telegram_job_func_fails_closed_on_invalid_allowlist(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """An allowlist with only invalid entries sends nothing (fail closed)."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    sent: list[object] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(text)
+
+    settings = Settings(telegram_user_ids="abc", telegram_bot_token="token")
     job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
 
     with pytest.raises(PermissionError):

@@ -122,6 +122,79 @@ def test_start_runtime_noop_without_token(
     assert any("disabled" in m and "BOT_TOKEN" in m for m in messages)
 
 
+def test_start_runtime_warns_on_empty_allowlist(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Token set but no allowlist -> fail-closed startup warning (issue #112)."""
+    fake_app = _FakeTelegramApp()
+    monkeypatch.setattr(
+        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+    )
+    settings = Settings(
+        data_dir=tmp_path,
+        db_name="runtime.db",
+        telegram_bot_token="123:abc",
+        telegram_user_id=None,
+        telegram_user_ids=None,
+    )
+    with caplog.at_level(logging.WARNING):
+        components = asyncio.run(
+            runtime.start_runtime(settings, _session_factory(tmp_path))
+        )
+    messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("ignore every message" in m for m in messages)
+    # Fail closed but still running: the bot starts, the gate denies everyone.
+    assert components.telegram_app is fake_app
+    assert components.telegram_status == "configured"
+    asyncio.run(components.shutdown())
+
+
+def test_start_runtime_warns_on_invalid_allowlist_entries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Invalid allowlist entries are named in the startup warning (issue #112)."""
+    fake_app = _FakeTelegramApp()
+    monkeypatch.setattr(
+        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+    )
+    settings = Settings(
+        data_dir=tmp_path,
+        db_name="runtime.db",
+        telegram_bot_token="123:abc",
+        telegram_user_id="42",
+        telegram_user_ids="abc",
+    )
+    with caplog.at_level(logging.WARNING):
+        components = asyncio.run(
+            runtime.start_runtime(settings, _session_factory(tmp_path))
+        )
+    messages = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("abc" in m for m in messages)
+    asyncio.run(components.shutdown())
+
+
+def test_start_runtime_no_allowlist_warning_when_valid(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A valid allowlist logs no allowlist warning (issue #112)."""
+    fake_app = _FakeTelegramApp()
+    monkeypatch.setattr(
+        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+    )
+    with caplog.at_level(logging.WARNING):
+        components = asyncio.run(
+            runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
+        )
+    assert not [r for r in caplog.records if "allowlist problem" in r.getMessage()]
+    asyncio.run(components.shutdown())
+
+
 def test_start_runtime_starts_scheduler_and_bot(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

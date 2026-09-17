@@ -12,17 +12,17 @@ issue #57 / M4-T1) into a Telegram priority card with inline action buttons:
 The pure business logic lives here and is fully unit-tested: card formatting
 (``format_reminder_card``), countdown text (``countdown_text``), the priority
 emoji map (``priority_emoji``), the low-priority suppression rule
-(``should_push``), the single-user allowlist (``is_allowed_user``), the inline
-callback-data codec (``callback_data`` / ``parse_callback_data``) and the
-per-action state transitions (``ack_delivery``, ``snooze_delivery``,
-``delete_delivery``). The impure Telegram wiring (``send_reminder_card`` /
-``make_telegram_job_func``) is a thin adapter over python-telegram-bot v21
-(polling) and is kept to a minimum.
+(``should_push``), the inline callback-data codec (``callback_data`` /
+``parse_callback_data``) and the per-action state transitions
+(``ack_delivery``, ``snooze_delivery``, ``delete_delivery``). The impure
+Telegram wiring (``send_reminder_card`` / ``make_telegram_job_func``) is a
+thin adapter over python-telegram-bot v21 (polling) and is kept to a minimum.
 
-Only the configured single Telegram user (``settings.telegram_user_id``) is
-allowed to receive cards; anything else is rejected by ``is_allowed_user``. Low
-priority events are never pushed (``should_push``). The bot never sends a card
-when no bot token is configured.
+Only allowlisted Telegram users (``settings.telegram_allowlist`` —
+``TELEGRAM_USER_IDS`` combined with the legacy ``TELEGRAM_USER_ID``, issue
+#112) receive cards; with an empty allowlist nothing is sent (fail closed).
+Low priority events are never pushed (``should_push``). The bot never sends a
+card when no bot token is configured.
 """
 
 from __future__ import annotations
@@ -99,17 +99,6 @@ def should_push(priority: EventPriority) -> bool:
     Low-priority events are recorded but never proactively pushed to Telegram.
     """
     return priority != EventPriority.LOW
-
-
-def is_allowed_user(user_id: str | None, allowed: str | None) -> bool:
-    """Single-user allowlist: True only when the sender is the configured user.
-
-    ``None`` for either side means the allowlist is not configured, so nothing
-    is allowed (fail closed).
-    """
-    if user_id is None or allowed is None:
-        return False
-    return str(user_id) == str(allowed)
 
 
 def countdown_text(target: datetime, now: datetime) -> str:
@@ -395,15 +384,16 @@ def make_telegram_job_func(
     The returned function matches the scheduler's job signature
     ``(event_id, occurrence_id, offset)`` and reuses ``deliver_reminder`` so the
     at-least-once / audit-trail semantics from the scheduler are preserved. It
-    fails closed: no bot token, no allowed user, a low-priority event, or a
-    channel the event isn't configured for means nothing is sent (issue #62).
+    fails closed: no bot token, an empty/invalid allowlist, a low-priority
+    event, or a channel the event isn't configured for means nothing is sent
+    (issue #62). Every allowlisted user id (issue #112) receives the card;
+    delivery is recorded once (sent or failed) regardless of recipient count.
 
     When ``scheduler`` is provided and the event has ``repeat_until_ack`` set, a
     successfully delivered reminder that hasn't been acknowledged is re-scheduled
     (repeat-until-ack, issue #62).
     """
-    allowed = settings.telegram_user_id
-    chat_id = _parse_chat_id(allowed)
+    chat_ids = settings.telegram_allowlist.ids
 
     def job_func(event_id: int, occurrence_id: str, offset: str) -> bool:
         now_utc = now or datetime.now(UTC)
@@ -417,18 +407,19 @@ def make_telegram_job_func(
                     return None
                 if not channel_allows(event.channels, EventChannel.TELEGRAM):
                     return None
-                if not is_allowed_user(allowed, settings.telegram_user_id):
+                if not chat_ids:
                     raise PermissionError("telegram user not allowed")
                 text = format_reminder_card(event, occurrence_id, offset, now=now_utc)
-                _run_send(
-                    bot,
-                    chat_id,
-                    text,
-                    event_id,
-                    occurrence_id,
-                    offset,
-                    snooze_allowed=bool(event.snooze_allowed),
-                )
+                for chat_id in chat_ids:
+                    _run_send(
+                        bot,
+                        chat_id,
+                        text,
+                        event_id,
+                        occurrence_id,
+                        offset,
+                        snooze_allowed=bool(event.snooze_allowed),
+                    )
 
         delivered = deliver_reminder(
             session_factory,
@@ -480,16 +471,6 @@ def _is_acked(
             .first()
             is not None
         )
-
-
-def _parse_chat_id(allowed: str | None) -> int | None:
-    """Parse the allowlisted Telegram user id into a chat id (or None)."""
-    if allowed is None:
-        return None
-    try:
-        return int(allowed)
-    except ValueError:
-        return None
 
 
 def _run_send(
