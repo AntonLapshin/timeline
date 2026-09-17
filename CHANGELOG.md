@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Test
+
+- **Close the two test gaps found in the PR #115 review (issue #116):**
+  `parse_allowlist` now has a dedicated test for non-ASCII digit entries
+  (`"٤٢"`, `"²"` — `str.isdigit()` is True and `int()` would even accept
+  them, but the `isascii()` guard drops them so a lookalike id can never
+  match a real Telegram user; fail-closed behavior verified), replacing the
+  over-claiming docstring on the signed-numbers test; and a new outbound
+  test covers the multi-recipient send-failure path — with two allowlisted
+  ids, a raising first `send_message` aborts the pass (the second recipient
+  is not attempted), the delivery is recorded as `failed` with the error,
+  and the exception re-raises for the scheduler's retry layer. Both modules
+  stay at 100% coverage; no behavior change.
+
 ### Added
 
 - **Actionable smart-input parse failures + server-side diagnostics (issue

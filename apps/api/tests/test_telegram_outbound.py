@@ -892,6 +892,43 @@ def test_make_telegram_job_func_sends_to_all_allowlisted_ids(
         assert session.query(DeliveryLog).one().status == "sent"
 
 
+def test_make_telegram_job_func_first_recipient_failure_stops_fanout(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A failed send to one recipient aborts the pass (issue #116).
+
+    With several allowlisted ids, a raising ``send_message`` for the first
+    recipient means the remaining recipients are not attempted on that pass;
+    the delivery is recorded as ``failed`` (with the error) and the exception
+    re-raises so the scheduler's retry layer can requeue the whole reminder.
+    """
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    attempted: list[int] = []
+
+    class FlakyBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            attempted.append(chat_id)
+            if chat_id == 111:
+                raise RuntimeError("telegram unavailable")
+
+    settings = Settings(telegram_user_ids="111,222", telegram_bot_token="token")
+    job_func = make_telegram_job_func(session_factory, FlakyBot(), settings, now=_now())
+
+    with pytest.raises(RuntimeError, match="telegram unavailable"):
+        job_func(event_id, "occ", "1h")
+    # The failure aborted the loop: the second id was never attempted.
+    assert attempted == [111]
+    with session_factory() as session:
+        log = session.query(DeliveryLog).one()
+        assert log.status == "failed"
+        assert "telegram unavailable" in (log.error or "")
+
+
 def test_make_telegram_job_func_combines_legacy_and_multi_vars(
     session_factory: sessionmaker[Session],
 ) -> None:
