@@ -18,12 +18,15 @@ export interface EventDrawerProps {
 }
 
 /**
- * The read-only event drawer (issue #38).
+ * The read-only event drawer as a right-side slide-over panel (issue #38,
+ * reworked into a slide-over in issue #122).
  *
- * A thin, dumb view: it renders the selected event's details (title, priority,
- * tag, recurrence, notes), its next occurrences, and a reminder preview — all
- * derived in `src/core`. Closes via the ✕ button or the Esc key (handled in
- * the view model). No business logic lives here.
+ * A thin, dumb view: it renders the fixed slide-over shell (dimmed backdrop,
+ * right-anchored panel, slide-in animation) and the selected event's details
+ * (title, priority, tag, recurrence, notes), its next occurrences, and a
+ * reminder preview — all derived in `src/core`. Closes via the ✕ button, the
+ * Esc key (handled in the view model) or a backdrop click. Body-scroll
+ * locking lives in the view model. No business logic lives here.
  */
 export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
   const {
@@ -37,18 +40,10 @@ export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
     deliveriesError,
   } = drawer;
 
+  // With a slide-over, the panel only renders when an event is selected —
+  // the app composition only mounts it while the drawer is open.
   if (!event) {
-    return (
-      <div
-        className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-600 dark:bg-slate-800"
-        role="status"
-        data-testid="event-drawer-empty"
-      >
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Select an event to see its details.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   const priority = priorityStyle(event.priority);
@@ -57,12 +52,22 @@ export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
   const tag = firstTag ? tagStyle(firstTag) : null;
 
   return (
-    <aside
-      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800"
-      role="dialog"
-      aria-label={`Event: ${event.title}`}
-      data-testid="event-drawer"
-    >
+    <>
+      {/* Dimmed backdrop: click to close. Sits below the panel (z-40 vs
+          z-50) and below the wizard modal so the wizard can stack on top. */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 z-40 animate-[drawer-fade-in_200ms_ease-out] bg-slate-900/40 dark:bg-black/60"
+        data-testid="event-drawer-backdrop"
+        onClick={drawer.close}
+      />
+      <aside
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto animate-[drawer-slide-in_200ms_ease-out] border-l border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Event: ${event.title}`}
+        data-testid="event-drawer"
+      >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -218,6 +223,7 @@ export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
           Edit event
         </button>
       )}
-    </aside>
+      </aside>
+    </>
   );
 }

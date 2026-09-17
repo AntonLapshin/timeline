@@ -72,14 +72,47 @@ describe("EventDrawer", () => {
     vi.clearAllMocks();
   });
 
-  it("renders the empty state when no event is selected", () => {
+  it("renders nothing when no event is selected (slide-over renders only when open)", () => {
     const close = vi.fn();
     useEventDrawerMock.mockReturnValue(
       drawerState({ event: null, open: false, preview: null, close }),
     );
+    const { container } = render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.queryByTestId("event-drawer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("event-drawer-backdrop")).not.toBeInTheDocument();
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders the slide-over shell: fixed right-anchored panel over a dimmed backdrop", () => {
+    useEventDrawerMock.mockReturnValue(drawerState());
     render(<EventDrawer drawer={useEventDrawerMock()} />);
-    expect(screen.getByTestId("event-drawer-empty")).toBeInTheDocument();
-    expect(screen.getByText(/Select an event/)).toBeInTheDocument();
+    const panel = screen.getByTestId("event-drawer");
+    expect(panel).toHaveClass("fixed");
+    expect(panel).toHaveClass("inset-y-0");
+    expect(panel).toHaveClass("right-0");
+    // Full width on narrow viewports, capped at max-w-md on wider ones.
+    expect(panel).toHaveClass("w-full");
+    expect(panel).toHaveClass("max-w-md");
+    expect(panel).toHaveAttribute("aria-modal", "true");
+    const backdrop = screen.getByTestId("event-drawer-backdrop");
+    expect(backdrop).toHaveClass("fixed");
+    expect(backdrop).toHaveClass("inset-0");
+  });
+
+  it("closes when the backdrop is clicked", () => {
+    const close = vi.fn();
+    useEventDrawerMock.mockReturnValue(drawerState({ close }));
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    fireEvent.click(screen.getByTestId("event-drawer-backdrop"));
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not close when the panel itself is clicked", () => {
+    const close = vi.fn();
+    useEventDrawerMock.mockReturnValue(drawerState({ close }));
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    fireEvent.click(screen.getByRole("dialog", { name: /HRA/ }));
+    expect(close).not.toHaveBeenCalled();
   });
 
   it("renders the event title, priority, tag, recurrence and notes", () => {

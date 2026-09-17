@@ -76,24 +76,6 @@ function populatedDrawerState(): EventDrawerState {
   };
 }
 
-/** An empty (closed) event-drawer state. */
-function emptyDrawerState(): EventDrawerState {
-  return {
-    event: null,
-    open: false,
-    loading: false,
-    error: null,
-    preview: null,
-    occurrences: [],
-    deliveriesLoading: false,
-    deliveriesError: null,
-    deliveries: [],
-    openDrawer: noop,
-    openFromOccurrence: async () => {},
-    close: noop,
-  };
-}
-
 /** A wizard state at a given step, used to render the wizard previews. */
 function wizardStateAt(step: 1 | 2 | 3): EventWizardState {
   return {
@@ -294,16 +276,14 @@ export function ShowcasePage() {
         </ShowcaseState>
       </ShowcaseSection>
 
-      {/* EventDrawer — populated + empty */}
+      {/* EventDrawer — populated (the slide-over only renders when an
+          event is selected, so there is no empty state to show) */}
       <ShowcaseSection
         title="EventDrawer"
-        caption="Read-only event details with reminders, next occurrences and the delivery log."
+        caption="Read-only event details as a right-side slide-over with reminders, next occurrences and the delivery log."
       >
         <ShowcaseState label="Populated">
           <EventDrawer drawer={populatedDrawerState()} onEdit={noop} />
-        </ShowcaseState>
-        <ShowcaseState label="Empty">
-          <EventDrawer drawer={emptyDrawerState()} />
         </ShowcaseState>
       </ShowcaseSection>
 

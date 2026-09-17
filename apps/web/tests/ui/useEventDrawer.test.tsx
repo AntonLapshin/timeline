@@ -217,6 +217,23 @@ describe("useEventDrawer", () => {
     expect(result.current.occurrences).toEqual([]);
   });
 
+  it("locks body scroll while open and restores it on close", () => {
+    const { result } = renderHook(() => useEventDrawer());
+    expect(document.body.style.overflow).toBe("");
+    act(() => result.current.openDrawer(sampleEvent()));
+    expect(document.body.style.overflow).toBe("hidden");
+    act(() => result.current.close());
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("restores body scroll when the hook unmounts while open", () => {
+    const { result, unmount } = renderHook(() => useEventDrawer());
+    act(() => result.current.openDrawer(sampleEvent()));
+    expect(document.body.style.overflow).toBe("hidden");
+    unmount();
+    expect(document.body.style.overflow).toBe("");
+  });
+
   it("closes on the Escape key", async () => {
     const { result } = renderHook(() => useEventDrawer());
     act(() => result.current.openDrawer(sampleEvent()));
