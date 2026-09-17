@@ -8,8 +8,9 @@ const base = "/timeline/";
 export default defineConfig({
   plugins: [react()],
   base,
-  // The web app is loopback-only by design: bind to 127.0.0.1:8123 (the port
+  // The web app is LAN-accessible by design: bind to 0.0.0.0:8123 (the port
   // the rest of the project uses for local runs and the Playwright smoke test).
+  // Exposing to the LAN without auth is part of the plan (trusted LAN only).
   server: {
     host: "0.0.0.0",
     port: 8123,

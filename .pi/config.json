@@ -9,8 +9,8 @@
     "demoUrl": "https://AntonLapshin.github.io/timeline/"
   },
   "pi": {
-    "model": "",
-    "provider": "",
+    "model": "zai-org/GLM-5.3-Flash",
+    "provider": "joingonka",
     "contextMaxTokens": 0,
     "maxRetries": 2,
     "retryBaseDelayMs": 5000,

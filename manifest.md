@@ -17,16 +17,16 @@ A personal, local-first global schedule that remembers everything: capture one-t
 ## Goals
 
 - Never forget: capture any future or recurrent event in under 30 seconds via Web UI or Telegram (text/voice).
-- See everything at home: timeline + calendar views, monthly counts, search/filter on a localhost-only web app (127.0.0.1:8123, no login).
+- See everything at home and on the LAN: timeline + calendar views, monthly counts, search/filter on a LAN-accessible web app (0.0.0.0:8123, no login) — exposing to the LAN without auth is part of the plan.
 - Remind from anywhere: per-event configurable Telegram reminders (Telegram-first; email is a v1 feature-flag only), delivered outside home via Telegram cloud while the app polls from the home machine.
 - Add from anywhere: Web form/wizard (home) plus Telegram text and local-voice input (anywhere), AI-parsed via a configurable JoinGonka direct call into structured event drafts that are confirmed before saving.
-- Local & private by construction: public repo with only code/docs/prompts/schemas; data (./data) and secrets (.env) gitignored and never committed; web bound to loopback only.
+- Local & private by construction: public repo with only code/docs/prompts/schemas; data (./data) and secrets (.env) gitignored and never committed; web bound to 0.0.0.0 for LAN access without auth (part of the plan, trusted LAN only).
 - Low maintenance on Omarchy: systemd --user service as daily driver (Compose for dev), SQLite, local nightly backups/rotation, one-command restore.
 
 ## Non-goals
 
 - Multi-user / family sharing / collaboration (single local user only).
-- Remote web access, hosting, password login, TLS, tunnels, VPS, or domains — web is loopback-only with no auth.
+- Public-internet hosting, password login, TLS, tunnels, VPS, or domains — LAN web access without auth is part of the plan (trusted LAN only); public-internet exposure remains out of scope.
 - Public sharing links.
 - Mobile native apps (responsive web suffices for v1).
 - Full email/calendar sync (Google Calendar import/export is ROADMAP-only).

@@ -55,14 +55,16 @@ Health probe: `GET http://127.0.0.1:8123/healthz` → `{"status": "ok", "uptime_
 
 ### Local run paths
 
-Two ways to run timeline locally, both bound to loopback only
-(`127.0.0.1`, **no `0.0.0.0`**) because the app has no auth:
+Two ways to run timeline locally, both bound to `0.0.0.0:8123`
+for LAN access — exposing to the LAN without auth is part of the plan
+(trusted LAN only):
 
-> **Exposing to the LAN is opt-in only (issue #97).** To access the web app
-> from your host system / another machine on your LAN you must explicitly set
-> `TIMELINE_ALLOW_NON_LOOPBACK=1` **and** `TIMELINE_HOST=0.0.0.0` (and whitelist
-> the port in the firewall). This exposes the app to the LAN with **no auth** —
-> anyone on the network can read/write events — so it stays off by default.
+> **LAN access without auth is by design.** The web app listens on
+> `0.0.0.0:8123` so it is reachable from your host system / another machine
+> on your LAN via `http://<machine-ip>:8123/timeline/`. Whitelist the port in
+> the firewall (`sudo ufw allow 8123/tcp`). Anyone on the LAN can read/write
+> events — restrict to a trusted LAN; public-internet exposure remains out
+> of scope.
 > See [Host-system / LAN access](#host-system--lan-access-opt-in-issue-97) below.
 
 **1. Docker Compose (recommended for dev).** One command starts web + api and
@@ -169,13 +171,12 @@ Both paths read secrets from the local `.env` (gitignored) — never from
 committed files. See `systemd/timeline.service`, `systemd/timeline-backup.*`
 and `docker-compose.yml` for details.
 
-#### Host-system / LAN access (opt-in, issue #97)
+#### Host-system / LAN access (by design, issue #97)
 
-By default the app binds to loopback only (`127.0.0.1`) and the fail-closed
-startup guard **refuses** to start on any non-loopback host — because the app
-has **no auth**. To access the web app from your host system or another machine
-on your LAN, you must explicitly opt in **and** whitelist the port in the
-firewall:
+LAN access without auth is part of the plan (trusted LAN only). The web app
+binds to `0.0.0.0:8123` and the API opt-in (`TIMELINE_ALLOW_NON_LOOPBACK=1`)
+covers the backend guard. To reach it from your host system or another machine
+on your LAN, whitelist the port in the firewall:
 
 ```bash
 # 1. Opt in + bind to all interfaces (in .env or the systemd unit):
@@ -191,11 +192,10 @@ Then open `http://<machine-ip>:8123` from the host system. If you use the
 `systemd/timeline.service` unit, also change its `ExecStart` `--host` to
 `0.0.0.0` and add `Environment=TIMELINE_ALLOW_NON_LOOPBACK=1`.
 
-> **Security trade-off:** binding to `0.0.0.0` exposes the app to your LAN
+> **Security note:** binding to `0.0.0.0` exposes the app to your LAN
 > with **no auth** — anyone on the network can read and write events. This is
-> why it is **opt-in only**; the default stays loopback-only and safe. Prefer
-> keeping the app on `127.0.0.1` and using the Telegram interface for
-> anywhere access.
+> accepted by design for a trusted LAN; do not expose to the public internet.
+> Use the Telegram interface for anywhere access outside the LAN.
 
 ---
 
