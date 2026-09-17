@@ -24,7 +24,10 @@ from app import models  # noqa: E402,F401  (registers models on Base.metadata)
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: the default (True) would disable every
+    # logger created before the migration runs (e.g. ``app.*`` loggers when
+    # migrations run in-process), silencing the app for the rest of the process.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

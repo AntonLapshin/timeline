@@ -33,6 +33,7 @@ from app.enums import (
 )
 from app.llm_parse import ParsedDraft
 from app.models import Event, TelegramInbound
+from app.stt import SttResult
 from app.telegram_inbound import (
     Command,
     DraftAction,
@@ -40,6 +41,8 @@ from app.telegram_inbound import (
     PendingDraft,
     _handle_callback_query,
     _handle_update,
+    _handle_voice_update,
+    _transcribe_voice_message,
     build_draft_keyboard,
     build_inbound_record,
     build_telegram_inbound_application,
@@ -55,6 +58,8 @@ from app.telegram_inbound import (
     parse_draft_callback,
     parse_upcoming_days,
     record_inbound,
+    voice_error_reply,
+    voice_unavailable_reply,
 )
 
 
@@ -862,7 +867,7 @@ def test_build_telegram_inbound_application_callback_save(
         settings, session_factory, now=_now(), draft_store=store
     )
     assert app is not None
-    callback = app.handlers[0][1].callback
+    callback = app.handlers[0][2].callback  # [0]=text, [1]=voice, [2]=callback
 
     answered: list[str] = []
     sent: list[str] = []
@@ -900,7 +905,7 @@ def test_build_telegram_inbound_application_callback_guards() -> None:
     settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
     app = build_telegram_inbound_application(settings, None, now=_now())
     assert app is not None
-    callback = app.handlers[0][1].callback
+    callback = app.handlers[0][2].callback  # [0]=text, [1]=voice, [2]=callback
 
     class _NoQueryUpdate:
         callback_query = None
@@ -1018,3 +1023,332 @@ def test_handle_callback_query_bad_payload() -> None:
     store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
     query = _FakeCallback("bogus:data", 42, 123)
     assert _handle_callback_query(query, settings, None, store, now=_now()) is None
+
+
+# --- voice messages (issue #111) -----------------------------------------------
+
+
+class _FakeVoice:
+    def __init__(self, file_id: str | None = "FILE123", duration: float | None = 2.0):
+        self.file_id = file_id
+        self.duration = duration
+
+
+class _FakeVoiceMessage(_FakeMessage):
+    """A voice message: no text, a ``voice`` attachment."""
+
+    def __init__(
+        self,
+        chat: _FakeChat,
+        user: _FakeUser,
+        file_id: str | None = "FILE123",
+        duration: float | None = 2.0,
+        message_id: int = 7,
+    ) -> None:
+        super().__init__(chat, user, None, message_id)
+        self.voice = _FakeVoice(file_id, duration)
+
+
+class _FakeVoiceUpdate:
+    def __init__(self, message: _FakeVoiceMessage) -> None:
+        self.effective_message = message
+        self.message = message
+
+
+class _FakeTelegramFile:
+    """A fake PTB file that 'downloads' by writing bytes to the target path."""
+
+    def __init__(self, calls: list[str]) -> None:
+        self._calls = calls
+
+    async def download_to_drive(self, path: str) -> None:
+        self._calls.append(f"download:{path}")
+        Path(path).write_bytes(b"OGGDATA")
+
+
+class _FakeBot:
+    """A fake bot whose ``get_file`` returns a downloadable fake file."""
+
+    def __init__(self, calls: list[str], *, fail: bool = False) -> None:
+        self._calls = calls
+        self._fail = fail
+
+    async def get_file(self, file_id: str) -> _FakeTelegramFile:
+        if self._fail:
+            raise RuntimeError("file download failed")
+        self._calls.append(f"get_file:{file_id}")
+        return _FakeTelegramFile(self._calls)
+
+
+def _voice_transcriber(
+    result: SttResult, seen: list[tuple[str, float | None]]
+) -> object:
+    """A fake VoiceTranscriber recording (ogg_path, duration) calls."""
+
+    def transcribe(
+        ogg_path: str, duration: float | None, settings: Settings
+    ) -> SttResult:
+        seen.append((ogg_path, duration))
+        return result
+
+    return transcribe
+
+
+def test_voice_unavailable_reply_points_at_text_path() -> None:
+    """The unavailable reply is explicit and points at the /add text path."""
+    reply = voice_unavailable_reply()
+    assert "voice transcription isn't available" in reply.lower()
+    assert "/add" in reply
+
+
+def test_voice_error_reply_formats_detail() -> None:
+    """The error reply includes the detail (or 'unknown error')."""
+    assert "boom" in voice_error_reply("boom")
+    assert "unknown error" in voice_error_reply(None)
+
+
+def test_handle_voice_update_gates() -> None:
+    """Group chats, non-allowed users, and non-voice messages are ignored."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    group = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "group"), _FakeUser(42)))
+    stranger = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(999)))
+    import asyncio
+
+    assert asyncio.run(_handle_voice_update(group, settings)) is None
+    assert asyncio.run(_handle_voice_update(stranger, settings)) is None
+    assert asyncio.run(_handle_voice_update(_FakeUpdate(None), settings)) is None
+    # A text message (no voice attribute) is not a voice update.
+    text_update = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "hello")
+    )
+    assert asyncio.run(_handle_voice_update(text_update, settings)) is None
+
+
+@pytest.mark.parametrize("kwargs", [{"file_id": None}, {}, {"bot": None}])
+def test_handle_voice_update_missing_file_or_bot_replies_error(
+    kwargs: dict,
+) -> None:
+    """A voice message without file_id or bot gets an explicit error reply."""
+    import asyncio
+
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    message = _FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42))
+    if "file_id" in kwargs:
+        message.voice.file_id = kwargs["file_id"]
+    update = _FakeUpdate(message)
+    reply = asyncio.run(_handle_voice_update(update, settings, bot=kwargs.get("bot")))
+    assert reply is not None
+    assert "voice file is unavailable" in reply.text
+
+
+def test_handle_voice_update_unavailable_stt_replies_clearly() -> None:
+    """No local STT (Docker) -> clear 'voice transcription unavailable' reply."""
+    import asyncio
+
+    calls: list[str] = []
+    seen: list[tuple[str, float | None]] = []
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    reply = asyncio.run(
+        _handle_voice_update(
+            update,
+            settings,
+            bot=_FakeBot(calls),
+            transcribe=_voice_transcriber(SttResult(ok=False, unavailable=True), seen),
+        )
+    )
+    assert reply is not None
+    assert "voice transcription isn't available" in reply.text.lower()
+    assert "/add" in reply.text
+    # The file is downloaded first (get_file + download_to_drive); only the
+    # transcription step then reports local STT as unavailable.
+    assert len(calls) == 2
+    assert calls[0] == "get_file:FILE123"
+    assert calls[1].startswith("download:")
+    assert len(seen) == 1
+
+
+def test_handle_voice_update_transcription_error_replies() -> None:
+    """A failed transcription gets an explicit error reply, not silence."""
+    import asyncio
+
+    calls: list[str] = []
+    seen: list[tuple[str, float | None]] = []
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    reply = asyncio.run(
+        _handle_voice_update(
+            update,
+            settings,
+            bot=_FakeBot(calls),
+            transcribe=_voice_transcriber(
+                SttResult(ok=False, error="ffmpeg missing"), seen
+            ),
+        )
+    )
+    assert reply is not None
+    assert "couldn't transcribe" in reply.text.lower()
+    assert "ffmpeg missing" in reply.text
+
+
+def test_handle_voice_update_empty_transcription_replies_error() -> None:
+    """A 'successful' transcription with empty text gets the error reply."""
+    import asyncio
+
+    calls: list[str] = []
+    seen: list[tuple[str, float | None]] = []
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    store = DraftStore()
+    reply = asyncio.run(
+        _handle_voice_update(
+            update,
+            settings,
+            bot=_FakeBot(calls),
+            draft_store=store,
+            transcribe=_voice_transcriber(SttResult(ok=True, text=""), seen),
+        )
+    )
+    assert reply is not None
+    assert "couldn't transcribe" in reply.text.lower()
+    assert "unknown error" in reply.text
+    # An empty transcript never reaches the parse -> draft flow.
+    assert store.get(123) is None
+
+
+def test_handle_voice_update_download_failure_replies_error() -> None:
+    """A download failure (bot.get_file raises) replies with the error."""
+    import asyncio
+
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    reply = asyncio.run(
+        _handle_voice_update(
+            update, settings, bot=_FakeBot([], fail=True), transcribe=None
+        )
+    )
+    assert reply is not None
+    assert "file download failed" in reply.text
+
+
+def test_handle_voice_update_success_routes_to_draft_flow(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A transcribed voice message follows the same parse -> draft flow as /add."""
+    import asyncio
+
+    calls: list[str] = []
+    seen: list[tuple[str, float | None]] = []
+
+    def transcribe(
+        ogg_path: str, duration: float | None, settings: Settings
+    ) -> SttResult:
+        assert Path(ogg_path).exists()  # downloaded file exists during transcription
+        seen.append((ogg_path, duration))
+        return SttResult(ok=True, text="dentist tomorrow 9am")
+
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
+    )
+    store = DraftStore()
+    http = _FakeHttp(_parse_response())
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    reply = asyncio.run(
+        _handle_voice_update(
+            update,
+            settings,
+            session_factory,
+            bot=_FakeBot(calls),
+            now=_now(),
+            http_client=http,
+            draft_store=store,
+            transcribe=transcribe,
+        )
+    )
+    assert reply is not None
+    assert "📝 Dentist" in reply.text
+    assert reply.reply_markup == [
+        [
+            ("💾 Save", "draft:save:0"),
+            ("✏️ Edit", "draft:edit:0"),
+            ("🗑 Discard", "draft:discard:0"),
+        ]
+    ]
+    pending = store.get(123)
+    assert pending is not None
+    assert pending.raw_input == "dentist tomorrow 9am"
+    # The temp .ogg file was removed after transcription.
+    assert seen and not Path(seen[0][0]).exists()
+    # Inbound record is persisted with message_type "draft".
+    with session_factory() as session:
+        assert session.query(TelegramInbound).one().message_type == "draft"
+
+
+def test_transcribe_voice_message_always_deletes_temp_file() -> None:
+    """The temp .ogg is deleted even when transcription raises."""
+    import asyncio
+
+    calls: list[str] = []
+    seen: list[tuple[str, float | None]] = []
+
+    def transcribe(
+        ogg_path: str, duration: float | None, settings: Settings
+    ) -> SttResult:
+        seen.append((ogg_path, duration))
+        raise RuntimeError("voxtype exploded")
+
+    with pytest.raises(RuntimeError, match="voxtype exploded"):
+        asyncio.run(
+            _transcribe_voice_message(
+                _FakeBot(calls),
+                "FILE123",
+                2.0,
+                Settings(telegram_user_id="42", telegram_bot_token="123:abc"),
+                transcribe=transcribe,
+            )
+        )
+    assert seen and not Path(seen[0][0]).exists()
+
+
+def test_build_telegram_inbound_application_voice_handler(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The registered VOICE handler transcribes and replies via the bot."""
+    import asyncio
+
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
+    )
+    store = DraftStore()
+    http = _FakeHttp(_parse_response())
+    app = build_telegram_inbound_application(
+        settings,
+        session_factory,
+        now=_now(),
+        http_client=http,
+        draft_store=store,
+        transcribe=lambda path, duration, s: SttResult(
+            ok=True, text="dentist tomorrow 9am"
+        ),
+    )
+    assert app is not None
+    voice_handler = app.handlers[0][1].callback  # [0]=text, [1]=voice, [2]=callback
+
+    calls: list[str] = []
+    replied: list[str] = []
+
+    class _ReplyVoiceMessage(_FakeVoiceMessage):
+        async def reply_text(self, text: str, **kwargs: object) -> None:
+            replied.append(text)
+
+    class _FakeContext:
+        bot = _FakeBot(calls)
+
+    update = _FakeUpdate(_ReplyVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+
+    asyncio.run(voice_handler(update, _FakeContext()))
+
+    assert len(replied) == 1
+    assert "📝 Dentist" in replied[0]
+    pending = store.get(123)
+    assert pending is not None and len(pending.drafts) == 1

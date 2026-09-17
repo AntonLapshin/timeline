@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Wire the Telegram bot + reminder scheduler into the API runtime (issue
+  #111, M9-T1):** both subsystems were built and tested as modules but never
+  started in production — the API lifespan only created tables and seeded, so
+  the bot never replied and no reminder ever fired. The new
+  `app.runtime.start_runtime` (called from the `app.main` lifespan) starts,
+  with `BOT_TOKEN` set, the APScheduler reminder engine (drain + failed-requeue
+  + outbound Telegram delivery via `make_telegram_job_func`) and the Telegram
+  inbound bot polling (`initialize` → `start` → `start_polling`) as background
+  tasks in the API process, with best-effort clean shutdown on app stop; with
+  no `BOT_TOKEN` nothing starts (one clear log line) and the app behaves
+  exactly as before. Startup failures are logged and surfaced as
+  `telegram: error` on `/healthz` instead of taking the API down.
+  `/healthz` now reports a `components` map (`scheduler: running|disabled`,
+  `telegram: configured|not_configured|error`) so the owner can self-diagnose
+  from the browser. Voice messages route through local STT → the same
+  parse → draft flow as `/add`; when local STT is unavailable (the Docker
+  image ships no voxtype/ffmpeg) the sender gets a clear "voice transcription
+  unavailable" reply instead of silence, and the README documents the Docker
+  STT limitation + the native-run path for voice. Also fixes alembic's
+  `fileConfig` disabling pre-existing loggers (`disable_existing_loggers=False`)
+  which silenced `app.*` loggers for the rest of the process after an
+  in-process migration run.
+
 - **Backend lint: fix ruff `I001` in `apps/api/app/config.py` (PR #110
   review, unblocks issue #105 AC6 "CI green"):** insert the missing blank
   line after the import block before `_detect_repo_root` (ruff isort
