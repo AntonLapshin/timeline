@@ -20,7 +20,7 @@ packages/shared/   # Shared contracts — event JSON schema v1 + enums used by w
 
 ```bash
 npm ci
-npm run dev          # Vite dev server (127.0.0.1:8123)
+npm run dev          # Vite dev server (0.0.0.0:8123 — localhost + LAN reachable)
 npm run lint         # eslint --max-warnings 0
 npm test             # Vitest (all workspaces)
 npm run test:coverage  # Vitest coverage gate: 100% on src/core/**/*.ts
@@ -55,9 +55,18 @@ Health probe: `GET http://127.0.0.1:8123/healthz` → `{"status": "ok", "uptime_
 
 ### Local run paths
 
-Two ways to run timeline locally, both bound to `0.0.0.0:8123`
-for LAN access — exposing to the LAN without auth is part of the plan
-(trusted LAN only):
+Two ways to run timeline locally. The web UI is LAN-accessible by design (no
+auth — trusted LAN only), while the bind posture differs per component:
+
+- **Web dev server (`npm run dev`)** — binds `0.0.0.0:8123` by default
+  (owner decision, commit 3ccc3a5), so the dev web UI is reachable on
+  localhost **and** from the LAN. No auth — anyone on the LAN can read/write
+  events.
+- **Docker Compose** — publishes web `8123` and API `8124` on `0.0.0.0` by
+  design (trusted LAN only, no auth).
+- **API (uvicorn / systemd)** — loopback default (`127.0.0.1:8123`) with a
+  fail-closed bind guard; LAN exposure requires the explicit opt-in
+  (`TIMELINE_ALLOW_NON_LOOPBACK=1`, issue #97).
 
 > **LAN access without auth is by design.** The web app listens on
 > `0.0.0.0:8123` so it is reachable from your host system / another machine
@@ -65,7 +74,7 @@ for LAN access — exposing to the LAN without auth is part of the plan
 > the firewall (`sudo ufw allow 8123/tcp`). Anyone on the LAN can read/write
 > events — restrict to a trusted LAN; public-internet exposure remains out
 > of scope.
-> See [Host-system / LAN access](#host-system--lan-access-opt-in-issue-97) below.
+> See [Host-system / LAN access](#host-system--lan-access-by-design-issue-97) below.
 
 **1. Docker Compose (recommended for dev).** One command starts web + api and
 keeps the SQLite database in a named volume. Ports bind `0.0.0.0` by design
@@ -87,7 +96,7 @@ sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp  # firewall for LAN access
 
 After changing `docker-compose.yml`, recreate the containers so the new port
 bindings take effect: `docker compose up -d --build` (a restart alone keeps
-the old `127.0.0.1`-only bindings).
+the old bindings).
 
 `scheduler` / `bot` services will be added to the compose stack in later
 milestones. `docker compose down` stops the stack; data persists in the
@@ -198,6 +207,10 @@ sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp
 Then open `http://<machine-ip>:8123/timeline/` from the host system. If the
 containers were started before this fix, recreate them so the new bindings
 take effect: `docker compose up -d --build`.
+
+The Vite dev server (`npm run dev`) already binds `0.0.0.0:8123` by default
+(owner decision, commit 3ccc3a5), so the dev web UI is LAN-reachable without
+any opt-in — only the API keeps the loopback default + opt-in guard (below).
 
 For the native `systemd --user` path (loopback by default), opt in explicitly:
 
@@ -421,7 +434,7 @@ JoinGonka (OpenAI-compatible) call per parse:
   fails closed if `TIMELINE_HOST` is not loopback-only. Set `TIMELINE_HOST` to
   `127.0.0.1` (or `localhost`/`::1`) in `.env` and restart — or, to expose the
   app to your LAN, explicitly opt in with `TIMELINE_ALLOW_NON_LOOPBACK=1`
-  **and** `TIMELINE_HOST=0.0.0.0` (see [Host-system / LAN access](#host-system--lan-access-opt-in-issue-97)).
+  **and** `TIMELINE_HOST=0.0.0.0` (see [Host-system / LAN access](#host-system--lan-access-by-design-issue-97)).
 - **Port 8123 already in use**: another process is bound to `127.0.0.1:8123`.
   Find and stop it (`systemctl --user stop timeline`, `ss -ltnp | grep 8123`)
   or change `TIMELINE_PORT` in `.env` (and the copied `systemd/timeline.service`

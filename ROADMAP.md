@@ -26,10 +26,12 @@
 - **Problem it solves:** users already keep calendars in Google Calendar; a
   one-way or two-way sync lets timeline events appear there (and existing
   Google events appear in timeline) without re-entering them, and makes the
-  schedule accessible outside the loopback-only web app.
+  schedule accessible outside the LAN-bound web app (beyond the home
+  network).
 - **Out-of-scope for v1:** yes — v1 is explicitly local-first with no remote
   web access and no calendar sync; sync requires OAuth + remote network access,
-  which contradicts the v1 loopback-only, no-auth posture.
+  which contradicts the v1 LAN-only, no-auth posture (public-internet
+  exposure stays out of scope).
 
 ### 2. `/ask` over history (conversational querying of past events)
 
