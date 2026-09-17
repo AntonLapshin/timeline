@@ -23,7 +23,10 @@ export interface SummaryState {
  * injected `apiClient` and delegates all derivation to the pure
  * `src/core/summaryCounts`. The component renders the resulting model.
  */
-export function useSummary(): SummaryState {
+export function useSummary(
+  /** Bump to re-run the summary fetch (e.g. after a wizard save, issue #121). */
+  refreshKey = 0,
+): SummaryState {
   const { apiClient } = useServices();
   const today = new Date();
   const month = monthKey(today.getFullYear(), today.getMonth() + 1);
@@ -51,7 +54,9 @@ export function useSummary(): SummaryState {
     return () => {
       cancelled = true;
     };
-  }, [apiClient, month]);
+    // `refreshKey` re-runs the fetch so a wizard save is reflected in the
+    // summary without a reload (issue #121).
+  }, [apiClient, month, refreshKey]);
 
   const model = useMemo(
     () => (summary ? summaryBar(summary, new Date()) : null),

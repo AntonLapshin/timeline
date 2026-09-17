@@ -285,9 +285,12 @@ export function AgendaList({
 export function CalendarView({
   onEventClick,
   filter,
+  refreshKey,
 }: {
   onEventClick?: (event: EventOccurrence) => void;
   filter?: EventFilter;
+  /** Bump to re-run the occurrence fetch (e.g. after a wizard save, issue #121). */
+  refreshKey?: number;
 }) {
   const {
     mode,
@@ -307,7 +310,7 @@ export function CalendarView({
     nextWeek,
     selectDay,
     closeDrawer,
-  } = useCalendar(filter);
+  } = useCalendar(filter, refreshKey);
 
   const navigation =
     mode === "week"

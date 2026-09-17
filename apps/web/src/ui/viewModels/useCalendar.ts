@@ -73,7 +73,11 @@ export interface CalendarState {
  * delegates all grid/count/drawer derivation to the pure `src/core/calendar`
  * module. The component renders the resulting state.
  */
-export function useCalendar(filter?: EventFilter): CalendarState {
+export function useCalendar(
+  filter?: EventFilter,
+  /** Bump to re-run the occurrence fetch (e.g. after a wizard save, issue #121). */
+  refreshKey = 0,
+): CalendarState {
   const { apiClient } = useServices();
   const today = new Date();
   const [cursor, setCursor] = useState<YearMonth>({
@@ -109,7 +113,9 @@ export function useCalendar(filter?: EventFilter): CalendarState {
     return () => {
       cancelled = true;
     };
-  }, [apiClient, key]);
+    // `refreshKey` re-runs the fetch so a wizard save is reflected in the
+    // grid without a reload (issue #121).
+  }, [apiClient, key, refreshKey]);
 
   const filtered = useMemo(
     () => filterOccurrences(occurrences, filter ?? EMPTY_FILTER),

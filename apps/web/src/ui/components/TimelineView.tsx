@@ -110,13 +110,19 @@ export function TimelineView({
   onEventClick,
   filter,
   onCreate,
+  refreshKey,
 }: {
   onEventClick?: (event: EventRead) => void;
   filter?: EventFilter;
   /** Optional callback to open the create-event flow from the empty state. */
   onCreate?: () => void;
+  /** Bump to re-run the events fetch (e.g. after a wizard save, issue #121). */
+  refreshKey?: number;
 }) {
-  const { groups, hasMore, loading, error, loadMore, retry } = useTimeline(filter);
+  const { groups, hasMore, loading, error, loadMore, retry } = useTimeline(
+    filter,
+    refreshKey,
+  );
 
   if (loading) {
     return (

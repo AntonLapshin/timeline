@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServices } from "../services/useServices";
 import {
   emptyDraft,
@@ -15,6 +15,16 @@ import {
 } from "../../core/eventWizard";
 import type { DraftErrors } from "../../core/eventWizard";
 import type { EventRead } from "../../core/eventTypes";
+
+/** Optional callbacks accepted by the event-wizard view model. */
+export interface EventWizardOptions {
+  /**
+   * Called after a successful save (create or update). The app uses it to
+   * refresh the data views (timeline/calendar/summary/filters) without a
+   * reload (issue #121).
+   */
+  onSaved?: () => void;
+}
 
 /** State shape produced by the event-wizard view model. */
 export interface EventWizardState {
@@ -34,8 +44,6 @@ export interface EventWizardState {
   saving: boolean;
   /** A human error message, or null when there is none. */
   error: string | null;
-  /** Whether the last save succeeded. */
-  saved: boolean;
   /** Open the wizard to create a new event. */
   openCreate: () => void;
   /** Open the wizard to create a new event pre-filled from a parsed draft. */
@@ -61,23 +69,27 @@ export interface EventWizardState {
  * transitions, validation and payload building to the pure
  * `src/core/eventWizard`, and performs the create/update I/O through the
  * injected `apiClient`. Components render the resulting state.
+ *
+ * A successful save closes the wizard (no dead-end success state) and fires
+ * the `onSaved` callback so the app can refresh its data views; a failed save
+ * keeps the modal open with an error (issue #121). Esc also closes the wizard
+ * while it is open.
  */
-export function useEventWizard(): EventWizardState {
+export function useEventWizard(options?: EventWizardOptions): EventWizardState {
   const { apiClient } = useServices();
+  const { onSaved } = options ?? {};
   const [open, setOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventRead | null>(null);
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<EventDraft>(() => emptyDraft());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
 
   const openCreate = useCallback(() => {
     setDraft(emptyDraft());
     setEditingEvent(null);
     setStep(1);
     setError(null);
-    setSaved(false);
     setOpen(true);
   }, []);
 
@@ -86,7 +98,6 @@ export function useEventWizard(): EventWizardState {
     setEditingEvent(null);
     setStep(1);
     setError(null);
-    setSaved(false);
     setOpen(true);
   }, []);
 
@@ -95,14 +106,12 @@ export function useEventWizard(): EventWizardState {
     setEditingEvent(event);
     setStep(1);
     setError(null);
-    setSaved(false);
     setOpen(true);
   }, []);
 
   const close = useCallback(() => {
     setOpen(false);
     setError(null);
-    setSaved(false);
   }, []);
 
   const next = useCallback(() => {
@@ -136,13 +145,28 @@ export function useEventWizard(): EventWizardState {
       } else {
         await apiClient.createEvent(buildCreatePayload(draft));
       }
-      setSaved(true);
+      // Success: close the modal (issue #121) and let the app refresh its
+      // data views via the `onSaved` callback. A failed save keeps the modal
+      // open with an error.
+      close();
+      onSaved?.();
     } catch {
       setError("Failed to save event");
     } finally {
       setSaving(false);
     }
-  }, [apiClient, draft, editingEvent]);
+  }, [apiClient, draft, editingEvent, close, onSaved]);
+
+  // Esc closes the wizard while it is open (issue #121; same window-keydown
+  // pattern as `useEventDrawer`).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, close]);
 
   return {
     open,
@@ -153,7 +177,6 @@ export function useEventWizard(): EventWizardState {
     canNext,
     saving,
     error,
-    saved,
     openCreate,
     openCreateWithDraft,
     openEdit,

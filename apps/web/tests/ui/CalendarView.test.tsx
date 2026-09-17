@@ -196,6 +196,33 @@ describe("CalendarView", () => {
     expect(getOccurrences).toHaveBeenCalledTimes(2);
   });
 
+  it("refetches occurrences when the refreshKey prop changes (post-save refresh)", async () => {
+    const getOccurrences = vi.fn().mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "HRA", start_at: "2026-09-05T10:00:00" }),
+    ]);
+    const services = {
+      apiClient: apiClientWith(getOccurrences),
+      llmParser: {},
+    } as unknown as Services;
+
+    const { rerender } = renderWithServices(services, <CalendarView />);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("2026-09-05, 1 event")).toBeInTheDocument(),
+    );
+    expect(getOccurrences).toHaveBeenCalledTimes(1);
+
+    // Bumping the refresh key (e.g. after a wizard save, issue #121) re-runs
+    // the fetch without a reload.
+    rerender(
+      <ServicesContext.Provider value={services}>
+        <CalendarView refreshKey={1} />
+      </ServicesContext.Provider>,
+    );
+    await waitFor(() => expect(getOccurrences).toHaveBeenCalledTimes(2));
+    expect(screen.getByLabelText("2026-09-05, 1 event")).toBeInTheDocument();
+  });
+
   it("shows a loading skeleton while fetching", async () => {
     let resolve!: (v: EventOccurrence[]) => void;
     const getOccurrences = vi

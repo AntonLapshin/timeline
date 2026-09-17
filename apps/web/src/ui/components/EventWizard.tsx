@@ -28,7 +28,6 @@ export function EventWizard({ wizard }: EventWizardProps) {
     canNext,
     saving,
     error,
-    saved,
     editingEvent,
     next,
     back,
@@ -100,11 +99,6 @@ export function EventWizard({ wizard }: EventWizardProps) {
         </div>
 
         {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {saved && (
-          <p className="mb-3 text-sm text-emerald-600 dark:text-emerald-400">
-            {editingEvent ? "Event updated." : "Event created."}
-          </p>
-        )}
 
         <div className="flex items-center justify-between">
           <button

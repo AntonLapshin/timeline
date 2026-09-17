@@ -18,8 +18,8 @@ const PRIORITY_LABELS: Record<EventPriority, string> = {
  * with an overdue highlight. All derivation lives in `src/core`; no business
  * logic lives here.
  */
-export function SummaryBar() {
-  const { model, loading, error } = useSummary();
+export function SummaryBar({ refreshKey }: { refreshKey?: number }) {
+  const { model, loading, error } = useSummary(refreshKey);
 
   if (loading) {
     return <p className="text-sm text-slate-500 dark:text-slate-400">Loading summary…</p>;

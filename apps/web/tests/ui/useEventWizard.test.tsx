@@ -107,7 +107,7 @@ describe("useEventWizard", () => {
     expect(result.current.draft.priority).toBe("medium");
   });
 
-  it("close closes the wizard and clears saved/error", () => {
+  it("close closes the wizard and clears the error", () => {
     const { result } = renderHook(() => useEventWizard());
     act(() => result.current.openCreate());
     act(() => result.current.close());
@@ -147,8 +147,9 @@ describe("useEventWizard", () => {
     expect(result.current.canNext).toBe(true);
   });
 
-  it("save creates an event via the API and sets saved", async () => {
+  it("save creates an event, closes the wizard and fires onSaved", async () => {
     const createEvent = vi.fn().mockResolvedValue(sampleEvent());
+    const onSaved = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {
         createEvent,
@@ -161,19 +162,22 @@ describe("useEventWizard", () => {
       },
       llmParser: {},
     });
-    const { result } = renderHook(() => useEventWizard());
+    const { result } = renderHook(() => useEventWizard({ onSaved }));
     act(() => result.current.openCreate());
     act(() => result.current.update({ title: "Standup" }));
     await act(async () => {
       await result.current.save();
     });
     expect(createEvent).toHaveBeenCalledTimes(1);
-    expect(result.current.saved).toBe(true);
+    // Success closes the modal (issue #121) and fires the onSaved callback.
+    expect(result.current.open).toBe(false);
+    expect(onSaved).toHaveBeenCalledTimes(1);
     expect(result.current.error).toBeNull();
   });
 
-  it("save updates an existing event via the API", async () => {
+  it("save updates an existing event via the API and closes the wizard", async () => {
     const updateEvent = vi.fn().mockResolvedValue(sampleEvent());
+    const onSaved = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {
         createEvent: vi.fn(),
@@ -186,13 +190,14 @@ describe("useEventWizard", () => {
       },
       llmParser: {},
     });
-    const { result } = renderHook(() => useEventWizard());
+    const { result } = renderHook(() => useEventWizard({ onSaved }));
     act(() => result.current.openEdit(sampleEvent()));
     await act(async () => {
       await result.current.save();
     });
     expect(updateEvent).toHaveBeenCalledWith(3, expect.any(Object));
-    expect(result.current.saved).toBe(true);
+    expect(result.current.open).toBe(false);
+    expect(onSaved).toHaveBeenCalledTimes(1);
   });
 
   it("save refuses an incomplete draft and sets an error", async () => {
@@ -216,10 +221,12 @@ describe("useEventWizard", () => {
     });
     expect(createEvent).not.toHaveBeenCalled();
     expect(result.current.error).toBe("Please complete all required fields");
-    expect(result.current.saved).toBe(false);
+    // A refused save keeps the modal open (issue #121).
+    expect(result.current.open).toBe(true);
   });
 
   it("save reports an error when the API call fails", async () => {
+    const onSaved = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {
         createEvent: vi.fn().mockRejectedValue(new Error("boom")),
@@ -232,13 +239,36 @@ describe("useEventWizard", () => {
       },
       llmParser: {},
     });
-    const { result } = renderHook(() => useEventWizard());
+    const { result } = renderHook(() => useEventWizard({ onSaved }));
     act(() => result.current.openCreate());
     act(() => result.current.update({ title: "Standup" }));
     await act(async () => {
       await result.current.save();
     });
     expect(result.current.error).toBe("Failed to save event");
-    expect(result.current.saved).toBe(false);
+    // A failed save keeps the modal open and must not fire onSaved (issue #121).
+    expect(result.current.open).toBe(true);
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("closes on the Escape key while open", () => {
+    const { result } = renderHook(() => useEventWizard());
+    act(() => result.current.openCreate());
+    expect(result.current.open).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(result.current.open).toBe(false);
+  });
+
+  it("ignores Escape when the wizard is closed", () => {
+    const { result } = renderHook(() => useEventWizard());
+    expect(result.current.open).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(result.current.open).toBe(false);
   });
 });

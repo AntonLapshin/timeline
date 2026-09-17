@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import App from "../../src/App";
 import type { EventWizardState } from "../../src/ui/viewModels/useEventWizard";
 import type { EventDrawerState } from "../../src/ui/viewModels/useEventDrawer";
@@ -34,13 +34,19 @@ vi.mock("../../src/ui/services/useServices", () => ({
   useServices: useServicesMock,
 }));
 vi.mock("../../src/ui/components/SummaryBar", () => ({
-  SummaryBar: () => <div data-testid="summary-bar" />,
+  SummaryBar: (props: { refreshKey?: number }) => (
+    <div data-testid="summary-bar" data-refresh-key={String(props.refreshKey)} />
+  ),
 }));
 vi.mock("../../src/ui/components/TimelineView", () => ({
-  TimelineView: () => <div data-testid="timeline-view" />,
+  TimelineView: (props: { refreshKey?: number }) => (
+    <div data-testid="timeline-view" data-refresh-key={String(props.refreshKey)} />
+  ),
 }));
 vi.mock("../../src/ui/components/CalendarView", () => ({
-  CalendarView: () => <div data-testid="calendar-view" />,
+  CalendarView: (props: { refreshKey?: number }) => (
+    <div data-testid="calendar-view" data-refresh-key={String(props.refreshKey)} />
+  ),
 }));
 vi.mock("../../src/ui/components/EventWizard", () => ({
   EventWizard: () => <div data-testid="event-wizard" />,
@@ -82,7 +88,6 @@ function wizardState(overrides: Partial<EventWizardState> = {}): EventWizardStat
     canNext: false,
     saving: false,
     error: null,
-    saved: false,
     openCreate: vi.fn(),
     openCreateWithDraft: vi.fn(),
     openEdit: vi.fn(),
@@ -126,6 +131,26 @@ function drawerState(overrides: Partial<EventDrawerState> = {}): EventDrawerStat
     close: vi.fn(),
     ...overrides,
   };
+}
+
+/**
+ * Make the wizard view-model mock capture the options App passes to it and
+ * return the `onSaved` callback (used to simulate a successful wizard save).
+ */
+function captureWizardOnSaved(): () => void {
+  let onSaved: (() => void) | undefined;
+  useEventWizardMock.mockImplementation((options?: { onSaved?: () => void }) => {
+    onSaved = options?.onSaved;
+    return wizardState();
+  });
+  return () => {
+    if (!onSaved) throw new Error("App did not pass onSaved to useEventWizard");
+    onSaved();
+  };
+}
+
+function refreshKeyOf(testId: string): string {
+  return screen.getByTestId(testId).getAttribute("data-refresh-key") ?? "";
 }
 
 describe("App", () => {
@@ -254,5 +279,45 @@ describe("App", () => {
     fireEvent.keyDown(input, { key: "/" });
     expect(focusSpy).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(input);
+  });
+
+  it("refetches events and closes the drawer when the wizard's onSaved fires", async () => {
+    const listEvents = vi.fn().mockResolvedValue([]);
+    const drawerClose = vi.fn();
+    useServicesMock.mockReturnValue({
+      apiClient: { listEvents },
+      llmParser: {},
+    });
+    useEventDrawerMock.mockReturnValue(drawerState({ close: drawerClose }));
+    const onSaved = captureWizardOnSaved();
+    render(<App />);
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(1));
+
+    // Simulate a successful wizard save.
+    act(() => onSaved());
+
+    // The app-level filter-options fetch re-ran without a reload (issue #121).
+    await waitFor(() => expect(listEvents).toHaveBeenCalledTimes(2));
+    // The drawer is closed along with the wizard so it can't show stale data.
+    expect(drawerClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("threads the refresh key into the data views and bumps it on wizard save", () => {
+    // Never-resolving fetch: this test asserts prop threading only, and a
+    // resolving promise would update state outside act() after the test.
+    useServicesMock.mockReturnValue({
+      apiClient: { listEvents: vi.fn().mockReturnValue(new Promise(() => {})) },
+      llmParser: {},
+    });
+    const onSaved = captureWizardOnSaved();
+    render(<App />);
+
+    expect(refreshKeyOf("timeline-view")).toBe("0");
+    expect(refreshKeyOf("summary-bar")).toBe("0");
+
+    act(() => onSaved());
+
+    expect(refreshKeyOf("timeline-view")).toBe("1");
+    expect(refreshKeyOf("summary-bar")).toBe("1");
   });
 });

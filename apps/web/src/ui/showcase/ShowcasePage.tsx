@@ -105,7 +105,6 @@ function wizardStateAt(step: 1 | 2 | 3): EventWizardState {
     canNext: true,
     saving: false,
     error: null,
-    saved: false,
     openCreate: noop,
     openCreateWithDraft: noop,
     openEdit: noop,
