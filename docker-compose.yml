@@ -1,8 +1,10 @@
 # Timeline — local development / daily-driver compose stack.
 #
-# Runs the web app and the API for local development. Both services bind to
-# loopback only (127.0.0.1) because the app has no auth — never expose them to
-# the LAN or internet.
+# Runs the web app and the API for local development. Host-side exposure is
+# loopback-only (the 127.0.0.1 prefix in `ports`); inside the containers the
+# servers bind 0.0.0.0 because Docker port publishing forwards to the
+# container's eth0 — a loopback bind inside the container would make the
+# published ports unreachable.
 #
 #   docker compose up --build
 #
@@ -20,7 +22,8 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     container_name: timeline-web
-    # Loopback bind only — no auth. Never change to 0.0.0.0.
+    # Host-side exposure stays loopback-only (no auth); the container itself
+    # must bind 0.0.0.0 for Docker port publishing to work.
     ports:
       - "127.0.0.1:8123:8123"
     depends_on:
@@ -32,15 +35,18 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: timeline-api
-    # Loopback bind only — no auth. Never change to 0.0.0.0.
+    # Host-side exposure stays loopback-only (no auth); the container itself
+    # must bind 0.0.0.0 for Docker port publishing to work, which requires the
+    # explicit TIMELINE_ALLOW_NON_LOOPBACK opt-in (bind guard, issue #97).
     ports:
       - "127.0.0.1:8124:8124"
     env_file:
       - .env
     environment:
-      TIMELINE_HOST: 127.0.0.1
+      TIMELINE_HOST: 0.0.0.0
       TIMELINE_PORT: 8124
       TIMELINE_DATA_DIR: /data
+      TIMELINE_ALLOW_NON_LOOPBACK: "1"
     volumes:
       - timeline-data:/data
     restart: on-failure

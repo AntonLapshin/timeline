@@ -11,8 +11,26 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# The repository root is two levels up from this module (apps/api/app/config.py).
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+def _detect_repo_root() -> Path:
+    """Locate the repo root used only for default path derivation.
+
+    Two supported layouts:
+    - Source checkout: this module is ``<repo>/apps/api/app/config.py``; the
+      root is the ancestor that contains ``apps/api/app``.
+    - Docker image: the API is copied flat to ``/app/app/config.py`` with no
+      repository above ``/app`` — there the package's parent (``/app``) is the
+      closest equivalent. ``TIMELINE_DATA_DIR`` (docker-compose sets ``/data``)
+      always overrides the derived default, so the fallback is harmless.
+    """
+    module_dir = Path(__file__).resolve().parent
+    for candidate in module_dir.parents:
+        if (candidate / "apps" / "api" / "app").is_dir():
+            return candidate
+    # Flattened container layout: /app/app/config.py → /app.
+    return module_dir.parent
+
+
+_REPO_ROOT = _detect_repo_root()
 _DEFAULT_DATA_DIR = _REPO_ROOT / "data"
 
 
