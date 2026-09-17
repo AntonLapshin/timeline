@@ -66,10 +66,24 @@ def test_parse_allowlist_combines_and_dedupes_sources() -> None:
 
 
 def test_parse_allowlist_rejects_signed_and_weird_numbers() -> None:
-    """Signed/underscore/unicode-digit entries are invalid, not parsed."""
+    """Signed and underscore-separated entries are invalid, not parsed."""
     parsed = parse_allowlist("+42", "-42", "1_0", "42")
     assert parsed.ids == (42,)
     assert parsed.invalid == ("+42", "-42", "1_0")
+
+
+def test_parse_allowlist_rejects_non_ascii_digits() -> None:
+    """Non-ASCII digit entries are invalid, not parsed (``isascii`` guard).
+
+    ``str.isdigit()`` is True for unicode digits (Arabic-Indic ``٤٢``,
+    superscript ``²``) and ``int()`` would even accept them, but Telegram user
+    ids are plain ASCII digits — the ``isascii()`` guard drops lookalike-digit
+    entries so they can never match a real id (fail closed).
+    """
+    parsed = parse_allowlist("٤٢", "²")
+    assert parsed.ids == ()
+    assert parsed.invalid == ("٤٢", "²")
+    assert not parsed
 
 
 # --- TelegramAllowlist.allows ---------------------------------------------------
