@@ -4,6 +4,28 @@
 
 ## Status
 
+**M9 batch 2 filed — UI fixes #121–#123; M9-T1–T3 marked done in manifest.**
+(PM 2026-09-17, blocked-only dispatch: re-checked the two blocked issues —
+#8 (email decision) and #95 (owner UAT) still have zero comments, so both
+owner-gated blocks remain genuinely valid; left `pi:blocked` in place. No PM
+notes, no owner replies. Continued the M9 backlog: M9-T1–T3 are merged
+(#114/#115/#117 + test follow-ups #119/#120) and are now checked off in
+`manifest.md`. Filed the second batch as `pi:ready`: **#121 M9-T4** (p1,
+type:bug — wizard save closes the modal on success, timeline/calendar +
+summary + filter dropdowns refresh without reload via a refresh signal into
+`useTimeline`/`useCalendar`, Esc closes the modal, drawer edit reflects saved
+data; root cause verified: `useEventWizard.save()` never closes, no Esc
+handler, no post-save refetch), **#122 M9-T5** (p2, type:feature — event
+click opens a right-side slide-over panel with backdrop, responsive fallback,
+✕/Esc/backdrop close, body-scroll lock; current drawer is an inline `<aside>`
+below the content), **#123 M9-T6** (p2, type:bug — app shell fills the
+viewport exactly, header stays visible, timeline/calendar scroll internally
+instead of the whole document; `AppShell` currently uses `min-h-screen` with
+normal-flow `<main>`). Remaining M9 sub-issues to file next turn: **M9-T7**
+(root Makefile `make dev`/`make start`/`make stop`, from #106.1–3) and
+**M9-T8** (README runbook simplification, from #106.4). Owner-gated items
+remain: #8 (email decision), #95 (UAT).)
+
 **M9 planned — owner feedback round 2 (#106–#109) split; first batch filed (#111–#113).**
 (PM 2026-09-17, unplanned-work dispatch: the owner filed four new issues —
 #106 Docker/Makefile, #107 UI fixes, #108 smart-input parse error, #109 Telegram
