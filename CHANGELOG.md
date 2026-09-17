@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Align docs/comments with the dev-server `0.0.0.0` bind (issue #105,
+  M8-T5):** reconcile the remaining docs/comments with the owner's LAN-access
+  binds (commits `3ccc3a5`, `f23c6b0`) — no behavioural changes. The README
+  quickstart `npm run dev` comment now reads `0.0.0.0:8123` (localhost + LAN
+  reachable); the "Local run paths" intro distinguishes the bind posture per
+  component (Vite dev server `0.0.0.0` by default; Docker Compose publishes
+  `0.0.0.0` by design; the API keeps its loopback default + fail-closed
+  opt-in guard, issue #97); the "Host-system / LAN access" section notes
+  `npm run dev` is already LAN-reachable without the API opt-in; the two
+  stale `#...opt-in-issue-97` anchors are fixed after the section's rename
+  to "(by design, issue #97)"; stale "never exposed beyond 127.0.0.1"
+  comments in `apps/web/playwright.config.ts` are corrected (the smoke test
+  targets `127.0.0.1:8123`, which `0.0.0.0` still serves), the
+  `vite.config.ts` `server.host` comment cites the owner decision
+  (`3ccc3a5`) with the no-auth LAN caveat, and ROADMAP v2 posture lines no
+  longer call v1 "loopback-only".
+
 - **Update `milestone.md`: check off M8-T3 and mark M7–M8 follow-ups done (issue
   #103, M8-T4):** the M8-T3 record (README cleanup, issue #99) is now checked
   off as `*(merged via #102)*`, and the "Status summary" table row for

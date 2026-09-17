@@ -20,9 +20,12 @@ const apiTarget = process.env.TIMELINE_API_URL ?? "http://127.0.0.1:8123";
 export default defineConfig({
   plugins: [react()],
   base,
-  // The web app is LAN-accessible by design: bind to 0.0.0.0:8123 (the port
-  // the rest of the project uses for local runs and the Playwright smoke test).
-  // Exposing to the LAN without auth is part of the plan (trusted LAN only).
+  // The web app is LAN-accessible by design: bind to 0.0.0.0:8123 (owner
+  // decision, commit 3ccc3a5) so the dev server is reachable from the host
+  // system and the LAN, not just loopback. The app has no auth — anyone on
+  // the LAN can read/write events, so this assumes a trusted LAN. The
+  // Playwright smoke test still targets 127.0.0.1:8123 and keeps working
+  // (0.0.0.0 accepts loopback connections).
   server: {
     host: "0.0.0.0",
     port: 8123,
@@ -32,6 +35,8 @@ export default defineConfig({
       "/healthz": { target: apiTarget, changeOrigin: true },
     },
   },
+  // `preview` (production-build preview, `npm run preview`) binds the same
+  // way for parity with the dev server and the Docker serve stage.
   preview: {
     host: "0.0.0.0",
     port: 8123,
