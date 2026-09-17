@@ -68,14 +68,26 @@ for LAN access — exposing to the LAN without auth is part of the plan
 > See [Host-system / LAN access](#host-system--lan-access-opt-in-issue-97) below.
 
 **1. Docker Compose (recommended for dev).** One command starts web + api and
-keeps the SQLite database in a named volume:
+keeps the SQLite database in a named volume. Ports bind `0.0.0.0` by design
+(trusted LAN only, no auth), so the stack is reachable via localhost and via
+the machine's LAN IP. The web server proxies `/api` + `/healthz` to the API,
+so browsers only need port 8123 (same-origin, no CORS):
 
 ```bash
 cp .env.example .env   # fill local values (secrets stay local)
 docker compose up --build
-# Web:  http://127.0.0.1:8123
+# Web:  http://127.0.0.1:8123/timeline/  (local)
+# Web:  http://<lan-ip>:8123/timeline/   (LAN, e.g. http://192.168.7.131:8123/timeline/)
 # API:  http://127.0.0.1:8124/healthz  →  {"status": "ok"}
 ```
+
+```bash
+sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp  # firewall for LAN access
+```
+
+After changing `docker-compose.yml`, recreate the containers so the new port
+bindings take effect: `docker compose up -d --build` (a restart alone keeps
+the old `127.0.0.1`-only bindings).
 
 `scheduler` / `bot` services will be added to the compose stack in later
 milestones. `docker compose down` stops the stack; data persists in the
@@ -173,10 +185,21 @@ and `docker-compose.yml` for details.
 
 #### Host-system / LAN access (by design, issue #97)
 
-LAN access without auth is part of the plan (trusted LAN only). The web app
-binds to `0.0.0.0:8123` and the API opt-in (`TIMELINE_ALLOW_NON_LOOPBACK=1`)
-covers the backend guard. To reach it from your host system or another machine
-on your LAN, whitelist the port in the firewall:
+LAN access without auth is part of the plan (trusted LAN only). Docker Compose
+binds `0.0.0.0:8123` (web, with `/api` proxied to the backend) and
+`0.0.0.0:8124` (API) already — just whitelist the ports in the firewall:
+
+```bash
+sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp
+# or: sudo firewall-cmd --permanent --add-port=8123/tcp --add-port=8124/tcp \
+#   && sudo firewall-cmd --reload
+```
+
+Then open `http://<machine-ip>:8123/timeline/` from the host system. If the
+containers were started before this fix, recreate them so the new bindings
+take effect: `docker compose up -d --build`.
+
+For the native `systemd --user` path (loopback by default), opt in explicitly:
 
 ```bash
 # 1. Opt in + bind to all interfaces (in .env or the systemd unit):

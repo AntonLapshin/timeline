@@ -1,15 +1,22 @@
 # Timeline — local development / daily-driver compose stack.
 #
-# Runs the web app and the API for local development. Host-side exposure is
-# loopback-only (the 127.0.0.1 prefix in `ports`); inside the containers the
-# servers bind 0.0.0.0 because Docker port publishing forwards to the
-# container's eth0 — a loopback bind inside the container would make the
-# published ports unreachable.
+# Runs the web app and the API for local development. Host-side ports bind
+# 0.0.0.0 (all interfaces) by design so the stack is reachable from the LAN
+# (trusted LAN only — the app has no auth). Inside the containers the servers
+# bind 0.0.0.0 because Docker port publishing forwards to the container's
+# eth0 — a loopback bind inside the container would make the published ports
+# unreachable.
 #
 #   docker compose up --build
 #
-# Then open http://127.0.0.1:8123 (web) and check http://127.0.0.1:8124/healthz
-# (API). The SQLite database persists in the `timeline-data` volume.
+# Then open http://127.0.0.1:8123/timeline/ (local) or
+# http://<lan-ip>:8123/timeline/ (LAN, e.g. http://192.168.7.131:8123/timeline/)
+# and check http://127.0.0.1:8124/healthz (API). The SQLite database persists
+# in the `timeline-data` volume. Whitelist the ports in the firewall:
+# `sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp`.
+#
+# WARNING: LAN exposure is unauthenticated (anyone on the LAN can read/write
+# events). Restrict to a trusted LAN; public-internet exposure is out of scope.
 #
 # Secrets come from a local `.env` file (copy `.env.example` → `.env`); nothing
 # secret is ever committed. See README "Local run paths".
@@ -22,10 +29,15 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
     container_name: timeline-web
-    # Host-side exposure stays loopback-only (no auth); the container itself
-    # must bind 0.0.0.0 for Docker port publishing to work.
+    # Host-side exposure is 0.0.0.0 (LAN) by design — trusted LAN only, no auth.
+    # The container itself must bind 0.0.0.0 for Docker port publishing to work.
+    # The web server proxies /api + /healthz to the api service, so browsers
+    # only need port 8123 (same-origin, works for localhost and LAN IPs).
     ports:
-      - "127.0.0.1:8123:8123"
+      - "8123:8123"
+    environment:
+      # Inside the compose network the API is reachable as http://api:8124.
+      TIMELINE_API_URL: http://api:8124
     depends_on:
       - api
     restart: on-failure
@@ -35,11 +47,12 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     container_name: timeline-api
-    # Host-side exposure stays loopback-only (no auth); the container itself
-    # must bind 0.0.0.0 for Docker port publishing to work, which requires the
-    # explicit TIMELINE_ALLOW_NON_LOOPBACK opt-in (bind guard, issue #97).
+    # Host-side exposure is 0.0.0.0 (LAN) by design — trusted LAN only, no auth.
+    # The container itself must bind 0.0.0.0 for Docker port publishing to work,
+    # which requires the explicit TIMELINE_ALLOW_NON_LOOPBACK opt-in (bind guard,
+    # issue #97).
     ports:
-      - "127.0.0.1:8124:8124"
+      - "8124:8124"
     env_file:
       - .env
     environment:

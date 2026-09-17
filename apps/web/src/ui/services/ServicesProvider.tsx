@@ -6,7 +6,7 @@ import {
 } from "./context";
 
 export interface ServicesProviderProps {
-  /** Base URL of the timeline API. Defaults to the loopback dev URL. */
+  /** Base URL of the timeline API. Defaults to same-origin (LAN-friendly). */
   baseUrl?: string;
   children: ReactNode;
 }

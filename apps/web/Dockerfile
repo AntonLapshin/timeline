@@ -4,8 +4,8 @@
 # static output with `vite preview`. Inside the container the server must bind
 # 0.0.0.0 — Docker port publishing forwards to the container's eth0, so a
 # loopback bind would make the published port unreachable. Host-side exposure
-# stays loopback-only via the compose `ports: 127.0.0.1:8123:8123` mapping.
-# The app has no auth: never widen the compose publish spec beyond 127.0.0.1.
+# is 0.0.0.0:8123 by design (trusted LAN only — the app has no auth; see
+# docker-compose.yml and README "Host-system / LAN access").
 
 # --- Build stage ---
 FROM node:20-alpine AS build
@@ -29,7 +29,7 @@ FROM node:20-alpine AS serve
 WORKDIR /app
 ENV NODE_ENV=production
 # Bind all interfaces inside the container (required for Docker port
-# publishing); host exposure is restricted by the compose ports mapping.
+# publishing); host exposure is 0.0.0.0:8123 by design (trusted LAN only).
 ENV HOST=0.0.0.0
 ENV PORT=8123
 COPY --from=build /app/package.json ./package.json
@@ -38,5 +38,6 @@ COPY --from=build /app/packages ./packages
 COPY --from=build /app/apps/web ./apps/web
 WORKDIR /app/apps/web
 # `vite preview` serves the built app (the --host flag overrides the
-# vite.config.ts preview block; host-side access is restricted by compose).
+# vite.config.ts preview block) and proxies /api + /healthz to the backend
+# (TIMELINE_API_URL, see docker-compose.yml and vite.config.ts).
 CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "8123", "--strictPort"]

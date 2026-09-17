@@ -3,9 +3,9 @@
 # Runs the backend with a SQLite (WAL) database under /data (mounted as a
 # compose volume). Inside the container the server must bind 0.0.0.0 — Docker
 # port publishing forwards to the container's eth0, so a loopback bind would
-# make the published port unreachable. Host-side exposure stays loopback-only
-# via the compose `ports: 127.0.0.1:8124:8124` mapping. The API has no auth:
-# never widen the compose publish spec beyond 127.0.0.1.
+# make the published port unreachable. Host-side exposure is 0.0.0.0:8124 by
+# design (trusted LAN only — the API has no auth; see docker-compose.yml and
+# README "Host-system / LAN access").
 
 FROM python:3.11-slim
 
@@ -29,7 +29,7 @@ RUN mkdir -p /data
 
 # Bind all interfaces inside the container (required for Docker port
 # publishing); the bind guard needs an explicit opt-in for the non-loopback
-# host. Host-side exposure is restricted by the compose ports mapping.
+# host. Host-side exposure is 0.0.0.0:8124 by design (trusted LAN only).
 ENV TIMELINE_HOST=0.0.0.0 \
     TIMELINE_PORT=8124 \
     TIMELINE_DATA_DIR=/data \

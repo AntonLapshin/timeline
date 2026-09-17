@@ -8,8 +8,11 @@ export interface Services {
   llmParser: LlmParser;
 }
 
-/** Default API base URL for the loopback-only web app. */
-export const DEFAULT_API_BASE_URL = "http://127.0.0.1:8123";
+/** Default API base URL: same-origin (relative) so the UI works on both
+ * localhost and LAN IPs. The Vite dev/preview server proxies /api + /healthz
+ * to the backend (see vite.config.ts), so browsers only need the web port
+ * (8123) and avoid CORS. Pass an explicit base URL to override (tests do). */
+export const DEFAULT_API_BASE_URL = "";
 
 /** React context holding the injected services (null until provided). */
 export const ServicesContext: Context<Services | null> =
