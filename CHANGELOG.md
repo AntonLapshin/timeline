@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Test
 
+- **Pin the `parse` success path with a non-JSON 200 body (issue #118):**
+  a new core test in `apps/web/tests/core/llmParse.test.ts` covers the one
+  remaining untested path in `llmParse.ts` — when a 200 response carries a
+  non-JSON body, `res.json()` rejects and that rejection propagates out of
+  `parse` (only HTTP/network failures are mapped to typed `ParseResult`s);
+  `useSmartInput`'s catch then renders the generic fallback, which is already
+  covered at the view-model level. The behavior is pre-existing and unchanged
+  (follow-up from the PR #117 review); `src/core` stays at 100% coverage.
+
 - **Close the two test gaps found in the PR #115 review (issue #116):**
   `parse_allowlist` now has a dedicated test for non-ASCII digit entries
   (`"٤٢"`, `"²"` — `str.isdigit()` is True and `int()` would even accept

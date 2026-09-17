@@ -44,6 +44,19 @@ describe("llmParse core module", () => {
     expect(result.draft).toEqual(draft);
   });
 
+  it("propagates the rejection when a 200 body is not JSON (view-model fallback)", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: true,
+      status: 200,
+      json: () => Promise.reject(new Error("not json")),
+    }));
+    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    // Documented behavior (issue #118): only HTTP/network failures are mapped
+    // to typed results — a non-JSON body on the success path rejects, and
+    // `useSmartInput`'s catch renders the generic fallback.
+    await expect(parser.parse("hello")).rejects.toThrow("not json");
+  });
+
   it("returns a distinct cannot-reach-API result when fetch rejects", async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error("offline");
