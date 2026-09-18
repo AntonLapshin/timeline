@@ -19,7 +19,8 @@
 # events). Restrict to a trusted LAN; public-internet exposure is out of scope.
 #
 # Secrets come from a local `.env` file (copy `.env.example` → `.env`); nothing
-# secret is ever committed. See README "Local run paths".
+# Secrets come from a local `.env` file (copy `.env.example` → `.env`); nothing
+# secret is ever committed. See README (Quickstart).
 
 name: timeline
 

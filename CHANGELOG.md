@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **README simplified to a make-target runbook (issue #128, M9-T8):** the README
+  (~620 → ~143 lines) is now centred on the `make dev` / `make start` / `make stop`
+  lifecycle: Quickstart (`.env` → `make dev` → open the URL), the daily lifecycle
+  targets, healthz self-diagnosis, privacy disclosure, a condensed env-var table,
+  the four failure modes an owner can actually hit (missing `.env`,
+  `llm_configured:false`, bot not replying, Docker STT limitation), and
+  backup/restore essentials. Removed the manual venv/uvicorn walkthrough, the
+  copy-and-edit systemd unit instructions (superseded by `make start`), the
+  duplicated firewall/LAN blocks, the Omarchy quickstart, and the long
+  troubleshooting section. Demo URL, repo layout, and stack/architecture summary
+  kept; details survive as pointers to `.env.example` / `docker-compose.yml`
+  comments.
+
 ### Added
 
 - **Root `Makefile`: one-command stack lifecycle — `make dev` / `make start`
