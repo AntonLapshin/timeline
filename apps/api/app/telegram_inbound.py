@@ -11,6 +11,11 @@ A python-telegram-bot v21 polling updater (consistent with
   ``POST /api/events/parse`` endpoint reuses), present each parsed draft as a
   Telegram card with inline **Save / Edit / Discard** buttons, and only persist
   a confirmed draft (via the CRUD layer) when the owner taps **Save**.
+  Plain (non-command) text is treated as an implicit ``/add`` so a natural
+  message is parsed instead of being silently dropped; the bot first replies
+  with a pending ack (``pending_add_reply``) because the LLM parse can take
+  seconds, then sends the draft card, and replies with a ``✅ Saved``
+  confirmation (``saved_confirmation_reply``) when the draft is saved.
 - **voice messages** — transcribed locally (``app.stt``: ffmpeg → voxtype,
   issue #71) and routed through the same parse → draft flow as ``/add``
   (issue #111). When local STT is unavailable (e.g. the Docker image ships no
@@ -31,7 +36,9 @@ The pure business logic lives here and is fully unit-tested: the DM-only gate
 parser (``parse_upcoming_days``), the event-listing helpers
 (``events_today`` / ``events_upcoming`` / ``events_low``), the line formatter
 (``format_event_line``), the command dispatcher (``handle_command``), the
-inbound-record builder (``build_inbound_record``) and the draft-flow helpers
+pending-ack helpers (``pending_add_reply`` / ``voice_pending_reply`` /
+``saved_confirmation_reply`` / ``is_add_flow_text``), the inbound-record
+builder (``build_inbound_record``) and the draft-flow helpers
 (``format_draft_card`` / ``build_draft_keyboard`` / ``parse_draft_callback`` /
 ``draft_to_event_create`` / ``DraftStore``) and the voice replies
 (``voice_unavailable_reply`` / ``voice_error_reply``). The impure Telegram
@@ -61,6 +68,7 @@ from .enums import EventChannel, EventPriority, EventSource, EventStatus, EventT
 from .llm_parse import ParsedDraft, parse_events
 from .models import Event, TelegramInbound
 from .recurrence import Occurrence, next_occurrences
+from .redaction import redact_text
 from .schemas import EventCreate
 from .stt import SttResult, run_command, transcribe_voice
 from .telegram_outbound import priority_emoji
@@ -423,6 +431,83 @@ def voice_error_reply(error: str | None) -> str:
     return f"🎙 Couldn't transcribe the voice message: {detail}"
 
 
+def pending_add_reply() -> str:
+    """Immediate ack sent before the (slow) LLM parse runs (pure).
+
+    Parsing can take many seconds (gateway retries with backoff), so the bot
+    sends this first — the caller then sends the draft card (or the parse
+    error) as a second message once parsing finishes.
+    """
+    return "⏳ Got it — parsing your event, one moment… I'll send the draft card next."
+
+
+def voice_pending_reply() -> str:
+    """Immediate ack sent before a voice message is downloaded/transcribed."""
+    return "🎙 Got your voice message — transcribing now, one moment…"
+
+
+def saved_confirmation_reply(title: str) -> str:
+    """Confirmation sent when a draft is saved as an event (pure)."""
+    return f"✅ Saved: {title}"
+
+
+def is_add_flow_text(text: str | None) -> bool:
+    """Whether a text message will run the LLM parse flow (pure).
+
+    True for ``/add <non-empty text>`` and for plain (non-command) text —
+    plain DMs are treated as implicit ``/add`` so sending
+    e.g. ``"Hanging on the bar for 2 minutes each day"`` just works instead
+    of being silently ignored. Fast commands (``/today`` …) return False.
+    """
+    if not text or not text.strip():
+        return False
+    command = parse_command(text.strip())
+    if command is None:
+        return True
+    return command.name == "add" and bool(command.args.strip())
+
+
+def wants_pending_for_text_update(update: Any, settings: Settings) -> bool:
+    """Peek whether the text handler should send a pending ack first (pure).
+
+    Mirrors the DM-only + allowlist gates of :func:`_handle_update` without
+    any I/O: only an allowlisted private-chat message that will run the
+    (slow) parse flow gets a pending message. Fast commands and ignored
+    updates never get one.
+    """
+    message = getattr(update, "effective_message", None) or getattr(
+        update, "message", None
+    )
+    if message is None:
+        return False
+    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
+        return False
+    user = getattr(message, "from_user", None)
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not settings.telegram_allowlist.allows(user_id):
+        return False
+    return is_add_flow_text(getattr(message, "text", None))
+
+
+def wants_pending_for_voice_update(update: Any, settings: Settings) -> bool:
+    """Peek whether the voice handler should send a pending ack first (pure)."""
+    message = getattr(update, "effective_message", None) or getattr(
+        update, "message", None
+    )
+    if message is None:
+        return False
+    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
+        return False
+    user = getattr(message, "from_user", None)
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not settings.telegram_allowlist.allows(user_id):
+        return False
+    voice = getattr(message, "voice", None)
+    if voice is None:
+        return False
+    return getattr(voice, "file_id", None) is not None
+
+
 def _reply_add(args: str) -> CommandResult:
     """Handle /add: empty text gets a usage hint; otherwise mark for parsing.
 
@@ -568,6 +653,14 @@ def record_inbound(
     record = build_inbound_record(message, message_type)
     session.add(record)
     session.commit()
+    logger.info(
+        "Recorded Telegram inbound id=%s chat=%s msg_id=%s type=%s ref=%s",
+        record.id,
+        record.chat_id,
+        record.telegram_message_id,
+        message_type,
+        redact_text(getattr(message, "text", None) or ""),
+    )
     return record
 
 
@@ -594,18 +687,31 @@ def _handle_update(
 
     Thin adapter that applies the DM-only gate and the single-user allowlist
     (ignoring group/channel/other-user noise), parses the command, dispatches
-    to the pure handler and persists the inbound message. For ``/add`` the
-    reply is a draft card with inline buttons (the LLM parse is impure, so it
-    happens here via ``http_client``). Returns ``None`` when the update is
-    ignored (no message, not a private chat, not the allowed user, or
-    non-command text).
+    to the pure handler and persists the inbound message. Plain (non-command)
+    text is treated as an implicit ``/add`` so a natural message like
+    ``"Hanging on the bar for 2 minutes each day"`` is parsed instead of
+    being silently dropped. For ``/add`` (explicit or implicit) the reply is
+    a draft card with inline buttons (the LLM parse is impure, so it happens
+    here via ``http_client``). Returns ``None`` when the update is ignored
+    (no message, not a private chat, not the allowed user, or empty text).
+
+    Every path is logged (content-free redacted refs only, never raw text)
+    so ignored messages are analyzable instead of silent.
     """
     message = getattr(update, "effective_message", None) or getattr(
         update, "message", None
     )
     if message is None:
+        logger.info("Ignoring Telegram update with no message.")
         return None
-    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
+    chat = getattr(message, "chat", None)
+    chat_type = getattr(chat, "type", None)
+    if not is_private_chat(chat_type):
+        logger.info(
+            "Ignoring Telegram message from non-private chat type=%s msg_id=%s.",
+            chat_type,
+            getattr(message, "message_id", None),
+        )
         return None
     user = getattr(message, "from_user", None)
     user_id = getattr(user, "id", None) if user is not None else None
@@ -613,9 +719,44 @@ def _handle_update(
         return None
 
     text = getattr(message, "text", None) or ""
-    command = parse_command(text)
+    message_id = getattr(message, "message_id", None)
+    chat_id = getattr(chat, "id", None)
+    logger.info(
+        "Received Telegram DM user=%s chat=%s msg_id=%s ref=%s",
+        user_id,
+        chat_id,
+        message_id,
+        redact_text(text),
+    )
+    stripped = text.strip()
+    command = parse_command(stripped)
     if command is None:
-        return None
+        if not stripped:
+            logger.info(
+                "Ignoring Telegram DM with empty text user=%s chat=%s msg_id=%s.",
+                user_id,
+                chat_id,
+                message_id,
+            )
+            return None
+        logger.info(
+            "Routing plain-text Telegram DM as implicit /add user=%s chat=%s "
+            "msg_id=%s ref=%s",
+            user_id,
+            chat_id,
+            message_id,
+            redact_text(stripped),
+        )
+        command = Command(name="add", args=stripped)
+    else:
+        logger.info(
+            "Dispatching Telegram command /%s user=%s chat=%s msg_id=%s ref=%s",
+            command.name,
+            user_id,
+            chat_id,
+            message_id,
+            redact_text(text),
+        )
 
     events: list[Event] = []
     if session_factory is not None:
@@ -623,9 +764,16 @@ def _handle_update(
             events = _active_events(session)
 
     result = handle_command(command, events, now=now)
+    logger.info(
+        "Telegram command /%s handled user=%s chat=%s msg_id=%s type=%s",
+        command.name,
+        user_id,
+        chat_id,
+        message_id,
+        result.message_type,
+    )
 
     if result.message_type == "add_parse":
-        chat = getattr(message, "chat", None)
         chat_id = getattr(chat, "id", None)
         reply = _handle_add_flow(
             result.reply,
@@ -660,11 +808,18 @@ def _handle_add_flow(
     Impure (calls ``parse_events`` via ``http_client``). On success the parsed
     draft(s) are stored in ``draft_store`` for this chat and returned as a card
     with Save / Edit / Discard buttons. Failures (no LLM key, transport error,
-    clarification needed) return a plain text reply and store nothing.
+    clarification needed) return a plain text reply and store nothing. Every
+    outcome is logged with a content-free redacted ref (never raw text).
     """
     if http_client is None or draft_store is None or chat_id is None:
+        logger.warning(
+            "Add flow unavailable chat=%s ref=%s (missing client/store/chat).",
+            chat_id,
+            redact_text(text),
+        )
         return BotReply("AI parsing isn't available right now.")
 
+    logger.info("Add flow parsing started chat=%s ref=%s", chat_id, redact_text(text))
     result = parse_events(
         text=text,
         now=_as_utc(now or datetime.now(UTC)),
@@ -673,18 +828,38 @@ def _handle_add_flow(
         http_client=http_client,
     )
     if result.unavailable:
+        logger.warning(
+            "Add flow unavailable (no LLM key) chat=%s ref=%s",
+            chat_id,
+            redact_text(text),
+        )
         return BotReply(
             "AI parsing isn't configured (no LLM key). "
             "Add the event manually in the web app for now."
         )
     if not result.ok or result.outcome is None:
+        logger.warning(
+            "Add flow parse failed chat=%s ref=%s error=%s",
+            chat_id,
+            redact_text(text),
+            result.error or "unknown error",
+        )
         return BotReply(f"Couldn't parse that: {result.error or 'unknown error'}")
     if result.outcome.needs_clarification:
+        logger.info(
+            "Add flow needs clarification chat=%s ref=%s", chat_id, redact_text(text)
+        )
         return BotReply(result.outcome.clarification or "Need more details.")
 
     drafts = result.outcome.drafts or []
 
     draft_store.set(chat_id, PendingDraft(drafts=drafts, raw_input=text))
+    logger.info(
+        "Add flow parsed %d draft(s) chat=%s ref=%s",
+        len(drafts),
+        chat_id,
+        redact_text(text),
+    )
     card_text = "\n\n".join(format_draft_card(d) for d in drafts)
     keyboard_rows = [build_draft_keyboard(i) for i in range(len(drafts))]
     return BotReply(card_text, reply_markup=keyboard_rows)
@@ -713,26 +888,49 @@ def _handle_callback_query(
 
     action = parse_draft_callback(getattr(query, "data", None))
     if action is None:
+        logger.info(
+            "Ignoring Telegram callback with bad payload user=%s data=%s.",
+            user_id,
+            getattr(query, "data", None),
+        )
         return None
 
     chat = getattr(getattr(query, "message", None), "chat", None)
     chat_id = getattr(chat, "id", None)
+    logger.info(
+        "Received Telegram draft callback action=%s index=%d user=%s chat=%s.",
+        action.action,
+        action.index,
+        user_id,
+        chat_id,
+    )
     if chat_id is None or draft_store is None:
+        logger.warning(
+            "Draft callback with no pending state user=%s chat=%s.", user_id, chat_id
+        )
         return BotReply("No pending draft to act on.")
 
     pending = draft_store.get(chat_id)
     if pending is None or action.index >= len(pending.drafts):
+        logger.info(
+            "Draft callback no longer available user=%s chat=%s index=%d.",
+            user_id,
+            chat_id,
+            action.index,
+        )
         return BotReply("That draft is no longer available.")
 
     draft = pending.drafts[action.index]
     if action.action == "save":
         return _save_draft(session_factory, draft, pending, chat_id, draft_store)
     if action.action == "edit":
+        logger.info("Draft callback edit re-prompt user=%s chat=%s.", user_id, chat_id)
         return BotReply(
             "✏️ Send the corrected event text (e.g. /add <text>) and I'll re-parse it."
         )
     if action.action == "discard":
         draft_store.pop(chat_id)
+        logger.info("Draft discarded user=%s chat=%s.", user_id, chat_id)
         return BotReply("🗑 Draft discarded.")
     return None  # pragma: no cover — all actions are handled above
 
@@ -746,12 +944,19 @@ def _save_draft(
 ) -> BotReply:
     """Persist a confirmed draft as a real event and clear the pending draft."""
     if session_factory is None:
+        logger.warning("Draft save with no database chat=%s.", chat_id)
         return BotReply("Can't save right now (no database).")
     payload = draft_to_event_create(draft, pending.raw_input)
     with session_factory() as session:
         event = crud.create_event(session, payload)
     draft_store.pop(chat_id)
-    return BotReply(f"✅ Saved: {event.title}")
+    logger.info(
+        "Saved Telegram draft as event id=%s chat=%s ref=%s",
+        event.id,
+        chat_id,
+        redact_text(event.title),
+    )
+    return BotReply(saved_confirmation_reply(event.title))
 
 
 async def _download_voice_file(bot: Any, file_id: str) -> str:
@@ -831,8 +1036,14 @@ async def _handle_voice_update(
         update, "message", None
     )
     if message is None:
+        logger.info("Ignoring Telegram voice update with no message.")
         return None
     if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
+        logger.info(
+            "Ignoring Telegram voice message from non-private chat type=%s msg_id=%s.",
+            getattr(getattr(message, "chat", None), "type", None),
+            getattr(message, "message_id", None),
+        )
         return None
     user = getattr(message, "from_user", None)
     user_id = getattr(user, "id", None) if user is not None else None
@@ -841,11 +1052,30 @@ async def _handle_voice_update(
 
     voice = getattr(message, "voice", None)
     if voice is None:
+        logger.info(
+            "Ignoring non-voice update in voice handler user=%s chat=%s msg_id=%s.",
+            user_id,
+            getattr(getattr(message, "chat", None), "id", None),
+            getattr(message, "message_id", None),
+        )
         return None
     file_id = getattr(voice, "file_id", None)
     if file_id is None or bot is None:
+        logger.warning(
+            "Voice message with unavailable file user=%s chat=%s msg_id=%s.",
+            user_id,
+            getattr(getattr(message, "chat", None), "id", None),
+            getattr(message, "message_id", None),
+        )
         return BotReply(voice_error_reply("voice file is unavailable"))
 
+    logger.info(
+        "Received Telegram voice message user=%s chat=%s msg_id=%s duration=%s.",
+        user_id,
+        getattr(getattr(message, "chat", None), "id", None),
+        getattr(message, "message_id", None),
+        getattr(voice, "duration", None),
+    )
     try:
         result = await _transcribe_voice_message(
             bot,
@@ -858,10 +1088,28 @@ async def _handle_voice_update(
         logger.warning("Voice message transcription failed: %s", exc)
         return BotReply(voice_error_reply(str(exc) or type(exc).__name__))
     if result.unavailable:
+        chat_id = getattr(getattr(message, "chat", None), "id", None)
+        logger.warning(
+            "Voice transcription unavailable user=%s chat=%s.",
+            user_id,
+            chat_id,
+        )
         return BotReply(voice_unavailable_reply())
     if not result.ok or not result.text:
+        logger.warning(
+            "Voice transcription failed user=%s chat=%s error=%s.",
+            user_id,
+            getattr(getattr(message, "chat", None), "id", None),
+            result.error,
+        )
         return BotReply(voice_error_reply(result.error))
 
+    logger.info(
+        "Voice transcribed user=%s chat=%s ref=%s",
+        user_id,
+        getattr(getattr(message, "chat", None), "id", None),
+        redact_text(result.text),
+    )
     chat = getattr(message, "chat", None)
     chat_id = getattr(chat, "id", None)
     reply = _handle_add_flow(
@@ -913,6 +1161,14 @@ def build_telegram_inbound_application(
         draft_store = DraftStore()
 
     async def handler(update: Any, _context: Any) -> None:
+        message = getattr(update, "effective_message", None) or getattr(
+            update, "message", None
+        )
+        if message is not None and wants_pending_for_text_update(update, settings):
+            sender = getattr(message, "reply_text", None)
+            if sender is not None:
+                with contextlib.suppress(Exception):
+                    await sender(pending_add_reply())
         reply = _handle_update(
             update,
             settings,
@@ -923,13 +1179,18 @@ def build_telegram_inbound_application(
         )
         if reply is None:
             return
-        message = getattr(update, "effective_message", None) or getattr(
-            update, "message", None
-        )
         if message is not None:
             await _send_reply(message.reply_text, reply)
 
     async def voice_handler(update: Any, context: Any) -> None:
+        message = getattr(update, "effective_message", None) or getattr(
+            update, "message", None
+        )
+        if message is not None and wants_pending_for_voice_update(update, settings):
+            sender = getattr(message, "reply_text", None)
+            if sender is not None:
+                with contextlib.suppress(Exception):
+                    await sender(voice_pending_reply())
         reply = await _handle_voice_update(
             update,
             settings,
@@ -942,9 +1203,6 @@ def build_telegram_inbound_application(
         )
         if reply is None:
             return
-        message = getattr(update, "effective_message", None) or getattr(
-            update, "message", None
-        )
         if message is not None:
             await _send_reply(message.reply_text, reply)
 

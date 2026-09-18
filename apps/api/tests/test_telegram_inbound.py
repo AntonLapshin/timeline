@@ -572,13 +572,92 @@ def test_handle_update_no_message() -> None:
     assert _handle_update(_FakeUpdate(None), settings) is None
 
 
-def test_handle_update_non_command_ignored() -> None:
-    """Plain text (not a command) is ignored."""
-    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
-    update = _FakeUpdate(
-        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "hello")
+def test_handle_update_plain_text_routes_to_add_flow(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Plain text (not a command) is parsed as an implicit /add (not ignored)."""
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
     )
-    assert _handle_update(update, settings) is None
+    store = DraftStore()
+    http = _FakeHttp(_parse_response())
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"),
+            _FakeUser(42),
+            "Hanging on the bar for 2 minutes each day",
+        )
+    )
+    reply = _handle_update(
+        update,
+        settings,
+        session_factory,
+        now=_now(),
+        http_client=http,
+        draft_store=store,
+    )
+    assert reply is not None
+    assert "📝 Dentist" in reply.text
+    pending = store.get(123)
+    assert pending is not None
+    assert pending.raw_input == "Hanging on the bar for 2 minutes each day"
+    with session_factory() as session:
+        assert session.query(TelegramInbound).one().message_type == "draft"
+
+
+def test_handle_update_empty_text_ignored(caplog: pytest.LogCaptureFixture) -> None:
+    """Whitespace-only text is ignored (but logged, not silent)."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "   "))
+    with caplog.at_level(logging.INFO):
+        assert _handle_update(update, settings) is None
+    assert any("empty text" in r.getMessage() for r in caplog.records)
+
+
+def test_handle_update_group_message_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """A group message is ignored with a log line (analyzable, not silent)."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    update = _FakeUpdate(_FakeMessage(_FakeChat(123, "group"), _FakeUser(42), "/today"))
+    with caplog.at_level(logging.INFO):
+        assert _handle_update(update, settings) is None
+    assert any("non-private" in r.getMessage() for r in caplog.records)
+
+
+def test_pending_helpers() -> None:
+    """Pending/confirmation replies and the add-flow peek are pure."""
+    from app.telegram_inbound import (
+        is_add_flow_text,
+        pending_add_reply,
+        saved_confirmation_reply,
+        voice_pending_reply,
+        wants_pending_for_text_update,
+    )
+
+    assert "⏳" in pending_add_reply()
+    assert "🎙" in voice_pending_reply()
+    assert saved_confirmation_reply("Dentist") == "✅ Saved: Dentist"
+    assert is_add_flow_text("/add dentist tomorrow") is True
+    assert is_add_flow_text("Hanging on the bar for 2 minutes") is True
+    assert is_add_flow_text("/today") is False
+    assert is_add_flow_text("/add") is False
+    assert is_add_flow_text("   ") is False
+    assert is_add_flow_text(None) is False
+
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    plain = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "hello there")
+    )
+    fast = _FakeUpdate(_FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/today"))
+    stranger = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(999), "hello there")
+    )
+    group = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "group"), _FakeUser(42), "hello there")
+    )
+    assert wants_pending_for_text_update(plain, settings) is True
+    assert wants_pending_for_text_update(fast, settings) is False
+    assert wants_pending_for_text_update(stranger, settings) is False
+    assert wants_pending_for_text_update(group, settings) is False
 
 
 def test_handle_update_today_replies_and_records(
@@ -896,8 +975,10 @@ def test_build_telegram_inbound_application_draft_card(
     )
     asyncio.run(handler(update, None))
 
-    assert len(sent) == 1
-    text, kwargs = sent[0]
+    # Pending ack first, then the draft card with an inline keyboard.
+    assert len(sent) == 2
+    assert "⏳" in sent[0][0]
+    text, kwargs = sent[1]
     assert "📝 Dentist" in text
     assert "reply_markup" in kwargs
 
@@ -1430,7 +1511,9 @@ def test_build_telegram_inbound_application_voice_handler(
 
     asyncio.run(voice_handler(update, _FakeContext()))
 
-    assert len(replied) == 1
-    assert "📝 Dentist" in replied[0]
+    # Pending ack first, then the draft card.
+    assert len(replied) == 2
+    assert "🎙" in replied[0]
+    assert "📝 Dentist" in replied[1]
     pending = store.get(123)
     assert pending is not None and len(pending.drafts) == 1
