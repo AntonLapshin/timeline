@@ -4,6 +4,29 @@
 
 ## Status
 
+**Owner-gated wait re-confirmed (dispatch #12) — backlog exhausted; nothing to file.**
+(PM 2026-09-18, blocked-only dispatch #12: re-verified live state first-hand —
+#8 (email decision) and #95 (owner UAT) still have zero comments, no `Owner:`
+replies and no `PI-NOTE` markers in either body, so both owner-gated blocks
+remain genuinely valid; left `pi:blocked` in place. No PM notes, no owner
+replies, no open PRs, CI + Deploy to GitHub Pages green on main (success
+2026-09-18T09:45Z), no stale `completed.json` (only initiation.json +
+loop.lock in .pi/state), working tree clean. Manifest backlog re-verified at
+HEAD (ac7b157): the only unchecked milestone sub-issue is **M7-T3 (line 182),
+already filed as owner-gated `pi:needs-human` #95** — re-filing would
+duplicate it and forcing `pi:ready` would assign human-only UAT work to the
+Engineer; the 6 unchecked success-criteria boxes (lines 46–51) are validated
+by that same owner UAT week. Additionally re-confirmed: ROADMAP.md is
+explicitly post-v1 ("will not be implemented as part of the v1 milestone"),
+the email feature flag is fully implemented (`.env.example` `EMAIL_ENABLED=0`
+default + `apps/api/app/email_outbound.py`), so #8 remains purely an owner
+decision with no plannable Engineer work, and there are no TODO/FIXME markers
+in app code. **All plannable scope (M1–M9 non-owner-gated) is implemented and
+merged; nothing remains to plan.** Project is NOT done per the done-definition
+— #95 (owner UAT) and #8 (email decision) are open and blocked on owner input;
+the loop keeps polling and will dispatch PM for owner-reply triage the moment
+the owner comments.)
+
 **Owner-gated wait re-confirmed (dispatch #11) — backlog exhausted; nothing to file.**
 (PM 2026-09-18, blocked-only dispatch #11: re-verified live state first-hand —
 #8 (email decision) and #95 (owner UAT) still have zero comments, no `Owner:`
