@@ -4,6 +4,24 @@
 
 ## Status
 
+**M9 batch 3 filed — #127 (M9-T7 Makefile) + #128 (M9-T8 README); M9-T4–T6 checked off.**
+(PM 2026-09-18, blocked-only dispatch: re-checked the two blocked issues —
+#8 (email decision) and #95 (owner UAT) still have zero comments, so both
+owner-gated blocks remain genuinely valid; left `pi:blocked` in place. No PM
+notes, no owner replies. M9-T4–T6 are merged (#124/#125/#126, issues #121–#123
+closed) and are now checked off in `manifest.md`. Filed the final non-owner-gated
+M9 batch as `pi:ready`: **#127 M9-T7** (p1, type:infra — root `Makefile` with
+`make dev` (.env bootstrap + compose up + healthz wait + URLs), `make start`
+(prod + systemd `--user` compose autostart unit; migrations already run via the
+API container CMD — verified), `make stop` (down + disable/remove unit);
+idempotent; tested end-to-end on the host with results in the PR; no secrets),
+**#128 M9-T8** (p2, type:refactor, depends on #127 — README restructured around
+the make targets, ~150 lines, manual venv/uvicorn + systemd-editing walkthroughs
+removed, troubleshooting condensed to the four real failure modes, demo URL +
+privacy disclosure kept). With these filed, **every non-owner-gated manifest
+sub-issue is planned**; after #127/#128 merge, only owner-gated #8 (email
+decision) and #95 (UAT) remain.)
+
 **M9 batch 2 filed — UI fixes #121–#123; M9-T1–T3 marked done in manifest.**
 (PM 2026-09-17, blocked-only dispatch: re-checked the two blocked issues —
 #8 (email decision) and #95 (owner UAT) still have zero comments, so both
