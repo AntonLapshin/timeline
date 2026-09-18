@@ -4,15 +4,15 @@
 
 ## Status
 
-**Owner-gated wait re-confirmed (dispatch #17) — backlog exhausted; nothing to file.**
-(PM 2026-09-18, blocked-only dispatch #17: fresh re-verification — #8 (email
+**Owner-gated wait re-confirmed (dispatch #18) — backlog exhausted; nothing to file.**
+(PM 2026-09-18, blocked-only dispatch #18: fresh re-verification — #8 (email
 decision) and #95 (owner UAT) still have zero comments, no `Owner:` replies
 and no `PI-NOTE` markers, so both owner-gated blocks remain genuinely valid;
 left `pi:blocked` in place. No PM notes, no owner replies, no open PRs, CI +
-Deploy to GitHub Pages green on main (success 2026-09-18T12:12Z), demo URL
+Deploy to GitHub Pages green on main (success 2026-09-18T12:59Z), demo URL
 live (HTTP 200), no stale `completed.json` (only initiation.json +
-loop.lock), working tree clean and in sync with origin/main. Manifest
-backlog re-verified at HEAD (90bc472): 7 unchecked boxes — 6 are the success
+loop.lock), working tree clean and in sync with origin/main (447f547).
+Manifest backlog re-verified at HEAD: 7 unchecked boxes — 6 are the success
 criteria (lines 46–51, validated by the owner UAT week) and the only
 unchecked milestone sub-issue is **M7-T3 (line 182), already filed as
 owner-gated `pi:needs-human` #95** (id:M7-T3) — re-filing would duplicate it
@@ -26,7 +26,7 @@ nothing remains to plan.** Project is NOT done per the done-definition — #95
 loop keeps polling and will dispatch PM for owner-reply triage the moment the
 owner comments.)
 
-*(Dispatches #4–#16, 2026-09-18 — consolidated: sixteen consecutive
+*(Dispatches #4–#17, 2026-09-18 — consolidated: seventeen consecutive
 blocked-only PM turns re-verified the identical owner-gated wait state — #8
 and #95 with zero comments and no `Owner:` replies, both blocks valid,
 `pi:blocked` left in place, no PM notes, no owner replies, no open PRs,
