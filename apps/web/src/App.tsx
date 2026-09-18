@@ -42,6 +42,12 @@ export default function App() {
     setRefreshKey((k) => k + 1);
     closeDrawer();
   }, [closeDrawer]);
+  // After a successful delete the drawer closes itself (view model); bump the
+  // refresh key so the timeline, calendar, summary and filter dropdowns
+  // refetch without a reload.
+  const onEventDeleted = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+  }, []);
   const wizard = useEventWizard({ onSaved: onWizardSaved });
   const smartInput = useSmartInput(wizard.openCreateWithDraft);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +147,11 @@ export default function App() {
         )}
       </AppShell>
       {drawer.open && (
-        <EventDrawer drawer={drawer} onEdit={() => wizard.openEdit(drawer.event!)} />
+        <EventDrawer
+          drawer={drawer}
+          onEdit={() => wizard.openEdit(drawer.event!)}
+          onDeleted={onEventDeleted}
+        />
       )}
       {wizard.open && <EventWizard wizard={wizard} />}
     </>

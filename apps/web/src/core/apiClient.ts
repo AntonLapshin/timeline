@@ -3,8 +3,8 @@
  *
  * Pure service: wraps `fetch` (injected as a dependency so this module stays
  * testable and free of browser globals) into typed methods for the documented
- * endpoints: `GET/POST /api/events`, `GET /api/events/{id}`, and
- * `GET /api/summary?month=YYYY-MM`. No React, no direct browser API access.
+ * endpoints: `GET/POST /api/events`, `GET/PATCH/DELETE /api/events/{id}`,
+ * and `GET /api/summary?month=YYYY-MM`. No React, no direct browser API access.
  */
 
 import type {
@@ -49,6 +49,7 @@ export interface ApiClient {
   getEvent(id: number): Promise<EventRead>;
   createEvent(payload: EventCreate): Promise<EventRead>;
   updateEvent(id: number, payload: EventUpdate): Promise<EventRead>;
+  deleteEvent(id: number): Promise<void>;
   getSummary(month: string): Promise<SummaryResponse>;
   getOccurrences(month: string): Promise<EventOccurrence[]>;
   getEventDeliveries(id: number): Promise<DeliveryLog[]>;
@@ -98,6 +99,14 @@ export function createApiClient(
         method: "PATCH",
         body: payload,
       });
+    },
+    async deleteEvent(id: number): Promise<void> {
+      // DELETE returns 204 No Content (no JSON body), so bypass the JSON
+      // `request()` helper and only assert the status.
+      const res = await fetchImpl(`${base}/api/events/${id}`, {
+        method: "DELETE",
+      });
+      assertOk(res, "delete event");
     },
     async getSummary(month: string): Promise<SummaryResponse> {
       return request<SummaryResponse>(

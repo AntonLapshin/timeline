@@ -9,10 +9,36 @@
  * `EventOccurrence` values.
  */
 
-import type { EventOccurrence } from "./eventTypes";
+import type { EventOccurrence, EventPriority } from "./eventTypes";
 import { parseIso, relativeLabel, startOfDay, toLocalDate, weekdayShort } from "./dateFmt";
 import { formatRecurrence } from "./recurrenceFormat";
 import { priorityStyle, tagStyle } from "./timeline";
+
+/**
+ * Solid dot color per priority, mirroring the event-row palette in
+ * `src/core/timeline` (critical → red, medium → amber/orange, low → gray)
+ * so the month-grid dots instantly convey each day's event mix.
+ */
+export const PRIORITY_DOT_CLASSES: Record<EventPriority, string> = {
+  critical: "bg-red-500",
+  medium: "bg-amber-500",
+  low: "bg-slate-400",
+};
+
+/** Derive the month-grid dot color for a priority level. */
+export function priorityDotClass(priority: EventPriority): string {
+  return PRIORITY_DOT_CLASSES[priority] ?? PRIORITY_DOT_CLASSES.medium;
+}
+
+/**
+ * Derive the dot colors for a day cell (up to `limit`, in occurrence order).
+ *
+ * One dot per occurrence, colored by that occurrence's priority, so mixed
+ * days show a mixed set of dots.
+ */
+export function dayDotClasses(day: CalendarDay, limit = 3): string[] {
+  return day.occurrences.slice(0, Math.max(0, limit)).map((o) => priorityDotClass(o.priority));
+}
 
 /** A single day cell in the month grid. */
 export interface CalendarDay {

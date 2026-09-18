@@ -70,9 +70,12 @@ function populatedDrawerState(): EventDrawerState {
     deliveriesLoading: false,
     deliveriesError: null,
     deliveries: deliveryLogRows(SHOWCASE_DELIVERIES),
+    deleting: false,
+    deleteError: null,
     openDrawer: noop,
     openFromOccurrence: async () => {},
     close: noop,
+    deleteCurrent: async () => true,
   };
 }
 

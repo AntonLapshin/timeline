@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { EventDrawerState } from "../viewModels/useEventDrawer";
 import { EVENT_CHANNELS } from "../../core/eventTypes";
 import { priorityStyle, tagStyle } from "../../core/timeline";
@@ -15,6 +16,8 @@ export interface EventDrawerProps {
   drawer: EventDrawerState;
   /** Called when the user wants to edit the selected event. */
   onEdit?: () => void;
+  /** Called after the selected event has been successfully deleted. */
+  onDeleted?: () => void;
 }
 
 /**
@@ -28,7 +31,7 @@ export interface EventDrawerProps {
  * Esc key (handled in the view model) or a backdrop click. Body-scroll
  * locking lives in the view model. No business logic lives here.
  */
-export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
+export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
   const {
     event,
     loading,
@@ -39,12 +42,35 @@ export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
     deliveriesLoading,
     deliveriesError,
   } = drawer;
+  const deleting = drawer.deleting ?? false;
+  const deleteError = drawer.deleteError ?? null;
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Reset the two-step delete confirmation whenever a different event is
+  // selected so a stale confirmation can never delete the wrong event.
+  useEffect(() => {
+    setConfirmingDelete(false);
+  }, [event?.id]);
 
   // With a slide-over, the panel only renders when an event is selected —
   // the app composition only mounts it while the drawer is open.
   if (!event) {
     return null;
   }
+
+  const handleConfirmDelete = async () => {
+    const deleteCurrent = drawer.deleteCurrent;
+    if (typeof deleteCurrent === "function") {
+      const ok = await deleteCurrent();
+      if (ok) {
+        setConfirmingDelete(false);
+        onDeleted?.();
+      }
+    } else {
+      // Back-compat for view-model doubles that predate delete support.
+      onDeleted?.();
+    }
+  };
 
   const priority = priorityStyle(event.priority);
   const badge = formatRecurrence(event.rrule);
@@ -222,6 +248,50 @@ export function EventDrawer({ drawer, onEdit }: EventDrawerProps) {
         >
           Edit event
         </button>
+      )}
+
+      {!confirmingDelete ? (
+        <button
+          type="button"
+          onClick={() => setConfirmingDelete(true)}
+          className="mt-2 w-full rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40"
+        >
+          Delete event
+        </button>
+      ) : (
+        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/40">
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">
+            Delete this event? This cannot be undone.
+          </p>
+          {deleteError && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+              {deleteError}
+            </p>
+          )}
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={deleting}
+              className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Confirm delete"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+              className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {deleteError && !confirmingDelete && (
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400" role="alert">
+          {deleteError}
+        </p>
       )}
       </aside>
     </>

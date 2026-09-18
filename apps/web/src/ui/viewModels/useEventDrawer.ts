@@ -45,12 +45,25 @@ export interface EventDrawerState {
   deliveriesError: string | null;
   /** The event's delivery-log rows (newest-first, limited). */
   deliveries: DeliveryLogRow[];
+  /** Whether a delete request is currently in flight. */
+  deleting?: boolean;
+  /** A human error message for a failed delete, or null. */
+  deleteError?: string | null;
   /** Open the drawer for a given event. */
   openDrawer: (event: EventRead) => void;
   /** Open the drawer for an event occurrence (fetches the full event). */
   openFromOccurrence: (occurrence: EventOccurrence) => Promise<void>;
   /** Close the drawer. */
   close: () => void;
+  /**
+   * Delete the currently selected event via the API.
+   *
+   * On success the drawer closes and `true` is returned so the app
+   * composition can refresh its data views (bump `refreshKey`). On failure
+   * `deleteError` is set and `false` is returned. Returns `false` without
+   * any I/O when no event is selected or a delete is already in flight.
+   */
+  deleteCurrent?: () => Promise<boolean>;
 }
 
 /**
@@ -70,6 +83,8 @@ export function useEventDrawer(): EventDrawerState {
   const [deliveriesRaw, setDeliveriesRaw] = useState<DeliveryLog[]>([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(false);
   const [deliveriesError, setDeliveriesError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // The month whose occurrences we fetch: the selected event's start month.
   const month = useMemo(() => {
@@ -136,11 +151,13 @@ export function useEventDrawer(): EventDrawerState {
   const openDrawer = useCallback((selected: EventRead) => {
     setEvent(selected);
     setError(null);
+    setDeleteError(null);
   }, []);
 
   const openFromOccurrence = useCallback(
     async (occurrence: EventOccurrence) => {
       setError(null);
+      setDeleteError(null);
       try {
         const full = await apiClient.getEvent(occurrence.event_id);
         setEvent(full);
@@ -157,7 +174,31 @@ export function useEventDrawer(): EventDrawerState {
     setError(null);
     setDeliveriesRaw([]);
     setDeliveriesError(null);
+    setDeleting(false);
+    setDeleteError(null);
   }, []);
+
+  const deleteCurrent = useCallback(async (): Promise<boolean> => {
+    if (!event || deleting) {
+      return false;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await apiClient.deleteEvent(event.id);
+      setEvent(null);
+      setOccurrences([]);
+      setError(null);
+      setDeliveriesRaw([]);
+      setDeliveriesError(null);
+      return true;
+    } catch {
+      setDeleteError("Failed to delete event");
+      return false;
+    } finally {
+      setDeleting(false);
+    }
+  }, [apiClient, deleting, event]);
 
   // Esc closes the drawer.
   useEffect(() => {
@@ -212,8 +253,11 @@ export function useEventDrawer(): EventDrawerState {
     deliveriesLoading,
     deliveriesError,
     deliveries,
+    deleting,
+    deleteError,
     openDrawer,
     openFromOccurrence,
     close,
+    deleteCurrent,
   };
 }

@@ -1,5 +1,6 @@
 import { useCalendar, type CalendarMode } from "../viewModels/useCalendar";
 import {
+  dayDotClasses,
   daySlots,
   toOccurrenceRow,
   weekGrid,
@@ -22,9 +23,10 @@ const MODES: Array<{ id: CalendarMode; label: string }> = [
 /**
  * A single day cell in the month grid.
  *
- * Dumb view: renders the day-of-month number and the day's occurrence count
- * (dots) passed in from the view model's grid, and calls `onSelect` when
- * clicked. No business logic — all derivation lives in `src/core`.
+ * Dumb view: renders the day-of-month number and one dot per occurrence
+ * (up to 3, colored by each occurrence's priority via `dayDotClasses`) passed
+ * in from the view model's grid, and calls `onSelect` when clicked. No
+ * business logic — all derivation lives in `src/core`.
  */
 export function DayCell({
   day,
@@ -49,15 +51,15 @@ export function DayCell({
       </span>
       {day.count > 0 && (
         <span className="mt-1 flex flex-wrap justify-center gap-0.5">
-          {Array.from({ length: Math.min(day.count, 3) }, (_, i) => (
+          {dayDotClasses(day).map((dotClass, i) => (
             <span
-              key={i}
+              key={`${day.isoDate}-dot-${i}`}
               aria-hidden
-              className="h-1.5 w-1.5 rounded-full bg-indigo-500"
+              className={`h-1.5 w-1.5 rounded-full ${dotClass}`}
             />
           ))}
           {day.count > 3 && (
-            <span className="text-[10px] font-medium leading-none text-indigo-600">
+            <span className="text-[10px] font-medium leading-none text-slate-500 dark:text-slate-400">
               +{day.count - 3}
             </span>
           )}

@@ -78,6 +78,8 @@ function createShowcaseApiClient(
       events === null ? fail() : Promise.resolve(SHOWCASE_EVENTS[0]),
     updateEvent: () =>
       events === null ? fail() : Promise.resolve(SHOWCASE_EVENTS[0]),
+    deleteEvent: () =>
+      events === null ? fail() : Promise.resolve(),
     getSummary: () =>
       summary === null ? fail() : Promise.resolve(summary),
     getOccurrences: () =>
