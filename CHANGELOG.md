@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Root `Makefile`: one-command stack lifecycle — `make dev` / `make start`
+  / `make stop` (issue #127, M9-T7):** the docker-compose stack is now driven
+  by three idempotent targets at the repo root (`make help` is the default
+  target and lists them, plus `make status` and `make logs`). `make dev`
+  bootstraps `.env` from `.env.example` (only when missing — an existing
+  `.env` is never overwritten; secrets stay in the local, gitignored `.env`),
+  runs `docker compose up --build -d`, waits for `GET
+  http://127.0.0.1:8124/healthz` to report ok (the API container applies
+  Alembic migrations before serving), and prints the web URL, the LAN URL
+  (detected via `ip route`), and the healthz URL. `make start` is the prod
+  path: stack up with built images plus install + enable of a systemd `--user`
+  boot-autostart unit — `systemd/timeline-compose.service.in` is generated to
+  `~/.config/systemd/user/timeline-compose.service` with the absolute repo
+  path and docker binary substituted, running `docker compose up -d` in the
+  repo dir at boot/login (with a short retry loop for a not-yet-ready daemon;
+  requires linger and docker-group access). `make stop` runs
+  `docker compose down` and disables/removes the unit; both are idempotent.
+  `make status` (compose ps + healthz) and `make logs` (follow logs) are small
+  extras. The pre-existing native `systemd/timeline.service` example is
+  untouched, no app code changes, and no secrets in the Makefile or unit;
+  both the Makefile output and the README section remind that LAN exposure is
+  unauthenticated (trusted LAN only) and that ports 8123/8124 need a firewall
+  whitelist.
+
 ### Changed
 
 - **App shell fills the viewport; timeline/calendar scroll internally (issue

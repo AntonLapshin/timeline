@@ -1,0 +1,34 @@
+# Timeline — systemd --user unit that autostarts the docker-compose stack
+# (web + api) at boot/login. Installed by `make start`, which substitutes the
+# absolute repo directory and docker binary path below; removed by `make stop`.
+#
+#   make start   -> install + enable (copied to ~/.config/systemd/user/)
+#   make stop    -> disable + remove
+#
+# The API container CMD runs `alembic upgrade head` before serving, so
+# migrations are applied on every (re)start of the api container. Secrets come
+# from the repo's gitignored `.env` (docker compose reads it automatically) —
+# no secrets live in this unit.
+#
+# Requires docker access for this user (member of the `docker` group) and
+# linger for true boot autostart (`loginctl enable-linger $USER`, already
+# enabled on the owner's host). LAN exposure is unauthenticated by design —
+# trusted LAN only; whitelist the ports in the firewall:
+#   sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp
+
+[Unit]
+Description=Timeline docker-compose stack (web + api, boot autostart)
+# A --user manager cannot order against system units (docker.service), so the
+# ExecStart retry loop below handles a not-yet-ready daemon at boot.
+
+[Service]
+Type=oneshot
+WorkingDirectory=@REPO_DIR@
+# Retry briefly so a not-yet-ready docker daemon at boot does not give up.
+ExecStart=/bin/sh -c 'for i in 1 2 3 4 5 6; do @DOCKER@ compose up -d && exit 0; sleep 5; done; exit 1'
+ExecStop=@DOCKER@ compose down
+RemainAfterExit=yes
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target
