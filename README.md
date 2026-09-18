@@ -80,7 +80,31 @@ auth — trusted LAN only), while the bind posture differs per component:
 keeps the SQLite database in a named volume. Ports bind `0.0.0.0` by design
 (trusted LAN only, no auth), so the stack is reachable via localhost and via
 the machine's LAN IP. The web server proxies `/api` + `/healthz` to the API,
-so browsers only need port 8123 (same-origin, no CORS):
+so browsers only need port 8123 (same-origin, no CORS).
+
+**One-command lifecycle (root `Makefile`).** `make dev` / `make start` /
+`make stop` wrap the compose stack (issue #127); `make help` lists them and is
+the default target. Requires docker access for your user (member of the
+`docker` group, or run the targets via sudo):
+
+```bash
+make dev      # dev: copies .env.example -> .env if missing (never overwrites),
+              # then docker compose up --build -d, waits for API healthz, prints URLs
+make start    # prod: stack up (built images; migrations run in the API container CMD)
+              # + installs/enables a systemd --user unit for boot autostart
+make stop     # docker compose down + disable/remove the boot-autostart unit
+make status   # compose ps + API healthz          make logs  # compose logs -f
+```
+
+`make start` installs `~/.config/systemd/user/timeline-compose.service`
+(generated from `systemd/timeline-compose.service.in` with your absolute repo
+path) and enables it, so the stack autostarts on boot/login — requires linger
+(`loginctl enable-linger $USER`) and docker access for your user. `make stop`
+downs the stack and removes the unit again; both are idempotent. The native
+`systemd/timeline.service` (non-Docker daily-driver path) is separate and
+untouched by these targets.
+
+**Manual equivalent:**
 
 ```bash
 cp .env.example .env   # fill local values (secrets stay local)
