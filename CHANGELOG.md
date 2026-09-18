@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **App shell fills the viewport; timeline/calendar scroll internally (issue
+  #123, M9-T6):** the app shell now occupies exactly the viewport height
+  (`h-dvh` flex column with `overflow-hidden`) instead of `min-h-screen` with
+  a normal-flow `<main>` — the page-level vertical scrollbar is gone. The
+  header (title, view switcher, search/filter, smart-input, summary bar,
+  theme toggle) is a `shrink-0` flex child so it stays visible while content
+  scrolls; `<main>` is the single internal scroll container (`min-h-0 flex-1
+  overflow-y-auto`, with the centered `max-w-3xl` content wrapper moved
+  inside it), so the Timeline (month groups + "Load more" pagination) and
+  the Calendar (month/week/agenda) scroll inside it instead of the whole
+  document. No logic changes — layout classes only, in `AppShell.tsx`.
+  Fixed-position overlays (event slide-over drawer, wizard modal) are
+  unaffected; the Showcase gallery's embedded AppShell previews now scroll
+  internally like the real shell. Works in both light and dark themes.
+
 - **Event click opens a right-side slide-over panel (issue #122, M9-T5):**
   clicking an event in the Timeline or Calendar now opens its details in a
   fixed slide-over anchored to the right edge of the viewport

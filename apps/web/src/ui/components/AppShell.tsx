@@ -24,12 +24,17 @@ export interface AppShellProps {
 }
 
 /**
- * The top-level app shell (issue #21).
+ * The top-level app shell (issue #21; viewport-height layout issue #123).
  *
  * Provides the no-login localhost layout: a header that hosts the summary-bar
  * slot (wired in a later issue), a view switcher (Timeline / Calendar), and the
- * active view's content. Dumb component — it renders props and calls the
- * `onViewChange` callback; no business logic.
+ * active view's content. The shell is exactly the viewport height (`h-dvh` flex
+ * column): the header stays visible and the content area (`<main>`) is the
+ * single internal scroll container, so the timeline/calendar scroll inside it
+ * instead of the whole document — no page-level vertical scrollbar.
+ *
+ * Dumb component — it renders props and calls the `onViewChange` callback; no
+ * business logic.
  */
 export function AppShell({
   view,
@@ -47,8 +52,8 @@ export function AppShell({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-900">
-      <header className="border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="flex h-dvh flex-col overflow-hidden bg-slate-100 dark:bg-slate-900">
+      <header className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
           <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Timeline</h1>
           <div className="flex items-center gap-2">
@@ -87,7 +92,9 @@ export function AppShell({
           <div className="mx-auto max-w-3xl px-4 pb-3">{summarySlot}</div>
         )}
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-6">{children}</main>
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-4 py-6">{children}</div>
+      </main>
     </div>
   );
 }

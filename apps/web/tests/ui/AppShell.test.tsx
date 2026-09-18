@@ -102,4 +102,30 @@ describe("AppShell", () => {
     );
     expect(screen.getByRole("button", { name: "🌙" })).toBeInTheDocument();
   });
+
+  it("fills the viewport exactly: header stays put, content scrolls internally (#123)", () => {
+    const { container } = render(
+      <AppShell view="timeline" onViewChange={() => {}}>
+        <p>content</p>
+      </AppShell>,
+    );
+
+    // The shell root is exactly the viewport height (flex column) and can
+    // never produce a page-level scrollbar.
+    const shell = container.firstElementChild as HTMLElement;
+    expect(shell).toHaveClass("h-dvh");
+    expect(shell).toHaveClass("flex", "flex-col", "overflow-hidden");
+
+    // The header keeps its natural height (never compressed) and stays
+    // visible while the content scrolls.
+    const header = shell.querySelector("header");
+    expect(header).toHaveClass("shrink-0");
+
+    // The content area is the single internal scroll container: it fills the
+    // remaining height (`flex-1`), is allowed to shrink below its content
+    // height (`min-h-0`, the flexbox overflow fix) and scrolls internally
+    // instead of the document.
+    const main = screen.getByRole("main");
+    expect(main).toHaveClass("min-h-0", "flex-1", "overflow-y-auto");
+  });
 });
