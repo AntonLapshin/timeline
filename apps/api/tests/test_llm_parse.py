@@ -305,7 +305,7 @@ def test_parse_needs_clarification() -> None:
 def test_parse_http_error() -> None:
     """A non-200 response is a failure."""
     client = _FakeClient(_FakeResponse(500, {}))
-    result = parse_events("x", NOW, TZ, _settings(), client)
+    result = parse_events("x", NOW, TZ, _settings(), client, sleep=lambda _s: None)
     assert result.ok is False
     assert "HTTP 500" in result.error
 
@@ -314,7 +314,9 @@ def test_parse_http_error_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     """A non-200 LLM response is logged server-side with the status (issue #113)."""
     client = _FakeClient(_FakeResponse(502, {}))
     with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
-        result = parse_events("dentist tomorrow", NOW, TZ, _settings(), client)
+        result = parse_events(
+            "dentist tomorrow", NOW, TZ, _settings(), client, sleep=lambda _s: None
+        )
     assert result.ok is False
     messages = "\n".join(r.getMessage() for r in caplog.records)
     assert any(r.levelno == logging.ERROR for r in caplog.records)
@@ -333,7 +335,12 @@ def test_parse_transport_error_is_logged_without_secrets(
 
     with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
         result = parse_events(
-            "dentist tomorrow 9am", NOW, TZ, _settings(), _RaisingClient()
+            "dentist tomorrow 9am",
+            NOW,
+            TZ,
+            _settings(),
+            _RaisingClient(),
+            sleep=lambda _s: None,
         )
     assert result.ok is False
     messages = "\n".join(r.getMessage() for r in caplog.records)
@@ -373,7 +380,9 @@ def test_parse_transport_error() -> None:
         def post(self, url: str, *, headers: dict[str, str], json: dict[str, object]):
             raise RuntimeError("boom")
 
-    result = parse_events("x", NOW, TZ, _settings(), _RaisingClient())
+    result = parse_events(
+        "x", NOW, TZ, _settings(), _RaisingClient(), sleep=lambda _s: None
+    )
     assert result.ok is False
     assert "boom" in result.error
 
@@ -407,6 +416,112 @@ def test_parse_invalid_response_shape() -> None:
     result = parse_events("x", NOW, TZ, _settings(), client)
     assert result.ok is False
     assert "invalid" in result.error
+
+
+# --- Retry with backoff (flaky gateway) -------------------------------------
+
+
+class _SequenceClient:
+    """A fake HTTP client replaying a scripted response/exception sequence."""
+
+    def __init__(self, script: list) -> None:
+        self._script = list(script)
+        self.posts = 0
+
+    def post(
+        self, url: str, *, headers: dict[str, str], json: dict[str, object]
+    ):
+        self.posts += 1
+        item = self._script.pop(0) if self._script else self._script[-1]
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def test_parse_retries_transient_5xx_then_succeeds() -> None:
+    """Transient 5xx responses are retried with exponential backoff."""
+    sleeps: list[float] = []
+    client = _SequenceClient(
+        [
+            _FakeResponse(503, {}),
+            _FakeResponse(502, {}),
+            _FakeResponse(
+                200,
+                {
+                    "events": [
+                        {"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}
+                    ]
+                },
+            ),
+        ]
+    )
+    result = parse_events(
+        "dentist tomorrow", NOW, TZ, _settings(), client, sleep=sleeps.append
+    )
+    assert result.ok is True
+    assert result.outcome is not None
+    assert result.outcome.drafts[0].title == "Dentist"
+    assert client.posts == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_parse_retries_transport_errors_then_succeeds() -> None:
+    """Timeouts/connection errors are retried (the known flaky-gateway case)."""
+    sleeps: list[float] = []
+    client = _SequenceClient(
+        [
+            RuntimeError("The read operation timed out"),
+            RuntimeError("The read operation timed out"),
+            _FakeResponse(
+                200,
+                {
+                    "events": [
+                        {"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}
+                    ]
+                },
+            ),
+        ]
+    )
+    result = parse_events(
+        "dentist tomorrow", NOW, TZ, _settings(), client, sleep=sleeps.append
+    )
+    assert result.ok is True
+    assert client.posts == 3
+    assert sleeps == [1.0, 2.0]
+
+
+def test_parse_does_not_retry_auth_errors() -> None:
+    """A 401 (bad key) fails immediately — retrying is pointless."""
+    sleeps: list[float] = []
+    client = _SequenceClient([_FakeResponse(401, {})])
+    result = parse_events("x", NOW, TZ, _settings(), client, sleep=sleeps.append)
+    assert result.ok is False
+    assert "HTTP 401" in result.error
+    assert client.posts == 1
+    assert sleeps == []
+
+
+def test_parse_gives_up_after_five_attempts() -> None:
+    """A persistently failing gateway is tried 5 times, then reported."""
+    sleeps: list[float] = []
+    client = _SequenceClient([RuntimeError("The read operation timed out")] * 5)
+    result = parse_events("x", NOW, TZ, _settings(), client, sleep=sleeps.append)
+    assert result.ok is False
+    assert "timed out" in result.error
+    assert "after 5 attempts" in result.error
+    assert client.posts == 5
+    assert sleeps == [1.0, 2.0, 4.0, 8.0]
+
+
+def test_parse_gives_up_after_five_attempts_on_5xx() -> None:
+    """A persistently 503 gateway is tried 5 times, then reported."""
+    sleeps: list[float] = []
+    client = _SequenceClient([_FakeResponse(503, {})] * 5)
+    result = parse_events("x", NOW, TZ, _settings(), client, sleep=sleeps.append)
+    assert result.ok is False
+    assert "HTTP 503" in result.error
+    assert "after 5 attempts" in result.error
+    assert client.posts == 5
 
 
 # --- Priority / critical-financial guard (web-side contract parity) ---------

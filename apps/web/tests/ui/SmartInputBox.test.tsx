@@ -61,4 +61,16 @@ describe("SmartInputBox", () => {
     render(<SmartInputBox smartInput={state()} />);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+
+  it("shows a live status and disables the input while parsing", () => {
+    render(<SmartInputBox smartInput={state({ parsing: true, text: "x" })} />);
+    expect(screen.getByLabelText("Add event")).toBeDisabled();
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent(/Retrying automatically \(up to 5 attempts\)/);
+  });
+
+  it("shows no status when idle", () => {
+    render(<SmartInputBox smartInput={state()} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
 });

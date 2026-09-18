@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **JoinGonka base URL corrected (`/openai/v1` → `/v1`):** the API posted to
+  `<base>/chat/completions`, so the old default produced
+  `.../openai/v1/chat/completions`, which the gateway rejects with HTTP 405.
+  The default in `app/config.py`, `.env.example`, and the tests is now
+  `https://gate.joingonka.ai/v1`. Existing local `.env` files still holding
+  the old value need a one-line update plus a container recreate
+  (`docker compose down && make dev`).
+
 - **Backup/restore runbook now works in the compose stack (review fix on PR
   #130, issue #128):** the api container previously inherited the host-relative
   `TIMELINE_BACKUPS_DIR=./backups` from `.env`, which resolved to
@@ -38,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comments.
 
 ### Added
+
+- **LLM parse retries flaky gateways (up to 5 attempts) + nicer smart-input
+  loading state:** `llm_parse.parse_events` now retries transport failures
+  (timeouts, connection errors) and retryable statuses (408/429/transient
+  5xx) with exponential backoff (1s, 2s, 4s, 8s); other 4xx (bad key/model)
+  still fail immediately, and the final error names the attempt count. The
+  smart-input box disables its input while parsing, shows a spinner on the
+  button, and renders a live status line explaining the wait and the
+  automatic retries.
 
 - **Root `Makefile`: one-command stack lifecycle — `make dev` / `make start`
   / `make stop` (issue #127, M9-T7):** the docker-compose stack is now driven

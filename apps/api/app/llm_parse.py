@@ -10,10 +10,11 @@ client (no real network):
 - ``validate_parse_response`` — pure validation of the model's JSON response
   into validated ``ParsedDraft``(s) or a ``needs_clarification`` request.
 - ``parse_events`` — orchestrator that returns ``unavailable`` when the LLM key
-  is absent, otherwise POSTs via the injected HTTP client and validates. Every
-  failure path is logged server-side (``logger.error`` with the underlying
-  error/status, issue #113) — never the raw text (only a redacted reference)
-  and never any secret.
+  is absent, otherwise POSTs via the injected HTTP client and validates, with
+  up to 5 attempts (exponential backoff) on transport failures and retryable
+  statuses. Every failure path is logged server-side (``logger.error`` with
+  the underlying error/status, issue #113) — never the raw text (only a
+  redacted reference) and never any secret.
 
 No real network happens in this module's own tests; the HTTP client is injected
 so callers (and tests) supply a fake.
@@ -22,6 +23,8 @@ so callers (and tests) supply a fake.
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -35,6 +38,21 @@ logger = logging.getLogger(__name__)
 
 #: The OpenAI-compatible chat completions path appended to the base URL.
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
+
+#: Maximum POST attempts per parse call (1 initial try + up to 4 retries).
+#: The JoinGonka gateway is known to be flaky (slow reads, transient 5xx),
+#: so transport failures and retryable statuses are retried with backoff.
+_MAX_ATTEMPTS = 5
+
+#: HTTP statuses worth retrying: rate-limit / transient gateway failures.
+#: Other 4xx (401 bad key, 403, 404 bad model, 405, …) fail immediately —
+#: retrying them is pointless.
+_RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
+#: Base delay (seconds) for exponential backoff between attempts: the wait
+#: after failed attempt N is ``_RETRY_BASE_DELAY_SEC * 2**(N-1)``
+#: (1s, 2s, 4s, 8s for the default 5 attempts).
+_RETRY_BASE_DELAY_SEC = 1.0
 
 #: System prompt describing the extraction task and output schema.
 _SYSTEM_PROMPT = (
@@ -159,6 +177,16 @@ class ParseOutcome:
         return self.clarification is not None
 
 
+def _retry_delay_sec(failed_attempt: int) -> float:
+    """Exponential-backoff delay after failed attempt N (1-based)."""
+    return _RETRY_BASE_DELAY_SEC * (2 ** (failed_attempt - 1))
+
+
+def _is_retryable_status(status_code: Any) -> bool:
+    """Whether an HTTP status is worth retrying (rate-limit / transient 5xx)."""
+    return status_code in _RETRYABLE_STATUS_CODES
+
+
 def validate_parse_response(data: Any) -> ParseOutcome:
     """Validate a model's JSON response into a ``ParseOutcome`` (pure).
 
@@ -219,6 +247,8 @@ def parse_events(
     tz: str,
     settings: Settings,
     http_client: HttpClient,
+    max_attempts: int = _MAX_ATTEMPTS,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> ParseResult:
     """Parse free text into validated event draft(s).
 
@@ -226,9 +256,14 @@ def parse_events(
     (matching the web ``LlmParser`` contract where a 503 means unavailable).
     Otherwise builds the JSON-mode request and POSTs it via the injected
     ``http_client`` (no real network in tests), then validates the response.
-    Every failure is logged server-side (``logger.error`` with the underlying
-    error/status — never the raw text, prompt, or any secret) so the owner can
-    diagnose bad keys/models/gate outages from the API logs (issue #113).
+
+    The gateway is flaky, so transport failures (timeouts, connection errors)
+    and retryable statuses (429 / transient 5xx) are retried up to
+    ``max_attempts`` times with exponential backoff (1s, 2s, 4s, 8s). Other
+    4xx statuses (bad key/model) fail immediately. Every failure is logged
+    server-side (``logger.error`` with the underlying error/status — never
+    the raw text, prompt, or any secret) so the owner can diagnose bad
+    keys/models/gate outages from the API logs (issue #113).
     """
     if not settings.llm_api_key:
         return ParseResult(ok=False, unavailable=True, error="LLM key not configured")
@@ -237,31 +272,60 @@ def parse_events(
     logger.info("parse_events called ref=%s", redact_text(text))
 
     request = build_request(text, now, tz, settings)
-    try:
-        response = http_client.post(
-            request.url, headers=request.headers, json=request.json
-        )
-    except Exception as exc:  # noqa: BLE001 — surface any transport error
-        error = f"LLM request failed: {exc}"
-        logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
-        return ParseResult(ok=False, error=error)
+    attempts = max(1, max_attempts)
+    last_error = "unknown error"
+    made = 0
+    for attempt in range(1, attempts + 1):
+        made = attempt
+        try:
+            response = http_client.post(
+                request.url, headers=request.headers, json=request.json
+            )
+        except Exception as exc:  # noqa: BLE001 — surface any transport error
+            last_error = f"LLM request failed: {exc}"
+            if attempt < attempts:
+                logger.warning(
+                    "LLM parse attempt %d/%d failed ref=%s: %s — retrying",
+                    attempt,
+                    attempts,
+                    redact_text(text),
+                    last_error,
+                )
+                sleep(_retry_delay_sec(attempt))
+                continue
+            break
 
-    if getattr(response, "status_code", None) != 200:
-        error = f"LLM request failed (HTTP {response.status_code})"
-        logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
-        return ParseResult(ok=False, error=error)
+        status_code = getattr(response, "status_code", None)
+        if status_code != 200:
+            last_error = f"LLM request failed (HTTP {status_code})"
+            if _is_retryable_status(status_code) and attempt < attempts:
+                logger.warning(
+                    "LLM parse attempt %d/%d failed ref=%s: %s — retrying",
+                    attempt,
+                    attempts,
+                    redact_text(text),
+                    last_error,
+                )
+                sleep(_retry_delay_sec(attempt))
+                continue
+            break
 
-    try:
-        data = response.json()
-    except Exception as exc:  # noqa: BLE001 — non-JSON body
-        error = f"LLM returned non-JSON: {exc}"
-        logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
-        return ParseResult(ok=False, error=error)
+        try:
+            data = response.json()
+        except Exception as exc:  # noqa: BLE001 — non-JSON body
+            error = f"LLM returned non-JSON: {exc}"
+            logger.error("LLM parse failed ref=%s: %s", redact_text(text), error)
+            return ParseResult(ok=False, error=error)
 
-    try:
-        outcome = validate_parse_response(data)
-    except ValueError as exc:
-        logger.error("LLM parse failed ref=%s: %s", redact_text(text), exc)
-        return ParseResult(ok=False, error=str(exc))
+        try:
+            outcome = validate_parse_response(data)
+        except ValueError as exc:
+            logger.error("LLM parse failed ref=%s: %s", redact_text(text), exc)
+            return ParseResult(ok=False, error=str(exc))
 
-    return ParseResult(ok=True, outcome=outcome)
+        return ParseResult(ok=True, outcome=outcome)
+
+    if made > 1:
+        last_error = f"{last_error} (after {made} attempts)"
+    logger.error("LLM parse failed ref=%s: %s", redact_text(text), last_error)
+    return ParseResult(ok=False, error=last_error)
