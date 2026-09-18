@@ -245,7 +245,7 @@ describe("calendar core module", () => {
         }),
       );
       expect(row.priorityColor).toContain("red");
-      expect(row.priorityIcon).toBe("!");
+      expect(row.priorityIcon).toBe("");
       expect(row.tagColor).toContain("border-");
       expect(row.tagIcon).toBe("#");
       expect(row.recurrenceBadge).toBe("every quarter");
@@ -509,7 +509,7 @@ describe("calendar core module", () => {
       expect(rows[1].dateLabel).toBe("Mon, Sep 7");
       expect(rows[1].timeLabel).toBe("10:00 AM");
       expect(rows[1].priorityColor).toContain("red");
-      expect(rows[1].priorityIcon).toBe("!");
+      expect(rows[1].priorityIcon).toBe("");
       expect(rows[1].tagColor).toContain("border-");
       expect(rows[1].tagIcon).toBe("#");
       expect(rows[1].recurrenceBadge).toBe("every quarter");

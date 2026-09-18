@@ -38,27 +38,27 @@ export function EventWizard({ wizard }: EventWizardProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 p-4 pt-16 dark:bg-black/60"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/50 p-4 pt-16 backdrop-blur-[2px] dark:bg-black/70"
       role="dialog"
       aria-modal="true"
       aria-label="Create or edit event"
     >
-      <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-slate-800">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200/70 bg-white/95 p-6 shadow-2xl backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/95 dark:shadow-black/50">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <h2 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-semibold tracking-tight text-transparent dark:from-slate-100 dark:to-slate-400">
             {editingEvent ? "Edit event" : "New event"}
           </h2>
           <button
             type="button"
             onClick={close}
             aria-label="Close wizard"
-            className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
+            className="btn-ghost px-2 py-1 text-sm leading-5"
           >
             ✕
           </button>
         </div>
 
-        <ol className="mb-5 flex flex-wrap items-center gap-2 text-xs font-medium">
+        <ol className="mb-5 flex flex-wrap items-center gap-2 text-xs font-medium leading-4">
           {STEP_TITLES.map((title, index) => {
             const stepNum = (index + 1) as 1 | 2 | 3;
             const active = stepNum === step;
@@ -66,11 +66,11 @@ export function EventWizard({ wizard }: EventWizardProps) {
             return (
               <li key={title} className="flex items-center gap-2">
                 <span
-                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${
+                  className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] leading-none shadow-sm ${
                     active
-                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                      ? "bg-gradient-to-br from-indigo-500 to-indigo-700 text-white shadow-indigo-600/30"
                       : done
-                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                        ? "bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-emerald-600/25"
                         : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
                   }`}
                 >
@@ -105,7 +105,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
             type="button"
             onClick={back}
             disabled={step === 1}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-40"
+            className="btn-ghost px-4 py-2"
           >
             Back
           </button>
@@ -115,7 +115,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
               type="button"
               onClick={next}
               disabled={!canNext}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300 disabled:opacity-40"
+              className="btn-primary px-4 py-2"
             >
               Next
             </button>
@@ -124,7 +124,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
               type="button"
               onClick={save}
               disabled={saving}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+              className="btn bg-gradient-to-b from-emerald-500 to-emerald-700 px-4 py-2 text-white shadow-md shadow-emerald-600/25 hover:from-emerald-400 hover:to-emerald-600"
             >
               {saving ? "Saving…" : "Save event"}
             </button>

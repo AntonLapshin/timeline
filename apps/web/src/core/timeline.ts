@@ -15,9 +15,10 @@ import { parseIso, relativeLabel, toLocalDate, weekdayShort } from "./dateFmt";
 
 /** Display styling for a priority level. */
 export interface PriorityStyle {
-  /** Tailwind text/background color class for the priority. */
+  /** Tailwind gradient-chip class for the priority. */
   color: string;
-  /** A short glyph used as the priority icon. */
+  /** Unused glyph slot (kept for API compat) — priorities render as
+   *  gradient dots via `PriorityDot`, so this is always "". */
   icon: string;
 }
 
@@ -69,20 +70,42 @@ export interface MonthGroup {
   weeks: WeekGroup[];
 }
 
-/** Per-priority display styling (critical, medium, low). */
+/** Per-priority display styling (critical, medium, low).
+ *
+ * `color` is a full Tailwind gradient-chip class: white text on a saturated
+ * gradient in light mode with a softened gradient + tinted ring in dark mode.
+ * Rendered as a gradient dot via `PriorityDot` (no glyph needed, so `icon`
+ * is empty) and reused for chips/pills (week chips, summary counts).
+ */
 const PRIORITY_STYLES: Record<EventPriority, PriorityStyle> = {
-  critical: { color: "text-red-700 bg-red-50 border-red-200", icon: "!" },
-  medium: { color: "text-amber-700 bg-amber-50 border-amber-200", icon: "•" },
-  low: { color: "text-slate-600 bg-slate-100 border-slate-200", icon: "·" },
+  critical: {
+    color:
+      "border-red-600/40 bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-sm shadow-red-500/30 dark:border-red-400/30 dark:from-rose-500/90 dark:to-red-600/90",
+    icon: "",
+  },
+  medium: {
+    color:
+      "border-amber-500/40 bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-sm shadow-amber-500/30 dark:border-amber-400/30 dark:from-amber-400/90 dark:to-orange-500/90",
+    icon: "",
+  },
+  low: {
+    color:
+      "border-sky-500/30 bg-gradient-to-br from-sky-400 to-indigo-500 text-white shadow-sm shadow-sky-500/25 dark:border-sky-400/30 dark:from-sky-400/90 dark:to-indigo-500/90",
+    icon: "",
+  },
 };
 
-/** Cycled tag color classes, indexed by a stable hash of the tag text. */
+/** Cycled tag color classes, indexed by a stable hash of the tag text.
+ *
+ * Muted pastel chips in light mode; desaturated translucent tints in dark
+ * mode (no near-white backgrounds).
+ */
 const TAG_COLORS = [
-  "text-indigo-700 bg-indigo-50 border-indigo-200",
-  "text-emerald-700 bg-emerald-50 border-emerald-200",
-  "text-sky-700 bg-sky-50 border-sky-200",
-  "text-fuchsia-700 bg-fuchsia-50 border-fuchsia-200",
-  "text-teal-700 bg-teal-50 border-teal-200",
+  "border-indigo-200 bg-indigo-50/80 text-indigo-700 dark:border-indigo-400/20 dark:bg-indigo-400/10 dark:text-indigo-300",
+  "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
+  "border-sky-200 bg-sky-50/80 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300",
+  "border-fuchsia-200 bg-fuchsia-50/80 text-fuchsia-700 dark:border-fuchsia-400/20 dark:bg-fuchsia-400/10 dark:text-fuchsia-300",
+  "border-teal-200 bg-teal-50/80 text-teal-700 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-300",
 ];
 
 /** A stable (non-negative) hash of a string. */
@@ -120,7 +143,7 @@ export function toEventRow(event: EventRead): EventRow {
     event,
     priorityColor: priority.color,
     priorityIcon: priority.icon,
-    tagColor: tag?.color ?? "text-slate-500 bg-transparent border-transparent",
+    tagColor: tag?.color ?? "border-slate-200 bg-slate-100/60 text-slate-500 dark:border-slate-600/60 dark:bg-slate-700/40 dark:text-slate-400",
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
     timeLabel: eventTimeLabel(event),

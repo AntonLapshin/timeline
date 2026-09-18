@@ -2,6 +2,7 @@ import { useTimeline } from "../viewModels/useTimeline";
 import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
 import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventRead } from "../../core/eventTypes";
+import { PriorityDot } from "./PriorityDot";
 
 /**
  * A single event row in the timeline.
@@ -20,37 +21,32 @@ export function EventRowView({
 }) {
   return (
     <li
-      className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
-        onEventClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700" : ""
-      } dark:border-slate-700 dark:bg-slate-800`}
+      className={`card group flex items-start gap-3 p-3.5 transition-all duration-150 hover:-translate-y-px hover:shadow-lg ${
+        onEventClick ? "cursor-pointer" : ""
+      }`}
       onClick={onEventClick ? () => onEventClick(row.event) : undefined}
     >
-      <span
-        aria-hidden
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${row.priorityColor}`}
-      >
-        {row.priorityIcon}
-      </span>
+      <PriorityDot priority={row.event.priority} size="md" className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+          <span className="truncate font-medium tracking-tight text-slate-900 dark:text-slate-100">
             {row.event.title}
           </span>
           {row.recurrenceBadge && (
-            <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
+            <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
               ↻ {row.recurrenceBadge}
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        <div className="mt-0.5 flex items-center gap-2 text-sm leading-5 text-slate-500 dark:text-slate-400">
           <span>{row.event.description}</span>
         </div>
-        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-1.5 flex items-center gap-2 text-xs leading-4 text-slate-500 dark:text-slate-400">
           <span>{row.timeLabel}</span>
           {row.relativeLabel && (
             <span
               data-testid="relative-label"
-              className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+              className="chip border-slate-200 bg-slate-100/70 text-slate-600 dark:border-slate-600/60 dark:bg-slate-700/50 dark:text-slate-300"
             >
               {row.relativeLabel}
             </span>
@@ -58,7 +54,7 @@ export function EventRowView({
         </div>
       </div>
       <span
-        className={`shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium ${row.tagColor}`}
+        className={`chip shrink-0 ${row.tagColor}`}
       >
         {row.tagIcon} {row.event.tags[0] ?? "untagged"}
       </span>
@@ -142,14 +138,14 @@ export function TimelineView({
   if (error) {
     return (
       <div
-        className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/40"
+        className="card border-red-200/70 bg-gradient-to-b from-red-50/80 to-white p-6 text-center dark:border-red-500/20 dark:from-red-950/40 dark:to-slate-800"
         role="alert"
       >
-        <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
+        <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">{error}</p>
         <button
           type="button"
           onClick={retry}
-          className="mt-3 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="btn-ghost mt-3 px-4 py-2"
         >
           Retry
         </button>
@@ -159,15 +155,15 @@ export function TimelineView({
 
   if (groups.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-600 dark:bg-slate-800">
-        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+      <div className="card border-dashed p-8 text-center">
+        <p className="text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">
           {filter && isFiltering(filter) ? "No matches." : "No events yet."}
         </p>
         {(!filter || !isFiltering(filter)) && onCreate && (
           <button
             type="button"
             onClick={onCreate}
-            className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+            className="btn-primary mt-3 px-4 py-2"
           >
             + Create your first event
           </button>
@@ -185,7 +181,7 @@ export function TimelineView({
         <button
           type="button"
           onClick={loadMore}
-          className="w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="btn-ghost w-full px-4 py-2"
         >
           Load more
         </button>

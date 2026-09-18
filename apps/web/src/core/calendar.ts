@@ -15,14 +15,15 @@ import { formatRecurrence } from "./recurrenceFormat";
 import { priorityStyle, tagStyle } from "./timeline";
 
 /**
- * Solid dot color per priority, mirroring the event-row palette in
- * `src/core/timeline` (critical → red, medium → amber/orange, low → gray)
- * so the month-grid dots instantly convey each day's event mix.
+ * Gradient dot per priority, mirroring the event-row palette in
+ * `src/core/timeline` (critical → rose/red, medium → amber/orange,
+ * low → sky/indigo) so the month-grid dots instantly convey each day's
+ * event mix. Gradient + shadow keeps tiny dots legible in both themes.
  */
 export const PRIORITY_DOT_CLASSES: Record<EventPriority, string> = {
-  critical: "bg-red-500",
-  medium: "bg-amber-500",
-  low: "bg-slate-400",
+  critical: "bg-gradient-to-br from-rose-400 to-red-600 shadow-sm shadow-red-500/40",
+  medium: "bg-gradient-to-br from-amber-300 to-orange-500 shadow-sm shadow-amber-500/40",
+  low: "bg-gradient-to-br from-sky-300 to-indigo-400 shadow-sm shadow-sky-500/30",
 };
 
 /** Derive the month-grid dot color for a priority level. */
@@ -269,7 +270,7 @@ export function toOccurrenceRow(o: EventOccurrence): OccurrenceRow {
     occurrence: o,
     priorityColor: priority.color,
     priorityIcon: priority.icon,
-    tagColor: tag?.color ?? "text-slate-500 bg-transparent border-transparent",
+    tagColor: tag?.color ?? "border-slate-200 bg-slate-100/60 text-slate-500 dark:border-slate-600/60 dark:bg-slate-700/40 dark:text-slate-400",
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
     timeLabel: occurrenceTimeLabel(o),
@@ -438,7 +439,7 @@ export function toAgendaRow(o: EventOccurrence): AgendaRow {
     timeLabel: o.all_day ? "All day" : timeLabel(o),
     priorityColor: priority.color,
     priorityIcon: priority.icon,
-    tagColor: tag?.color ?? "text-slate-500 bg-transparent border-transparent",
+    tagColor: tag?.color ?? "border-slate-200 bg-slate-100/60 text-slate-500 dark:border-slate-600/60 dark:bg-slate-700/40 dark:text-slate-400",
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
     relativeLabel: relativeLabel(o.start_at, new Date()),

@@ -33,14 +33,18 @@ export interface DeliveryLogRow {
   timeLabel: string;
 }
 
-/** Per-status display styling (scheduled, sent, failed, acked, snoozed, deleted). */
+/** Per-status display styling (scheduled, sent, failed, acked, snoozed, deleted).
+ *
+ * Muted pastel chips in light mode; desaturated translucent tints in dark
+ * mode (no near-white backgrounds).
+ */
 const STATUS_STYLES: Record<string, DeliveryStatusStyle> = {
-  scheduled: { color: "text-slate-600 bg-slate-100 border-slate-200", icon: "◷" },
-  sent: { color: "text-emerald-700 bg-emerald-50 border-emerald-200", icon: "✓" },
-  failed: { color: "text-red-700 bg-red-50 border-red-200", icon: "✕" },
-  acked: { color: "text-sky-700 bg-sky-50 border-sky-200", icon: "☑" },
-  snoozed: { color: "text-amber-700 bg-amber-50 border-amber-200", icon: "◔" },
-  deleted: { color: "text-slate-500 bg-slate-100 border-slate-200", icon: "⊘" },
+  scheduled: { color: "border-slate-200 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-700/40 dark:text-slate-300", icon: "◷" },
+  sent: { color: "border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300", icon: "✓" },
+  failed: { color: "border-red-200 bg-red-50/80 text-red-700 dark:border-red-400/20 dark:bg-red-400/10 dark:text-red-300", icon: "✕" },
+  acked: { color: "border-sky-200 bg-sky-50/80 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-300", icon: "☑" },
+  snoozed: { color: "border-amber-200 bg-amber-50/80 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300", icon: "◔" },
+  deleted: { color: "border-slate-200 bg-slate-100/70 text-slate-500 dark:border-slate-600/50 dark:bg-slate-700/40 dark:text-slate-400", icon: "⊘" },
 };
 
 /** Human labels for each delivery status. */
@@ -79,7 +83,7 @@ export function deliveryStatusLabel(status: string): string {
 export function deliveryStatusStyle(status: string): DeliveryStatusStyle {
   return (
     STATUS_STYLES[status] ?? {
-      color: "text-slate-600 bg-slate-100 border-slate-200",
+      color: "border-slate-200 bg-slate-100/70 text-slate-600 dark:border-slate-600/50 dark:bg-slate-700/40 dark:text-slate-300",
       icon: "•",
     }
   );

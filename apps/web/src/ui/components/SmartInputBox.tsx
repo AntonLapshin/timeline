@@ -40,12 +40,12 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
           aria-label="Add event"
           disabled={parsing}
           aria-busy={parsing}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500"
+          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm leading-5 text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30"
         />
         <button
           type="submit"
           disabled={parsing || !text.trim()}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+          className="btn-accent shrink-0 px-3 py-1.5"
         >
           {parsing && (
             <svg

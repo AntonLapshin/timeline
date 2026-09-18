@@ -26,39 +26,39 @@ export function DemoPanel({
   const info = useProjectInfo(projectName, owner, repo, status, description);
 
   return (
-    <section className="mx-auto max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-xl font-semibold text-slate-900">{info.name}</h2>
+    <section className="card mx-auto max-w-md p-6">
+      <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{info.name}</h2>
       {info.description && (
-        <p className="mt-1 text-sm text-slate-600">{info.description}</p>
+        <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-400">{info.description}</p>
       )}
 
-      <dl className="mt-4 space-y-2 text-sm">
+      <dl className="mt-4 space-y-2 text-sm leading-5">
         <div className="flex items-center justify-between">
-          <dt className="text-slate-500">Status</dt>
+          <dt className="text-slate-500 dark:text-slate-400">Status</dt>
           <dd>
-            <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
+            <span className="chip border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">
               {info.statusText}
             </span>
           </dd>
         </div>
         <div className="flex items-center justify-between">
-          <dt className="text-slate-500">Repo</dt>
-          <dd className="font-mono text-slate-700">
+          <dt className="text-slate-500 dark:text-slate-400">Repo</dt>
+          <dd className="font-mono text-slate-700 dark:text-slate-300">
             {info.owner}/{info.repo}
           </dd>
         </div>
         <div className="flex items-center justify-between">
-          <dt className="text-slate-500">Demo</dt>
+          <dt className="text-slate-500 dark:text-slate-400">Demo</dt>
           <dd>
             {info.demoReady ? (
               <a
                 href={info.demoUrl}
-                className="text-indigo-600 underline hover:text-indigo-800"
+                className="text-indigo-600 underline decoration-indigo-300 underline-offset-2 hover:text-indigo-800 dark:text-indigo-400 dark:decoration-indigo-500/40 dark:hover:text-indigo-300"
               >
                 {info.demoUrl}
               </a>
             ) : (
-              <span className="text-slate-500">Not deployed yet</span>
+              <span className="text-slate-500 dark:text-slate-400">Not deployed yet</span>
             )}
           </dd>
         </div>

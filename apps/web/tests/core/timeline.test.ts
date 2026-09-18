@@ -44,13 +44,14 @@ function makeEvent(overrides: Partial<EventRead>): EventRead {
 
 describe("timeline core module", () => {
   describe("priorityStyle", () => {
-    it("returns distinct styles for each priority", () => {
-      expect(priorityStyle("critical").icon).toBe("!");
-      expect(priorityStyle("medium").icon).toBe("•");
-      expect(priorityStyle("low").icon).toBe("·");
+    it("returns distinct gradient styles for each priority", () => {
+      // Priorities render as gradient dots (PriorityDot), so no glyph icon.
+      expect(priorityStyle("critical").icon).toBe("");
+      expect(priorityStyle("medium").icon).toBe("");
+      expect(priorityStyle("low").icon).toBe("");
       expect(priorityStyle("critical").color).toContain("red");
       expect(priorityStyle("medium").color).toContain("amber");
-      expect(priorityStyle("low").color).toContain("slate");
+      expect(priorityStyle("low").color).toContain("sky");
     });
 
     it("falls back to medium for unknown priorities", () => {
@@ -80,7 +81,7 @@ describe("timeline core module", () => {
         makeEvent({ priority: "critical", tags: ["work"] }),
       );
       expect(row.priorityColor).toContain("red");
-      expect(row.priorityIcon).toBe("!");
+      expect(row.priorityIcon).toBe("");
       expect(row.tagColor).toContain("border-");
       expect(row.tagIcon).toBe("#");
     });

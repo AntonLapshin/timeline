@@ -25,7 +25,7 @@ export function WizardStepOne({
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-slate-700">
+        <label className="field-label">
           Title
         </label>
         <input
@@ -33,15 +33,15 @@ export function WizardStepOne({
           value={draft.title}
           onChange={(e) => onChange({ title: e.target.value })}
           placeholder="What's the event?"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="field-input mt-1"
         />
         {errors.title && (
-          <p className="mt-1 text-xs text-red-600">{errors.title}</p>
+          <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.title}</p>
         )}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700">
+        <label className="field-label">
           Notes
         </label>
         <textarea
@@ -49,7 +49,7 @@ export function WizardStepOne({
           onChange={(e) => onChange({ notes: e.target.value })}
           placeholder="Optional details"
           rows={2}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="field-input mt-1 resize-y"
         />
       </div>
 
@@ -59,30 +59,30 @@ export function WizardStepOne({
           id="wizard-all-day"
           checked={draft.allDay}
           onChange={(e) => onChange({ allDay: e.target.checked })}
-          className="h-4 w-4"
+          className="h-4 w-4 rounded accent-indigo-600 dark:accent-indigo-400"
         />
-        <label htmlFor="wizard-all-day" className="text-sm text-slate-700">
+        <label htmlFor="wizard-all-day" className="text-sm leading-5 text-slate-700 dark:text-slate-300">
           All day
         </label>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-slate-700">
+          <label className="field-label">
             Date
           </label>
           <input
             type="date"
             value={draft.date}
             onChange={(e) => onChange({ date: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="field-input mt-1"
           />
           {errors.date && (
-            <p className="mt-1 text-xs text-red-600">{errors.date}</p>
+            <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.date}</p>
           )}
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-700">
+          <label className="field-label">
             Time
           </label>
           <input
@@ -90,16 +90,16 @@ export function WizardStepOne({
             value={draft.time}
             disabled={draft.allDay}
             onChange={(e) => onChange({ time: e.target.value })}
-            className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100"
+            className="field-input mt-1"
           />
           {errors.time && (
-            <p className="mt-1 text-xs text-red-600">{errors.time}</p>
+            <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.time}</p>
           )}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-slate-700">
+        <label className="field-label">
           Timezone
         </label>
         <input
@@ -107,7 +107,7 @@ export function WizardStepOne({
           value={draft.tz}
           onChange={(e) => onChange({ tz: e.target.value })}
           placeholder="e.g. Europe/Berlin"
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="field-input mt-1"
         />
       </div>
     </div>

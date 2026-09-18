@@ -188,7 +188,7 @@ export function ShowcasePage() {
           <button
             type="button"
             onClick={() => setNarrow((v) => !v)}
-            className="mb-2 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+            className="btn-ghost mb-2 px-2 py-1 text-xs"
           >
             Toggle width
           </button>

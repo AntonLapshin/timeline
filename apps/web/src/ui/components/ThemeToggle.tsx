@@ -17,9 +17,9 @@ export function ThemeToggle() {
       onClick={toggle}
       aria-label={`Switch to ${themeLabel(target)} theme`}
       title={`Switch to ${themeLabel(target)} theme`}
-      className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+      className="btn-ghost px-2.5 py-1.5 shadow-sm"
     >
-      {theme === "dark" ? "☀️" : "🌙"}
+      <span aria-hidden className="leading-none">{theme === "dark" ? "☀️" : "🌙"}</span>
     </button>
   );
 }

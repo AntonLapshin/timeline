@@ -52,30 +52,30 @@ export function AppShell({
   ];
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-slate-100 dark:bg-slate-900">
-      <header className="shrink-0 border-b border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <div className="flex h-dvh flex-col overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200/60 dark:from-slate-950 dark:to-slate-900">
+      <header className="shrink-0 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-700/60 dark:bg-slate-900/80">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Timeline</h1>
+          <h1 className="bg-gradient-to-r from-slate-900 via-slate-700 to-indigo-600 bg-clip-text text-lg font-bold tracking-tight text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-indigo-400">Timeline</h1>
           <div className="flex items-center gap-2">
             {themeToggleSlot}
-            <nav className="flex flex-wrap gap-1" aria-label="Views">
+            <nav className="flex flex-wrap items-center gap-1 rounded-2xl border border-slate-200/70 bg-slate-100/70 p-1 dark:border-slate-700/60 dark:bg-slate-800/70" aria-label="Views">
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   aria-pressed={view === tab.id}
                   onClick={() => onViewChange(tab.id)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+                  className={`rounded-xl px-3 py-1.5 text-sm font-medium leading-5 transition-all duration-150 ${
                     view === tab.id
-                      ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                      : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700"
+                      ? "bg-white text-slate-900 shadow-md dark:bg-slate-900 dark:text-slate-100 dark:shadow-black/40"
+                      : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
                   }`}
                 >
                   {tab.label}
                 </button>
               ))}
               {actions && (
-                <div className="ml-2 border-l border-slate-200 pl-2 dark:border-slate-600">
+                <div className="ml-1 border-l border-slate-200 pl-2 dark:border-slate-600">
                   {actions}
                 </div>
               )}

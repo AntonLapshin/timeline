@@ -125,7 +125,7 @@ export default function App() {
           <button
             type="button"
             onClick={wizard.openCreate}
-            className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-300"
+            className="btn-primary px-3 py-1.5"
           >
             + New
           </button>

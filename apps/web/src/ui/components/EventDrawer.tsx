@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { EventDrawerState } from "../viewModels/useEventDrawer";
 import { EVENT_CHANNELS } from "../../core/eventTypes";
-import { priorityStyle, tagStyle } from "../../core/timeline";
+import { tagStyle } from "../../core/timeline";
 import { formatRecurrence } from "../../core/recurrenceFormat";
+import { PriorityDot } from "./PriorityDot";
 
 /** Human labels for each reminder channel. */
 const CHANNEL_LABELS: Record<string, string> = {
@@ -72,7 +73,6 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
     }
   };
 
-  const priority = priorityStyle(event.priority);
   const badge = formatRecurrence(event.rrule);
   const firstTag = event.tags.length > 0 ? event.tags[0] : null;
   const tag = firstTag ? tagStyle(firstTag) : null;
@@ -83,12 +83,12 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           z-50) and below the wizard modal so the wizard can stack on top. */}
       <div
         aria-hidden="true"
-        className="fixed inset-0 z-40 animate-[drawer-fade-in_200ms_ease-out] bg-slate-900/40 dark:bg-black/60"
+        className="fixed inset-0 z-40 animate-[drawer-fade-in_200ms_ease-out] bg-slate-950/50 backdrop-blur-[2px] dark:bg-black/70"
         data-testid="event-drawer-backdrop"
         onClick={drawer.close}
       />
       <aside
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto animate-[drawer-slide-in_200ms_ease-out] border-l border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+        className="fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto animate-[drawer-slide-in_200ms_ease-out] border-l border-slate-200/70 bg-white/95 p-5 shadow-2xl backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/95 dark:shadow-black/50"
         role="dialog"
         aria-modal="true"
         aria-label={`Event: ${event.title}`}
@@ -96,25 +96,20 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
       >
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              aria-hidden
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${priority.color}`}
-            >
-              {priority.icon}
-            </span>
-            <h2 className="truncate text-lg font-semibold text-slate-900 dark:text-slate-100">
+          <div className="flex items-center gap-2.5">
+            <PriorityDot priority={event.priority} size="md" />
+            <h2 className="truncate text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               {event.title}
             </h2>
             {badge.known && (
-              <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
+              <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
                 ↻ {badge.label}
               </span>
             )}
           </div>
           {firstTag && (
             <span
-              className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-xs font-medium ${tag?.color}`}
+              className={`chip mt-1.5 ${tag?.color}`}
             >
               {tag?.icon} {firstTag}
             </span>
@@ -124,7 +119,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           type="button"
           onClick={drawer.close}
           aria-label="Close event drawer"
-          className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          className="btn-ghost px-2 py-1 text-sm leading-5"
         >
           ✕
         </button>
@@ -138,14 +133,14 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
         Reminders
       </h3>
       {preview && preview.hasReminders ? (
-        <div className="mb-4 space-y-1 text-sm text-slate-700 dark:text-slate-300">
+        <div className="mb-4 space-y-1 text-sm leading-5 text-slate-700 dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">Channels:</span>
             {EVENT_CHANNELS.filter((c) => preview.channels.includes(c)).map(
               (c) => (
                 <span
                   key={c}
-                  className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-300"
+                  className="chip border-slate-200 bg-slate-100/70 text-slate-700 dark:border-slate-600/60 dark:bg-slate-700/50 dark:text-slate-300"
                 >
                   {CHANNEL_LABELS[c] ?? c}
                 </span>
@@ -183,7 +178,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           {occurrences.map(({ occurrence, row }) => (
             <li
               key={`${occurrence.event_id}-${occurrence.start_at}`}
-              className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/40"
+              className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 dark:border-slate-700/70 dark:bg-slate-800/60"
             >
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -214,11 +209,11 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           {deliveries.map((row) => (
             <li
               key={row.log.id}
-              className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-700/40"
+              className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 dark:border-slate-700/70 dark:bg-slate-800/60"
             >
               <span
                 aria-hidden
-                className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${row.statusStyle.color}`}
+                className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold leading-none shadow-sm ${row.statusStyle.color}`}
               >
                 {row.statusStyle.icon}
               </span>
@@ -244,7 +239,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
         <button
           type="button"
           onClick={onEdit}
-          className="mt-4 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="btn-ghost mt-4 w-full px-4 py-2"
         >
           Edit event
         </button>
@@ -254,17 +249,17 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
         <button
           type="button"
           onClick={() => setConfirmingDelete(true)}
-          className="mt-2 w-full rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40"
+          className="btn mt-2 w-full border border-red-200 bg-white px-4 py-2 text-red-700 shadow-sm hover:bg-red-50 dark:border-red-500/30 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40"
         >
           Delete event
         </button>
       ) : (
-        <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/40">
-          <p className="text-sm font-medium text-red-700 dark:text-red-300">
+        <div className="mt-2 rounded-xl border border-red-200 bg-red-50/80 p-3 dark:border-red-500/30 dark:bg-red-950/40">
+          <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">
             Delete this event? This cannot be undone.
           </p>
           {deleteError && (
-            <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
+            <p className="mt-1 text-sm leading-5 text-red-600 dark:text-red-400" role="alert">
               {deleteError}
             </p>
           )}
@@ -273,7 +268,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
               type="button"
               onClick={handleConfirmDelete}
               disabled={deleting}
-              className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="btn flex-1 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-white shadow-md shadow-red-600/25 hover:from-red-400 hover:to-red-600"
             >
               {deleting ? "Deleting…" : "Confirm delete"}
             </button>
@@ -281,7 +276,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
               type="button"
               onClick={() => setConfirmingDelete(false)}
               disabled={deleting}
-              className="flex-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="btn-ghost flex-1 px-4 py-2"
             >
               Cancel
             </button>

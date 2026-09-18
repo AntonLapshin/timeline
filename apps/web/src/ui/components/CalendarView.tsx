@@ -9,6 +9,7 @@ import {
 } from "../../core/calendar";
 import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventOccurrence } from "../../core/eventTypes";
+import { PriorityDot } from "./PriorityDot";
 
 /** Weekday column headers (Sunday-first, matching the grid). */
 const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -40,10 +41,10 @@ export function DayCell({
       type="button"
       onClick={() => onSelect(day)}
       aria-label={`${day.isoDate}, ${day.count} event${day.count === 1 ? "" : "s"}`}
-      className={`print-month-cell flex h-16 flex-col items-center justify-start rounded-lg border p-1 text-sm transition-colors ${
+      className={`print-month-cell flex h-16 flex-col items-center justify-start rounded-xl border p-1 text-sm leading-5 transition-all duration-150 ${
         day.inMonth
-          ? "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
-          : "border-transparent bg-slate-50 text-slate-300 dark:bg-slate-800/40 dark:text-slate-600"
+          ? "border-slate-200/80 bg-white shadow-sm hover:-translate-y-px hover:shadow-md dark:border-slate-700/70 dark:bg-slate-800 dark:hover:bg-slate-700/80"
+          : "border-transparent bg-slate-100/60 text-slate-300 dark:bg-slate-800/40 dark:text-slate-600"
       }`}
     >
       <span className={`font-medium ${day.inMonth ? "text-slate-700 dark:text-slate-200" : ""}`}>
@@ -55,7 +56,7 @@ export function DayCell({
             <span
               key={`${day.isoDate}-dot-${i}`}
               aria-hidden
-              className={`h-1.5 w-1.5 rounded-full ${dotClass}`}
+              className={`h-2 w-2 rounded-full ring-1 ring-white/60 dark:ring-white/20 ${dotClass}`}
             />
           ))}
           {day.count > 3 && (
@@ -84,34 +85,29 @@ export function OccurrenceRowView({
         return (
           <li
             key={`${o.event_id}-${o.start_at}`}
-            className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
-              onEventClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700" : ""
-            } dark:border-slate-700 dark:bg-slate-800`}
+            className={`card flex items-start gap-3 p-3 transition-all duration-150 hover:-translate-y-px hover:shadow-lg ${
+              onEventClick ? "cursor-pointer" : ""
+            }`}
             onClick={onEventClick ? () => onEventClick(o) : undefined}
           >
-            <span
-              aria-hidden
-              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${row.priorityColor}`}
-            >
-              {row.priorityIcon}
-            </span>
+            <PriorityDot priority={o.priority} size="md" className="mt-0.5" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+                <span className="truncate font-medium tracking-tight text-slate-900 dark:text-slate-100">
                   {row.occurrence.title}
                 </span>
                 {row.recurrenceBadge && (
-                  <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
+                  <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
                     ↻ {row.recurrenceBadge}
                   </span>
                 )}
               </div>
-              <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <div className="mt-1 flex items-center gap-2 text-xs leading-4 text-slate-500 dark:text-slate-400">
                 <span>{row.timeLabel}</span>
                 {row.relativeLabel && (
                   <span
                     data-testid="relative-label"
-                    className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                    className="chip border-slate-200 bg-slate-100/70 text-slate-600 dark:border-slate-600/60 dark:bg-slate-700/50 dark:text-slate-300"
                   >
                     {row.relativeLabel}
                   </span>
@@ -123,7 +119,7 @@ export function OccurrenceRowView({
             </div>
             {row.occurrence.tag && (
               <span
-                className={`shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium ${row.tagColor}`}
+                className={`chip shrink-0 ${row.tagColor}`}
               >
                 {row.tagIcon} {row.occurrence.tag}
               </span>
@@ -145,14 +141,17 @@ export function WeekChip({
 }) {
   return (
     <div
-      className={`w-full truncate rounded px-1 py-0.5 text-left text-[11px] leading-tight ${row.priorityColor} ${
-        onEventClick ? "cursor-pointer hover:brightness-95" : ""
+      className={`flex w-full items-center gap-1.5 truncate rounded-lg border border-transparent px-1.5 py-1 text-left text-[11px] leading-4 shadow-sm ${row.priorityColor} ${
+        onEventClick ? "cursor-pointer transition-all duration-150 hover:shadow-md hover:brightness-110" : ""
       }`}
       title={row.occurrence.title}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
     >
-      {!row.occurrence.all_day && <span className="font-medium">{row.timeLabel} </span>}
-      {row.occurrence.title}
+      <PriorityDot priority={row.occurrence.priority} size="sm" className="h-2.5 w-2.5" />
+      <span className="truncate">
+        {!row.occurrence.all_day && <span className="font-semibold">{row.timeLabel} </span>}
+        {row.occurrence.title}
+      </span>
     </div>
   );
 }
@@ -202,34 +201,29 @@ export function AgendaRowView({
 }) {
   return (
     <li
-      className={`flex items-start gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm ${
-        onEventClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700" : ""
-      } dark:border-slate-700 dark:bg-slate-800`}
+      className={`card flex items-start gap-3 p-3 transition-all duration-150 hover:-translate-y-px hover:shadow-lg ${
+        onEventClick ? "cursor-pointer" : ""
+      }`}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
     >
-      <span
-        aria-hidden
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${row.priorityColor}`}
-      >
-        {row.priorityIcon}
-      </span>
+      <PriorityDot priority={row.occurrence.priority} size="md" className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate font-medium text-slate-900 dark:text-slate-100">
+          <span className="truncate font-medium tracking-tight text-slate-900 dark:text-slate-100">
             {row.occurrence.title}
           </span>
           {row.recurrenceBadge && (
-            <span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-800">
+            <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
               ↻ {row.recurrenceBadge}
             </span>
           )}
         </div>
-        <div className="mt-1 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+        <div className="mt-1 flex items-center gap-2 text-xs leading-4 text-slate-500 dark:text-slate-400">
           <span>{row.dateLabel}</span>
           <span>·</span>
           <span>{row.timeLabel}</span>
           {row.relativeLabel && (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+            <span className="chip border-slate-200 bg-slate-100/70 text-slate-600 dark:border-slate-600/60 dark:bg-slate-700/50 dark:text-slate-300">
               {row.relativeLabel}
             </span>
           )}
@@ -237,7 +231,7 @@ export function AgendaRowView({
       </div>
       {row.occurrence.tag && (
         <span
-          className={`shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium ${row.tagColor}`}
+          className={`chip shrink-0 ${row.tagColor}`}
         >
           {row.tagIcon} {row.occurrence.tag}
         </span>
@@ -256,8 +250,8 @@ export function AgendaList({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-600 dark:bg-slate-800">
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+      <div className="card border-dashed p-8 text-center">
+        <p className="text-sm leading-5 text-slate-500 dark:text-slate-400">
           No upcoming events. Enjoy the calm!
         </p>
       </div>
@@ -321,17 +315,17 @@ export function CalendarView({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 print-hidden">
+      <div className="flex gap-1 rounded-2xl border border-slate-200/70 bg-slate-100/70 p-1 print-hidden dark:border-slate-700/70 dark:bg-slate-800/70">
         {MODES.map((tab) => (
           <button
             key={tab.id}
             type="button"
             aria-pressed={mode === tab.id}
             onClick={() => setMode(tab.id)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium ${
+            className={`flex-1 rounded-xl px-3 py-1.5 text-sm font-medium leading-5 transition-all duration-150 ${
               mode === tab.id
-                ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+                ? "bg-white text-slate-900 shadow-md dark:bg-slate-900 dark:text-slate-100 dark:shadow-black/40"
+                : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             }`}
           >
             {tab.label}
@@ -344,16 +338,16 @@ export function CalendarView({
           type="button"
           onClick={navigation.prev}
           aria-label="Previous"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="btn-ghost px-3 py-1.5"
         >
           ←
         </button>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{navigation.title}</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{navigation.title}</h2>
         <button
           type="button"
           onClick={navigation.next}
           aria-label="Next"
-          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          className="btn-ghost px-3 py-1.5"
         >
           →
         </button>
@@ -361,14 +355,14 @@ export function CalendarView({
 
       {error && (
         <div
-          className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/40"
+          className="card border-red-200/70 bg-gradient-to-b from-red-50/80 to-white p-6 text-center dark:border-red-500/20 dark:from-red-950/40 dark:to-slate-800"
           role="alert"
         >
-          <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
+          <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">{error}</p>
           <button
             type="button"
             onClick={retry}
-            className="mt-3 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            className="btn-ghost mt-3 px-4 py-2"
           >
             Retry
           </button>
@@ -441,19 +435,19 @@ export function CalendarView({
 
       {selectedDay && (
         <div
-          className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm print-hidden dark:border-slate-700 dark:bg-slate-800"
+          className="card bg-slate-50/80 p-4 backdrop-blur print-hidden dark:bg-slate-800/90"
           role="dialog"
           aria-label={`Events on ${selectedDay.isoDate}`}
         >
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               {selectedDay.isoDate}
             </h3>
             <button
               type="button"
               onClick={closeDrawer}
               aria-label="Close"
-              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              className="btn-ghost px-2 py-1 text-sm leading-5"
             >
               ✕
             </button>

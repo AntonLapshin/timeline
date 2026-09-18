@@ -2,6 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  /*
+   * Vertically centered control text.
+   *
+   * Browsers render <button>/<input>/<select> with `line-height: normal`,
+   * which adds uneven descender space below the cap height — the text looks
+   * shifted up (bottom padding looks larger). Pinning a shared line-height
+   * and centering button content with flex keeps glyphs optically centered
+   * with balanced top/bottom padding in both themes.
+   */
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.25rem; /* text-sm leading */
+    vertical-align: middle;
+    text-wrap: balance;
+  }
+
+  input,
+  select,
+  textarea {
+    line-height: 1.25rem;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    line-height: normal;
+    vertical-align: middle;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  /* Native date/time pickers render an unthemed white popup in dark mode
+   * unless the control opts into a dark color scheme. */
+  .dark input[type="date"],
+  .dark input[type="time"],
+  .dark input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+
+  ::selection {
+    background: rgb(99 102 241 / 0.25);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.5) transparent;
+  }
+}
+
+@layer components {
+  /*
+   * Shared modern field + button treatments. Components compose these with
+   * their layout classes so focus rings, borders and dark surfaces stay
+   * consistent (and dark mode never falls back to a white box).
+   */
+  .field-input {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm leading-5 text-slate-900 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:disabled:bg-slate-800 dark:disabled:text-slate-500;
+  }
+
+  .field-label {
+    @apply block text-sm font-medium text-slate-700 dark:text-slate-300;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl text-sm font-medium leading-5 transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 active:scale-[0.98];
+  }
+
+  .btn-primary {
+    @apply btn bg-gradient-to-b from-slate-800 to-slate-950 px-4 py-2 text-white shadow-md shadow-slate-900/20 hover:from-slate-700 hover:to-slate-900 dark:from-slate-100 dark:to-slate-300 dark:text-slate-900 dark:shadow-none dark:hover:from-white dark:hover:to-slate-200;
+  }
+
+  .btn-accent {
+    @apply btn bg-gradient-to-b from-indigo-500 to-indigo-700 px-3 py-1.5 text-white shadow-md shadow-indigo-600/25 hover:from-indigo-400 hover:to-indigo-600 dark:shadow-indigo-950/50;
+  }
+
+  .btn-ghost {
+    @apply btn border border-slate-300 bg-white/80 px-3 py-1.5 text-slate-700 shadow-sm backdrop-blur hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700;
+  }
+
+  .card {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.05),0_8px_24px_-12px_rgb(15_23_42/0.15)] dark:border-slate-700/70 dark:bg-slate-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_12px_32px_-12px_rgb(0_0_0/0.6)];
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium leading-4;
+  }
+}
+
 /*
  * Slide-over panel animations (issue #122, M9-T5).
  *

@@ -31,6 +31,9 @@ export interface SearchFilterBarProps {
   onClear: () => void;
 }
 
+const SELECT_CLASSES =
+  "rounded-xl border border-slate-300 bg-white px-2 py-1.5 text-sm leading-5 text-slate-700 shadow-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30";
+
 /**
  * The app-wide search/filter bar (issue #46).
  *
@@ -67,7 +70,7 @@ export function SearchFilterBar({
         }}
         placeholder="Search events…"
         aria-label="Search events"
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:placeholder:text-slate-500 sm:w-56"
+        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-sm leading-5 text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 sm:w-56"
       />
       <select
         value={filter.priority ?? ""}
@@ -77,7 +80,7 @@ export function SearchFilterBar({
           )
         }
         aria-label="Filter by priority"
-        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        className={SELECT_CLASSES}
       >
         <option value="">Priority</option>
         {PRIORITY_OPTIONS.map((opt) => (
@@ -90,7 +93,7 @@ export function SearchFilterBar({
         value={filter.tag ?? ""}
         onChange={(e) => onTagChange(e.target.value === "" ? null : e.target.value)}
         aria-label="Filter by tag"
-        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        className={SELECT_CLASSES}
       >
         <option value="">Tag</option>
         {tags.map((tag) => (
@@ -105,7 +108,7 @@ export function SearchFilterBar({
           onMonthChange(e.target.value === "" ? null : e.target.value)
         }
         aria-label="Filter by month"
-        className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+        className={SELECT_CLASSES}
       >
         <option value="">Month</option>
         {months.map((month) => (
@@ -118,7 +121,7 @@ export function SearchFilterBar({
         <button
           type="button"
           onClick={onClear}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+          className="btn-ghost px-2 py-1.5"
         >
           Clear
         </button>
