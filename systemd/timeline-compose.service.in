@@ -1,9 +1,9 @@
 # Timeline — systemd --user unit that autostarts the docker-compose stack
-# (web + api) at boot/login. Installed by `make start`, which substitutes the
-# absolute repo directory and docker binary path below; removed by `make stop`.
+# (web + api) at boot/login. Installed by `make docker-start`, which substitutes the
+# absolute repo directory and docker binary path below; removed by `make docker-stop`.
 #
-#   make start   -> install + enable (copied to ~/.config/systemd/user/)
-#   make stop    -> disable + remove
+#   make docker-start   -> install + enable (copied to ~/.config/systemd/user/)
+#   make docker-stop    -> disable + remove
 #
 # The API container CMD runs `alembic upgrade head` before serving, so
 # migrations are applied on every (re)start of the api container. Secrets come

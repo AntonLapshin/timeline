@@ -1,0 +1,46 @@
+# Timeline — systemd --user unit for the host-run API (managed by `make start`).
+#
+# Runs the FastAPI backend natively on the host (port 8124) so local-only
+# dependencies work — notably voxtype + ffmpeg voice transcription (issue #71),
+# which the docker-compose stack cannot use (see README). Installed by
+# `make start`, which substitutes @REPO_DIR@ below; removed by `make stop`.
+#
+#   make start    -> build web + install + enable + start (boot autostart)
+#   make stop     -> stop + disable + remove (no autostart)
+#   make restart  -> rebuild web + restart services (keeps autostart)
+#   make status   -> unit state + API health
+#   make logs     -> follow journald logs for api + web
+#
+# Secrets come from the repo's gitignored `.env` (EnvironmentFile) — no secrets
+# live in this unit. Stack ports mirror the compose stack: API on 8124, web
+# preview on 8123 (single firewall port for browsers). LAN exposure (0.0.0.0 +
+# TIMELINE_ALLOW_NON_LOOPBACK=1) is by design and unauthenticated — trusted LAN
+# only; whitelist the ports in the firewall:
+#   sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp
+
+[Unit]
+Description=Timeline API on host (voxtype-capable, boot autostart)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO_DIR@/apps/api
+# Repo .env provides secrets (BOT_TOKEN, LLM_API_KEY, ...); `-` tolerates a
+# missing file on first install (make start creates it via the env target).
+EnvironmentFile=-@REPO_DIR@/.env
+# Stack ports mirror the compose stack; these override .env values.
+Environment=TIMELINE_HOST=0.0.0.0
+Environment=TIMELINE_PORT=8124
+Environment=TIMELINE_ALLOW_NON_LOOPBACK=1
+Environment=TIMELINE_DATA_DIR=@REPO_DIR@/data
+Environment=TIMELINE_BACKUPS_DIR=@REPO_DIR@/backups
+# Apply pending Alembic migrations before serving (parity with the API image
+# CMD, which runs `alembic upgrade head` on every container start).
+ExecStartPre=@REPO_DIR@/apps/api/.venv/bin/alembic upgrade head
+ExecStart=@REPO_DIR@/apps/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8124
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,29 @@
+# Timeline — systemd --user unit for the host-run web UI (managed by `make start`).
+#
+# Serves the production web build (`vite preview`, port 8123) and proxies /api
+# + /healthz to the host-run API on 127.0.0.1:8124 (TIMELINE_API_URL, see
+# apps/web/vite.config.ts), so browsers only need port 8123 (same-origin,
+# works for localhost and LAN IPs). Installed by `make start` (which builds
+# the web bundle first), removed by `make stop`.
+#
+# LAN exposure is by design and unauthenticated — trusted LAN only; whitelist
+# the port in the firewall: sudo ufw allow 8123/tcp
+
+[Unit]
+Description=Timeline web UI on host (vite preview, boot autostart)
+After=network.target timeline-api.service
+Wants=timeline-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=@REPO_DIR@/apps/web
+Environment=TIMELINE_API_URL=http://127.0.0.1:8124
+Environment=HOST=0.0.0.0
+Environment=PORT=8123
+ExecStart=@REPO_DIR@/node_modules/.bin/vite preview --host 0.0.0.0 --port 8123 --strictPort
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

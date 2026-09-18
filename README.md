@@ -10,12 +10,21 @@ Live demo: **[https://AntonLapshin.github.io/timeline/](https://AntonLapshin.git
 
 ## Quickstart
 
-Requires Docker access for your user (member of the `docker` group, or run the
-targets via `sudo`).
+Host run (native — the only path with voice transcription via local
+voxtype + ffmpeg):
 
 ```bash
 cp .env.example .env   # fill in your local secrets — .env is gitignored, never committed
-make dev               # build + start the stack, wait for API health, print URLs
+make start             # build web + start api :8124 / web :8123 + boot autostart
+```
+
+Or with Docker (no voice transcription — the API image ships no
+voxtype/ffmpeg; requires Docker access for your user — member of the `docker`
+group, or run the targets via `sudo`):
+
+```bash
+cp .env.example .env   # fill in your local secrets — .env is gitignored, never committed
+make docker-dev        # build + start the stack, wait for API health, print URLs
 ```
 
 Then open **http://127.0.0.1:8123/timeline/** — or from another machine on your
@@ -25,20 +34,36 @@ LAN, `http://<lan-ip>:8123/timeline/` (whitelist the ports first:
 Daily lifecycle (idempotent; `make help` is the default target):
 
 ```bash
-make dev     # dev stack: builds, starts, waits for API health, prints URLs
-make start   # prod stack: migrations run in the API container on boot,
-             # + installs/enables a systemd --user unit for boot autostart
-make stop    # stop the stack + remove boot autostart
-make status  # compose ps + API health          make logs  # follow logs
+make start     # host run: rebuilds web, starts api+web, waits for health,
+               # + installs/enables systemd --user units for boot autostart
+make stop      # stop the host run + remove boot autostart
+make restart   # rebuild web + restart the host run (keeps autostart)
+make status    # unit state + API health          make logs  # follow logs
 ```
 
-- `make dev` / `make start` auto-create `.env` from `.env.example` when it is
-  missing (an existing `.env` is never overwritten — secrets stay local).
-- `make start` boot autostart requires linger (`loginctl enable-linger $USER`).
-- After editing `.env` or `docker-compose.yml`, recreate the stack (`make dev`) —
-  a restart alone keeps the old configuration.
-- Data persists in the `timeline-data` Docker volume (`docker compose down -v`
-  removes it).
+Docker equivalents (same ports, so only one run at a time — starting one
+best-effort stops the other):
+
+```bash
+make docker-dev     # dev stack: builds, starts, waits for API health, prints URLs
+make docker-start   # prod stack: migrations run in the API container on boot,
+                    # + installs/enables a systemd --user unit for boot autostart
+make docker-stop    # stop the stack + remove boot autostart
+make docker-status  # compose ps + API health    make docker-logs  # follow logs
+```
+
+- `make start` / `make docker-dev` / `make docker-start` auto-create `.env`
+  from `.env.example` when it is missing (an existing `.env` is never
+  overwritten — secrets stay local).
+- Boot autostart requires linger (`loginctl enable-linger $USER`).
+- Host prerequisites: API venv (`cd apps/api && python3 -m venv .venv &&
+  . .venv/bin/activate && pip install -r requirements.txt`) and web deps
+  (`npm ci`); `make start` fails fast with a hint when they are missing.
+- After editing `.env`, recreate the run (`make restart` for host,
+  `make docker-dev` for compose) — a restart alone keeps the old
+  configuration (systemd loads env at service start).
+- Data persists in `./data` (host run) or the `timeline-data` Docker volume
+  (`docker compose down -v` removes it).
 
 ## Health
 
@@ -76,21 +101,21 @@ documented in `.env.example` and the comments in `docker-compose.yml`.
 
 ## Troubleshooting
 
-- **Stack won't start / `.env` missing** — `make dev` / `make start` copy
-  `.env.example` → `.env` automatically when it's missing; fill in real values
-  and re-run. Docker only reads `.env` when containers are created, so re-run
-  `make dev` after editing it.
+- **Stack won't start / `.env` missing** — `make start` / `make docker-dev` /
+  `make docker-start` copy `.env.example` → `.env` automatically when it's
+  missing; fill in real values and re-run. Docker only reads `.env` when
+  containers are created, and systemd only at service start, so re-run
+  `make restart` / `make docker-dev` after editing it.
 - **"Parsing is unavailable" / `llm_configured:false` in healthz** — no real
   `LLM_API_KEY`/`LLM_MODEL` in `.env` (`.env.example` ships `changeme`
-  placeholders). Set real values and recreate the stack (`make dev`).
+  placeholders). Set real values and recreate (`make restart` / `make docker-dev`).
 - **Bot not replying** — set a real `BOT_TOKEN` (from @BotFather) and allowlist
   your Telegram id in `TELEGRAM_USER_IDS`. The bot is DM-only and ignores
   non-allowlisted ids; healthz shows `telegram: not_configured` without a token.
 - **Voice messages in Docker** — the API image ships no voxtype/ffmpeg, so voice
   is not transcribed in the compose stack (the bot says so explicitly and points
-  at `/add <text>`). Voice requires running the API on the host with voxtype +
-  ffmpeg installed (Omarchy: Install > AI > Dictation; see
-  `systemd/timeline.service` for the native path).
+  at `/add <text>`). Voice requires the host run (`make start`, voxtype +
+  ffmpeg installed — Omarchy: Install > AI > Dictation).
 
 ## Backup & restore
 
@@ -98,13 +123,13 @@ The API ships a backup module that dumps the SQLite DB and prunes older dumps
 (keeps the newest `TIMELINE_BACKUP_KEEP`, default 30) — see
 `apps/api/app/backup.py`. In the compose stack dumps land on the host in the
 gitignored `./backups/` directory (bind-mounted at `/data/backups` in the
-container), so they survive `make stop` and even `docker compose down -v`:
+container), so they survive `make docker-stop` and even `docker compose down -v`:
 
 ```bash
 docker compose exec api python -m app.backup backup        # dump now (also: list)
-make stop                                                  # never restore into a live DB
+make docker-stop                                           # never restore into a live DB
 docker compose run --rm api python -m app.backup restore /data/backups/<file>.db
-make dev                                                   # start again
+make docker-dev                                            # start again
 ```
 
 `docker compose exec api python -m app.backup list` shows the stored dumps;

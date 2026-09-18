@@ -62,7 +62,7 @@ services:
       TIMELINE_PORT: 8124
       TIMELINE_DATA_DIR: /data
       # Backups must land on a mounted path, not the container's writable
-      # layer: `docker compose down` (make stop) would destroy dumps written
+      # layer: `docker compose down` (make docker-stop) would destroy dumps written
       # to /app/backups. The host's ./backups (gitignored) is bind-mounted at
       # /data/backups, so dumps survive down/down -v and are directly
       # accessible on the host. This overrides TIMELINE_BACKUPS_DIR from .env
