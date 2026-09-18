@@ -4,6 +4,23 @@
 
 ## Status
 
+**Owner-gated wait re-confirmed (dispatch #10) — backlog exhausted; nothing to file.**
+(PM 2026-09-18, blocked-only dispatch #10: re-verified the two blocked issues
+first-hand — #8 (email decision) and #95 (owner UAT) still have zero comments,
+no `Owner:` replies and no `PI-NOTE` markers, so both owner-gated blocks remain
+genuinely valid; left `pi:blocked` in place. No PM notes, no owner replies, no
+open PRs, CI + Deploy to GitHub Pages green on main (success 2026-09-18T09:18Z),
+no stale `completed.json`, working tree clean. Manifest backlog re-verified:
+the only unchecked milestone sub-issue is **M7-T3 (line 182), already filed as
+owner-gated `pi:needs-human` #95** — re-filing would duplicate it and forcing
+`pi:ready` would assign human-only UAT work to the Engineer; the 6 unchecked
+success-criteria boxes (lines 46–51) are validated by that same owner UAT week;
+ROADMAP.md remains explicitly post-v1. **All plannable scope (M1–M9
+non-owner-gated) is implemented and merged; nothing remains to plan.** Project
+is NOT done per the done-definition — #95 (owner UAT) and #8 (email decision)
+are open and blocked on owner input; the loop keeps polling and will dispatch
+PM for owner-reply triage the moment the owner comments.)
+
 **Owner-gated wait re-confirmed (dispatch #9) — backlog exhausted; nothing to file.**
 (PM 2026-09-18, blocked-only dispatch #9: independently re-verified the two
 blocked issues — #8 (email decision) and #95 (owner UAT) still have zero
