@@ -3,6 +3,33 @@
 @tailwind utilities;
 
 /*
+ * Slide-over panel animations (issue #122, M9-T5).
+ *
+ * The event drawer slides in from the right edge of the viewport over a
+ * dimmed backdrop. The keyframes live here (outside Tailwind's config) so
+ * both light and dark themes share one definition and no config change is
+ * needed; the components reference them via arbitrary `animate-[...]`
+ * utilities.
+ */
+@keyframes drawer-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes drawer-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
  * Print-friendly month view (issue #84, M7-T1).
  *
  * When printing the Calendar month grid, hide the interactive chrome (header,

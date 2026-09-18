@@ -169,6 +169,18 @@ export function useEventDrawer(): EventDrawerState {
     return () => window.removeEventListener("keydown", onKey);
   }, [event, close]);
 
+  // Lock body scroll while the drawer is open so the page behind the
+  // slide-over's backdrop cannot scroll (issue #122). The previous inline
+  // overflow value is restored on close/unmount.
+  useEffect(() => {
+    if (!event) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [event]);
+
   const preview = useMemo(
     () => (event ? reminderPreview(event) : null),
     [event],

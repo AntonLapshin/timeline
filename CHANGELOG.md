@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Event click opens a right-side slide-over panel (issue #122, M9-T5):**
+  clicking an event in the Timeline or Calendar now opens its details in a
+  fixed slide-over anchored to the right edge of the viewport
+  (`fixed inset-y-0 right-0 w-full max-w-md`) sliding in over a dimmed,
+  click-to-close backdrop — instead of the previous inline card rendered
+  below the content that forced a page jump. `EventDrawer.tsx` is now the
+  slide-over shell only (positioning, backdrop, slide/fade animations via
+  new `drawer-slide-in`/`drawer-fade-in` keyframes in `styles/index.css`);
+  detail rendering is unchanged (priority/tag/recurrence badges, next
+  occurrences, reminder preview, delivery log, Edit action). Responsive
+  fallback: on narrow viewports the panel spans the full width (`w-full`
+  capped at `max-w-md`). All close paths work: ✕ button, Esc key (view
+  model, unchanged) and backdrop click; clicking inside the panel does not
+  close it. Body scroll behind the panel is locked while it is open and
+  restored on close/unmount (lock lives in the `useEventDrawer` view model).
+  The inline "Select an event to see its details." empty state is removed —
+  the panel only renders while an event is selected (the
+  `data-testid="event-drawer"` hook is kept); the Showcase gallery drops the
+  now-empty drawer preview. Works in both light and dark themes.
+
 ### Test
 
 - **Pin the `parse` success path with a non-JSON 200 body (issue #118):**
