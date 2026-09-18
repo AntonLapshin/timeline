@@ -4,6 +4,22 @@
 
 ## Status
 
+**All non-owner-gated scope merged — M9-T7 (#129) + M9-T8 (#130) checked off; only owner-gated #8/#95 remain.**
+(PM 2026-09-18, blocked-only dispatch: re-checked the two blocked issues —
+#8 (email decision) and #95 (owner UAT) still have zero comments, so both
+owner-gated blocks remain genuinely valid; left `pi:blocked` in place. No PM
+notes, no owner replies, no open PRs. The final M9 batch is merged: **#129**
+(M9-T7 root Makefile `make dev`/`make start`/`make stop`) and **#130** (M9-T8
+README simplification, incl. a review fix pinning `TIMELINE_BACKUPS_DIR=/data/backups`
+so the backup/restore runbook survives `make stop`). Both are now checked off
+in `manifest.md`. With that, **every non-owner-gated manifest sub-issue
+(M1–M9) is implemented and merged**; CI on main is green and the demo URL is
+live (HTTP 200). Nothing left to file: the only unchecked backlog item is
+M7-T3, already filed as owner-gated `pi:needs-human` #95. Project is NOT done
+per the done-definition — #95 (owner UAT) and #8 (email decision) are open and
+blocked on owner input; the loop keeps polling and will dispatch PM for
+owner-reply triage when the owner responds.)
+
 **M9 batch 3 filed — #127 (M9-T7 Makefile) + #128 (M9-T8 README); M9-T4–T6 checked off.**
 (PM 2026-09-18, blocked-only dispatch: re-checked the two blocked issues —
 #8 (email decision) and #95 (owner UAT) still have zero comments, so both

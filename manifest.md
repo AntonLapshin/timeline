@@ -8,11 +8,11 @@
 2026-09-16; owner feedback round filed as #106–#109 on 2026-09-17 and planned
 as milestone **M9** — runtime wiring for the Telegram bot/scheduler, UI fixes,
 smart-input parse errors, Docker/Makefile. M9-T1–T3 merged (#114/#115/#117);
-M9-T4–T6 merged (#124/#125/#126) on 2026-09-18; third batch filed 2026-09-18
-as #127 (M9-T7 root Makefile dev/start/stop) and #128 (M9-T8 README
-simplification) — the last non-owner-gated M9 sub-issues. Owner-gated items
-remain: UAT M7-T3 is `pi:needs-human` #95 and the email decision is
-`need-owner` #8.)
+M9-T4–T6 merged (#124/#125/#126); M9-T7 merged via #129 and M9-T8 via #130 on
+2026-09-18 — **all non-owner-gated M9 sub-issues are now merged**. Every
+non-owner-gated manifest sub-issue (M1–M9) is implemented and merged; the
+project is waiting only on owner-gated items: UAT M7-T3 (`pi:needs-human`
+#95) and the email decision (`need-owner` #8).)
 
 **completed_at (M1–M8):** 2026-09-16T04:50:00Z — reopened for M9 on
 2026-09-17 (owner feedback #106–#109).
@@ -195,5 +195,5 @@ A personal, local-first global schedule that remembers everything: capture one-t
 - [x] M9-T4 — Wizard: Save closes the modal on success and the timeline/calendar show the change without reload; Esc closes the wizard modal. (owner #107.3–4; filed as #121, merged via #124)
 - [x] M9-T5 — Event click opens a right-side panel (slide-over on the right; responsive fallback; Esc/✕ close). (owner #107.2; filed as #122, merged via #125)
 - [x] M9-T6 — App shell full viewport height: no page-level vertical scrollbar; timeline/calendar scroll internally. (owner #107.1; filed as #123, merged via #126)
-- [ ] M9-T7 — Root Makefile: `make dev` (compose up + all scripts, web LAN-accessible), `make start` (prod + boot autostart incl. migrations), `make stop` (stop + remove autostart); tested end-to-end on the host. (from owner #106.1–3; filed as #127)
-- [ ] M9-T8 — README simplification: runbook centred on the make targets; remove unnecessary instructions. (from owner #106.4; filed as #128, depends on #127)
+- [x] M9-T7 — Root Makefile: `make dev` (compose up + all scripts, web LAN-accessible), `make start` (prod + boot autostart incl. migrations), `make stop` (stop + remove autostart); tested end-to-end on the host. (from owner #106.1–3; filed as #127, merged via #129)
+- [x] M9-T8 — README simplification: runbook centred on the make targets; remove unnecessary instructions. (from owner #106.4; filed as #128, depends on #127, merged via #130)
