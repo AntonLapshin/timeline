@@ -232,11 +232,11 @@ def test_email_smtp_settings_read_from_env(monkeypatch: pytest.MonkeyPatch) -> N
 def test_llm_settings_defaults() -> None:
     """LLM settings have safe defaults; key defaults to None (unavailable)."""
     settings = Settings(
-        llm_base_url="https://gate.joingonka.ai/openai/v1",
+        llm_base_url="https://gate.joingonka.ai/v1",
         llm_model="",
         llm_api_key=None,
     )
-    assert settings.llm_base_url == "https://gate.joingonka.ai/openai/v1"
+    assert settings.llm_base_url == "https://gate.joingonka.ai/v1"
     assert settings.llm_model == ""
     assert settings.llm_api_key is None
 
@@ -247,7 +247,7 @@ def test_llm_settings_fall_back_when_env_unset(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.delenv("LLM_MODEL", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     settings = Settings()
-    assert settings.llm_base_url == "https://gate.joingonka.ai/openai/v1"
+    assert settings.llm_base_url == "https://gate.joingonka.ai/v1"
     assert settings.llm_model == ""
     assert settings.llm_api_key is None
 

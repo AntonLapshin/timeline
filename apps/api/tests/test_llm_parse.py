@@ -28,7 +28,7 @@ TZ = "Europe/Berlin"
 
 def _settings(**overrides: object) -> Settings:
     values: dict[str, object] = {
-        "llm_base_url": "https://gate.joingonka.ai/openai/v1",
+        "llm_base_url": "https://gate.joingonka.ai/v1",
         "llm_model": "test-model",
         "llm_api_key": "test-key",
     }
@@ -91,7 +91,7 @@ def test_build_prompt_system_describes_json_schema() -> None:
 def test_build_request_uses_json_mode_and_model() -> None:
     """The request targets /chat/completions with JSON mode and the model."""
     req: ParseRequest = build_request("dentist tomorrow", NOW, TZ, _settings())
-    assert req.url == "https://gate.joingonka.ai/openai/v1/chat/completions"
+    assert req.url == "https://gate.joingonka.ai/v1/chat/completions"
     assert req.headers["Authorization"] == "Bearer test-key"
     assert req.headers["Content-Type"] == "application/json"
     assert req.json["model"] == "test-model"

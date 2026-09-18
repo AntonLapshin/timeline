@@ -152,7 +152,7 @@ class Settings:
     #: JoinGonka / OpenAI-compatible base URL for LLM parsing (issue #70).
     llm_base_url: str = field(
         default_factory=lambda: os.getenv(
-            "LLM_BASE_URL", "https://gate.joingonka.ai/openai/v1"
+            "LLM_BASE_URL", "https://gate.joingonka.ai/v1"
         )
     )
     #: LLM model name for parsing (local .env only).

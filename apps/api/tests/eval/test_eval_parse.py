@@ -24,7 +24,7 @@ NOW = datetime.fromisoformat(EVAL_NOW_ISO).astimezone(UTC)
 
 def _settings() -> Settings:
     return Settings(
-        llm_base_url="https://gate.joingonka.ai/openai/v1",
+        llm_base_url="https://gate.joingonka.ai/v1",
         llm_model="eval-model",
         llm_api_key="eval-key",
     )
