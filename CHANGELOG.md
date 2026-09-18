@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Backup/restore runbook now works in the compose stack (review fix on PR
+  #130, issue #128):** the api container previously inherited the host-relative
+  `TIMELINE_BACKUPS_DIR=./backups` from `.env`, which resolved to
+  `/app/backups` inside the container's writable layer — so `make stop`
+  (`docker compose down`) destroyed the dump it had just been told to create,
+  and `restore` in a fresh container failed with `No such backup`. The compose
+  stack now pins `TIMELINE_BACKUPS_DIR=/data/backups` and bind-mounts the
+  host's gitignored `./backups` directory there, so dumps land on the host,
+  survive `make stop` and even `docker compose down -v`, and the documented
+  backup → stop → restore (`/data/backups/<file>.db`) → start sequence works
+  as written. `.env.example` documents the override; the duplicated
+  `docker-compose.yml` header lines were also removed.
+
 ### Changed
 
 - **README simplified to a make-target runbook (issue #128, M9-T8):** the README

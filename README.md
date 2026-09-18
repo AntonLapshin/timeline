@@ -96,17 +96,21 @@ documented in `.env.example` and the comments in `docker-compose.yml`.
 
 The API ships a backup module that dumps the SQLite DB and prunes older dumps
 (keeps the newest `TIMELINE_BACKUP_KEEP`, default 30) — see
-`apps/api/app/backup.py`:
+`apps/api/app/backup.py`. In the compose stack dumps land on the host in the
+gitignored `./backups/` directory (bind-mounted at `/data/backups` in the
+container), so they survive `make stop` and even `docker compose down -v`:
 
 ```bash
 docker compose exec api python -m app.backup backup        # dump now (also: list)
 make stop                                                  # never restore into a live DB
-docker compose run --rm api python -m app.backup restore backups/<file>.db
+docker compose run --rm api python -m app.backup restore /data/backups/<file>.db
 make dev                                                   # start again
 ```
 
-Set `TIMELINE_BACKUPS_DIR` in `.env` to a mounted path to keep dumps outside
-the container.
+`docker compose exec api python -m app.backup list` shows the stored dumps;
+on the host they are simply files in `./backups/`. The compose stack pins
+`TIMELINE_BACKUPS_DIR=/data/backups` (overriding the host-relative value in
+`.env`, which is only meaningful for native runs).
 
 ## Repository layout
 
