@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   createLlmParser,
   draftFromParsed,
+  parseApiBody,
   parsedToWizardDraft,
   type ParseResult,
 } from "../../src/core/llmParse";
@@ -42,6 +43,46 @@ describe("llmParse core module", () => {
     >;
     expect(result.ok).toBe(true);
     expect(result.draft).toEqual(draft);
+  });
+
+  it("unwraps the { events: [...] } envelope and returns the first draft", async () => {
+    const draft = {
+      title: "Dentist",
+      start_at: "2026-09-16T09:00:00+02:00",
+      priority: "medium",
+    };
+    const fetchImpl = mockFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ events: [draft] }),
+    }));
+    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const result = await parser.parse("dentist tomorrow 9am");
+    expect(result).toEqual({ ok: true, draft });
+  });
+
+  it("surfaces needs_clarification with the server message", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        needs_clarification: true,
+        message: "Which day?",
+      }),
+    }));
+    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const result = await parser.parse("sometime soon");
+    expect(result).toEqual({ ok: false, error: "Which day?" });
+  });
+
+  it("parseApiBody falls back for empty events or unknown bodies", () => {
+    const empty = parseApiBody({ events: [] });
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) {
+      expect(empty.error).toContain("more specific");
+    }
+    const unknown = parseApiBody({ foo: 1 });
+    expect(unknown.ok).toBe(false);
   });
 
   it("propagates the rejection when a 200 body is not JSON (view-model fallback)", async () => {

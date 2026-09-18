@@ -18,6 +18,7 @@ from app.llm_parse import (
     ParseRequest,
     build_prompt,
     build_request,
+    extract_model_payload,
     parse_events,
     validate_parse_response,
 )
@@ -570,3 +571,56 @@ def test_critical_financial_never_silently_saved() -> None:
         }
     )
     assert outcome.drafts[0].priority == "critical"
+
+
+# --- Chat-completions envelope unwrapping (smart-input fix) ------------------
+
+
+def test_extract_model_payload_passes_through_inner_payload() -> None:
+    """A body that already looks like the model payload is returned as-is."""
+    inner = {"events": [{"title": "X", "start_at": "2026-09-16"}]}
+    assert extract_model_payload(inner) == inner
+
+
+def test_extract_model_payload_unwraps_json_string_content() -> None:
+    """The real gateway envelope (choices[0].message.content as JSON) unwraps."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    envelope = {"choices": [{"message": {"content": json.dumps(inner)}}]}
+    assert extract_model_payload(envelope) == inner
+
+
+def test_extract_model_payload_unwraps_dict_content_and_fences() -> None:
+    """Dict content and ```json fences are both tolerated."""
+    inner = {"needs_clarification": True, "message": "Which day?"}
+    assert (
+        extract_model_payload({"choices": [{"message": {"content": inner}}]}) == inner
+    )
+    import json
+
+    fenced_content = "```json\n" + json.dumps(inner) + "\n```"
+    fenced = {"choices": [{"message": {"content": fenced_content}}]}
+    assert extract_model_payload(fenced) == inner
+
+
+def test_extract_model_payload_rejects_envelope_without_content() -> None:
+    """An envelope with no usable content is a clean ValueError."""
+    with pytest.raises(ValueError):
+        extract_model_payload({"foo": "bar"})
+    with pytest.raises(ValueError):
+        extract_model_payload({"choices": []})
+
+
+def test_parse_unwraps_real_gateway_envelope() -> None:
+    """parse_events succeeds against a real OpenAI-style gateway body."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    envelope = {"choices": [{"message": {"content": json.dumps(inner)}}]}
+    client = _FakeClient(_FakeResponse(200, envelope))
+    result = parse_events("dentist tomorrow", NOW, TZ, _settings(), client)
+    assert result.ok is True
+    assert result.outcome is not None
+    assert result.outcome.drafts is not None
+    assert result.outcome.drafts[0].title == "Dentist"

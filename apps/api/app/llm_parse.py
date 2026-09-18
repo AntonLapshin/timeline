@@ -22,6 +22,7 @@ so callers (and tests) supply a fake.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import Callable
@@ -187,6 +188,59 @@ def _is_retryable_status(status_code: Any) -> bool:
     return status_code in _RETRYABLE_STATUS_CODES
 
 
+def _strip_code_fences(content: str) -> str:
+    """Strip Markdown code fences the model sometimes adds around JSON."""
+    text = content.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        # Drop the opening fence (``` or ```json).
+        lines = lines[1:]
+        # Drop the closing fence when present.
+        if lines and lines[-1].strip().startswith("```"):
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+    return text
+
+
+def extract_model_payload(data: Any) -> Any:
+    """Unwrap an OpenAI-compatible chat-completions body into the model payload.
+
+    The gateway returns ``{"choices": [{"message": {"content": "<json>"}}]}``
+    where ``content`` is a JSON string (or, rarely, an already-decoded dict)
+    holding ``{"events": [...]}`` / ``{"needs_clarification": ...}``. This
+    extracts and JSON-decodes that inner payload (pure).
+
+    For testability, a body that already looks like the inner payload
+    (has ``events`` / ``needs_clarification`` / ``title`` keys) is returned
+    as-is. Anything else raises ``ValueError``.
+    """
+    if isinstance(data, dict):
+        if (
+            "events" in data
+            or "needs_clarification" in data
+            or "title" in data
+        ):
+            return data
+        choices = data.get("choices")
+        if isinstance(choices, list) and choices:
+            first = choices[0]
+            message: Any = first.get("message", {}) if isinstance(first, dict) else {}
+            content: Any = (
+                message.get("content") if isinstance(message, dict) else None
+            )
+            if isinstance(content, dict):
+                return content
+            if isinstance(content, str):
+                text = _strip_code_fences(content)
+                if not text:
+                    raise ValueError("LLM returned an empty message content")
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"LLM returned non-JSON content: {exc}") from exc
+    raise ValueError("LLM response has no usable message content")
+
+
 def validate_parse_response(data: Any) -> ParseOutcome:
     """Validate a model's JSON response into a ``ParseOutcome`` (pure).
 
@@ -318,7 +372,7 @@ def parse_events(
             return ParseResult(ok=False, error=error)
 
         try:
-            outcome = validate_parse_response(data)
+            outcome = validate_parse_response(extract_model_payload(data))
         except ValueError as exc:
             logger.error("LLM parse failed ref=%s: %s", redact_text(text), exc)
             return ParseResult(ok=False, error=str(exc))

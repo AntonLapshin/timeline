@@ -30,6 +30,56 @@ export type ParseResult =
       unavailable?: boolean;
     };
 
+/** Wire shape of `POST /api/events/parse` (see `EventParseResponse`). */
+interface ParseApiResponse {
+  events?: ParsedDraft[] | null;
+  needs_clarification?: boolean | null;
+  message?: string | null;
+  /** Legacy/bare-draft shape: the body itself is the draft. */
+  title?: string;
+}
+
+/** Fallback when the model needs more detail but gives no message. */
+export const NEEDS_CLARIFICATION_MESSAGE =
+  "Couldn't turn that into an event. Try being more specific, or add it manually.";
+
+/**
+ * Normalize a successful `/api/events/parse` body into a `ParseResult`.
+ *
+ * The API returns an envelope — `{ events: [...] }` or
+ * `{ needs_clarification: true, message }` — never a bare draft. A bare
+ * `{ title, ... }` body is still accepted for backward compatibility.
+ * Pure; never throws.
+ */
+export function parseApiBody(body: unknown): ParseResult {
+  if (!body || typeof body !== "object") {
+    return { ok: false, error: NEEDS_CLARIFICATION_MESSAGE };
+  }
+  const envelope = body as ParseApiResponse;
+  if (envelope.needs_clarification) {
+    const message =
+      typeof envelope.message === "string" && envelope.message.trim()
+        ? envelope.message.trim()
+        : NEEDS_CLARIFICATION_MESSAGE;
+    return { ok: false, error: message };
+  }
+  if (Array.isArray(envelope.events)) {
+    if (envelope.events.length === 0) {
+      const message =
+        typeof envelope.message === "string" && envelope.message.trim()
+          ? envelope.message.trim()
+          : NEEDS_CLARIFICATION_MESSAGE;
+      return { ok: false, error: message };
+    }
+    return { ok: true, draft: envelope.events[0] };
+  }
+  if (typeof envelope.title === "string") {
+    // Backward-compatible bare draft (older API / existing tests).
+    return { ok: true, draft: envelope as ParsedDraft };
+  }
+  return { ok: false, error: NEEDS_CLARIFICATION_MESSAGE };
+}
+
 /** Message for a failed LLM call behind the API (HTTP 502, issue #113). */
 export const LLM_FAILED_MESSAGE =
   "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs";
@@ -118,8 +168,8 @@ export function createLlmParser(
           error: `Unexpected API error (HTTP ${res.status}). You can still add the event manually.`,
         };
       }
-      const data = (await res.json()) as ParsedDraft;
-      return { ok: true, draft: data };
+      const data = (await res.json()) as unknown;
+      return parseApiBody(data);
     },
   };
 }
