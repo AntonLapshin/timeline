@@ -27,6 +27,7 @@ card when no bot token is configured.
 
 from __future__ import annotations
 
+import functools
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -348,6 +349,46 @@ def snooze_allowed_for_event(session: Session, event_id: int) -> bool:
 # --- impure wiring (python-telegram-bot v21) ---------------------------------
 
 
+#: Live Telegram reminder job functions by stable context key.
+#:
+#: APScheduler's persistent SQLite jobstore pickles every scheduled job, and
+#: only module-level callables survive pickling — scheduling the closure built
+#: by :func:`make_telegram_job_func` raises ``PicklingError: Can't pickle
+#: local object`` the moment a job is added. That took down the whole
+#: Telegram/scheduler stack at startup: the drain schedules jobs for every
+#: active event, so any seeded or real event made ``start_runtime`` fail with
+#: ``telegram: error`` on /healthz and the bot never polled (no reply to any
+#: DM). The scheduler therefore stores a picklable ``functools.partial`` of
+#: :func:`run_telegram_reminder_job`; at fire time the dispatcher looks the
+#: live closure back up here. The key is stable across restarts so jobs
+#: persisted by a previous process still resolve after ``start_runtime``
+#: re-registers the fresh closure.
+_JOB_FUNC_REGISTRY: dict[str, Callable[[int, str, str], bool]] = {}
+
+#: Stable registry key for the production Telegram reminder job function.
+TELEGRAM_JOB_CONTEXT_KEY = "telegram-reminders"
+
+
+def run_telegram_reminder_job(
+    context_key: str, event_id: int, occurrence_id: str, offset: str
+) -> bool:
+    """APScheduler entry point for Telegram reminders (must stay picklable).
+
+    Looks up the live job closure registered under ``context_key`` by
+    :func:`make_telegram_job_func` and runs it. ``functools.partial`` binds the
+    key at schedule time, so the persisted job holds only this module-level
+    function plus plain strings — all picklable, unlike the closure itself
+    (which captures the bot, DB sessions and scheduler).
+    """
+    try:
+        job_func = _JOB_FUNC_REGISTRY[context_key]
+    except KeyError:
+        raise RuntimeError(
+            f"telegram reminder job context {context_key!r} is not registered"
+        ) from None
+    return job_func(event_id, occurrence_id, offset)
+
+
 class _Bot(Protocol):
     """The minimal python-telegram-bot surface this module uses."""
 
@@ -388,6 +429,14 @@ def make_telegram_job_func(
     event, or a channel the event isn't configured for means nothing is sent
     (issue #62). Every allowlisted user id (issue #112) receives the card;
     delivery is recorded once (sent or failed) regardless of recipient count.
+
+    The returned callable is a picklable ``functools.partial`` of the
+    module-level :func:`run_telegram_reminder_job` (not the closure itself),
+    so it can be persisted by APScheduler's SQLite jobstore — scheduling a
+    closure or lambda raises ``PicklingError`` and breaks startup. Pass the
+    returned value (not the inner closure) to ``add_reminder_job`` /
+    ``drain_schedule`` / ``requeue_failed`` and to ``handle_callback`` for
+    snooze re-scheduling.
 
     When ``scheduler`` is provided and the event has ``repeat_until_ack`` set, a
     successfully delivered reminder that hasn't been acknowledged is re-scheduled
@@ -445,10 +494,18 @@ def make_telegram_job_func(
                         repeat_interval=repeat_interval,
                     )
                     if planned is not None:
-                        add_reminder_job(scheduler, planned, job_func)
+                        add_reminder_job(
+                            scheduler,
+                            planned,
+                            functools.partial(
+                                run_telegram_reminder_job,
+                                TELEGRAM_JOB_CONTEXT_KEY,
+                            ),
+                        )
         return delivered
 
-    return job_func
+    _JOB_FUNC_REGISTRY[TELEGRAM_JOB_CONTEXT_KEY] = job_func
+    return functools.partial(run_telegram_reminder_job, TELEGRAM_JOB_CONTEXT_KEY)
 
 
 def _is_acked(

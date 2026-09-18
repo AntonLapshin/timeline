@@ -19,6 +19,7 @@ wiring (``make_telegram_job_func``, ``build_telegram_application``).
 from __future__ import annotations
 
 import contextlib
+import pickle
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -31,8 +32,9 @@ from app.config import Settings
 from app.db import create_engine_from_settings, make_session_factory
 from app.enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
 from app.models import DeliveryLog, Event
-from app.scheduler import build_scheduler, dedupe_key
+from app.scheduler import build_scheduler, dedupe_key, drain_schedule
 from app.telegram_outbound import (
+    TELEGRAM_JOB_CONTEXT_KEY,
     _run_send,
     ack_delivery,
     build_reply_markup,
@@ -45,6 +47,7 @@ from app.telegram_outbound import (
     make_telegram_job_func,
     parse_callback_data,
     priority_emoji,
+    run_telegram_reminder_job,
     should_push,
     snooze_allowed_for_event,
     snooze_delivery,
@@ -81,6 +84,15 @@ def _event(**overrides: object) -> Event:
 
 def _now() -> datetime:
     return datetime(2026, 1, 1, 8, 30, tzinfo=UTC)
+
+
+def _noop_job_func(*args: object, **kwargs: object) -> None:
+    """Picklable stand-in job func for tests using the real persistent store.
+
+    Module-level (unlike a lambda) so APScheduler's SQLite jobstore can pickle
+    it — scheduling a lambda/closure raises ``PicklingError``.
+    """
+    return None
 
 
 # --- pure helpers ------------------------------------------------------------
@@ -366,7 +378,7 @@ def test_handle_callback_snooze_schedules(
                 data=callback_data("snooze", event_id, "occ", "1h"),
                 session=session,
                 scheduler=scheduler,
-                job_func=lambda *a, **k: None,
+                job_func=_noop_job_func,
                 now=now,
             )
             assert msg == "Snoozed for 1 day 😴"
@@ -670,6 +682,65 @@ def test_make_telegram_job_func_repeat_until_ack_schedules_followup(
         jobs = scheduler.get_jobs()
         assert len(jobs) == 1
         assert "~repeat@" in jobs[0].id
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_make_telegram_job_func_is_picklable(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The factory returns a picklable callable for the persistent jobstore.
+
+    Regression test: the scheduler persists jobs pickled in SQLite, and the
+    previous closure return raised ``PicklingError: Can't pickle local
+    object`` the moment any job was scheduled. That failed ``start_runtime``
+    (drain) with ``telegram: error`` whenever any active event existed, so the
+    bot never polled and no DM ever got a reply.
+    """
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            raise AssertionError("must not send during a pickle test")
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+    clone = pickle.loads(pickle.dumps(job_func))
+    assert clone.func is run_telegram_reminder_job
+    assert clone.args == (TELEGRAM_JOB_CONTEXT_KEY,)
+
+
+def test_drain_schedule_with_production_job_func(
+    session_factory: sessionmaker[Session], tmp_path: Path
+) -> None:
+    """The startup drain works with the production job func (bot-silent bug).
+
+    Mirrors ``start_runtime``: an active event with reminder offsets is drained
+    into a real persistent scheduler using the real ``make_telegram_job_func``
+    value. Listing the jobs forces a pickle round-trip through the SQLite
+    jobstore — the old closure return blew up here with PicklingError.
+    """
+    with session_factory() as session:
+        session.add(_event())
+        session.commit()
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            raise AssertionError("drained jobs must not fire in this test")
+
+    settings = Settings(
+        data_dir=tmp_path, db_name="telegram.db", telegram_user_id="123"
+    )
+    scheduler = build_scheduler(settings)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FakeBot(), settings, now=_now()
+        )
+        added = drain_schedule(
+            scheduler, session_factory, job_func=job_func, now=_now()
+        )
+        assert added == 1
+        assert len(scheduler.get_jobs()) == 1
     finally:
         with contextlib.suppress(Exception):
             scheduler.shutdown(wait=False)

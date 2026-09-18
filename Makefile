@@ -1,6 +1,7 @@
 # Timeline — one-command lifecycle for the docker-compose stack (web + api).
 #
 #   make dev     dev stack: build + up, wait for API health, print URLs
+#   make restart dev stack: down + dev (rebuild + up, wait, print URLs)
 #   make start   prod stack: build + up, install + enable boot autostart
 #   make stop    stop the stack and remove boot autostart
 #   make status  compose ps + API healthz
@@ -25,12 +26,13 @@ UNIT_DIR ?= $(HOME)/.config/systemd/user
 UNIT_DST ?= $(UNIT_DIR)/$(UNIT_NAME)
 
 .DEFAULT_GOAL := help
-.PHONY: help dev start stop status logs env wait-health print-urls install-unit remove-unit
+.PHONY: help dev restart start stop status logs env wait-health print-urls install-unit remove-unit
 
 help:
 	@echo "Timeline — docker-compose stack control"
 	@echo
 	@echo "  make dev     Start the dev stack (build + up -d), wait for API health, print URLs"
+	@echo "  make restart Restart the dev stack (compose down + dev)"
 	@echo "  make start   Prod: stack up (built images, migrations via API CMD) + boot autostart"
 	@echo "  make stop    Stop the stack (compose down) and remove boot autostart"
 	@echo "  make status  Show compose ps + API health"
@@ -46,6 +48,11 @@ dev: env
 	@$(MAKE) --no-print-directory wait-health
 	@$(MAKE) --no-print-directory print-urls
 	@echo 'Reminder: LAN access is unauthenticated (trusted LAN only); firewall: sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp'
+
+# Restart: compose down + dev (build + up + health wait + URLs).
+restart:
+	$(COMPOSE) down
+	@$(MAKE) --no-print-directory dev
 
 # Prod: stack up + install/enable the boot-autostart systemd --user unit.
 start: env
