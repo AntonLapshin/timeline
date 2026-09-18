@@ -11,7 +11,12 @@
 
 import type { EventPriority, EventRead } from "./eventTypes";
 import { formatRecurrence } from "./recurrenceFormat";
-import { parseIso, relativeLabel, toLocalDate, weekdayShort } from "./dateFmt";
+import {
+  dateKeyForDisplay,
+  displayParts,
+  parseIso,
+  relativeLabel,
+} from "./dateFmt";
 
 /** Display styling for a priority level. */
 export interface PriorityStyle {
@@ -159,25 +164,24 @@ export function weekInMonth(date: Date): number {
 /**
  * Format an event's start for display, e.g. "Mon, Sep 5 · 10:00 AM".
  *
- * All-day events omit the time. Events with an unparseable start fall back to
- * the raw `start_at` string so the UI never renders a blank value.
+ * Rendered in the event's own timezone (`event.tz`), not the browser zone —
+ * a UTC instant formatted with browser-local getters shifts the wall-clock
+ * time whenever the two zones differ. All-day events omit the time. Events
+ * with an unparseable start fall back to the raw `start_at` string so the UI
+ * never renders a blank value.
  */
 export function eventTimeLabel(event: EventRead): string {
   const parsed = parseIso(event.start_at);
   if (!parsed) {
     return event.start_at;
   }
-  const weekday = weekdayShort(parsed);
-  const monthShort = parsed.toLocaleString("en-US", { month: "short" });
-  const day = parsed.getDate();
+  const parts = displayParts(event.start_at, parsed, event.tz || undefined);
   if (event.all_day) {
-    return `${weekday}, ${monthShort} ${day}`;
+    return `${parts.weekday}, ${parts.monthShort} ${parts.day}`;
   }
-  const hour = parsed.getHours();
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${weekday}, ${monthShort} ${day} · ${hour12}:${minute} ${period}`;
+  const period = parts.hour >= 12 ? "PM" : "AM";
+  const hour12 = parts.hour % 12 === 0 ? 12 : parts.hour % 12;
+  return `${parts.weekday}, ${parts.monthShort} ${parts.day} · ${hour12}:${String(parts.minute).padStart(2, "0")} ${period}`;
 }
 
 /**
@@ -199,7 +203,7 @@ export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
       unsortedRows.push(row);
       continue;
     }
-    const monthKey = toLocalDate(parsed).slice(0, 7);
+    const monthKey = dateKeyForDisplay(event.start_at, parsed, event.tz || undefined).slice(0, 7);
     let month = months.get(monthKey);
     if (!month) {
       month = { key: monthKey, label: monthKey, weeks: [] };

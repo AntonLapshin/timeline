@@ -10,7 +10,14 @@
  */
 
 import type { EventOccurrence, EventPriority } from "./eventTypes";
-import { parseIso, relativeLabel, startOfDay, toLocalDate, weekdayShort } from "./dateFmt";
+import {
+  dateKeyForDisplay,
+  displayParts,
+  parseIso,
+  relativeLabel,
+  startOfDay,
+  toLocalDate,
+} from "./dateFmt";
 import { formatRecurrence } from "./recurrenceFormat";
 import { priorityStyle, tagStyle } from "./timeline";
 
@@ -148,8 +155,10 @@ export function monthGrid(year: number, month: number): CalendarGrid {
 /**
  * Filter the occurrences that fall on a given day.
  *
- * Compares each occurrence's local calendar date against the day cell's
- * `isoDate`. Used by the day drawer to list a selected day's events.
+ * Each occurrence is placed by its calendar date **in its own timezone**
+ * (`o.tz`), matching the backend month expansion (which interprets the month
+ * in each event's timezone). Comparing raw browser-local dates instead is
+ * what dropped/shifted occurrences across midnight for non-UTC zones.
  */
 export function dayOccurrences(
   occurrences: readonly EventOccurrence[],
@@ -157,11 +166,14 @@ export function dayOccurrences(
 ): EventOccurrence[] {
   return occurrences.filter((o) => {
     const date = parseIso(o.start_at);
-    return date !== null && toLocalDate(date) === day.isoDate;
+    if (date === null) {
+      return false;
+    }
+    return dateKeyForDisplay(o.start_at, date, o.tz || undefined) === day.isoDate;
   });
 }
 
-/** Group occurrences by their local calendar date (YYYY-MM-DD). */
+/** Group occurrences by their calendar date in each occurrence's own timezone. */
 function groupByDate(
   occurrences: readonly EventOccurrence[],
 ): Map<string, EventOccurrence[]> {
@@ -169,7 +181,7 @@ function groupByDate(
   for (const o of occurrences) {
     const date = parseIso(o.start_at);
     if (!date) continue;
-    const key = toLocalDate(date);
+    const key = dateKeyForDisplay(o.start_at, date, o.tz || undefined);
     const list = byDay.get(key);
     if (list) list.push(o);
     else byDay.set(key, [o]);
@@ -229,21 +241,17 @@ function occurrenceTimeLabel(o: EventOccurrence): string {
   if (!parsed) {
     return o.start_at;
   }
-  const weekday = weekdayShort(parsed);
-  const monthShort = parsed.toLocaleString("en-US", { month: "short" });
-  const day = parsed.getDate();
+  const parts = displayParts(o.start_at, parsed, o.tz || undefined);
   if (o.all_day) {
-    return `${weekday}, ${monthShort} ${day}`;
+    return `${parts.weekday}, ${parts.monthShort} ${parts.day}`;
   }
-  const hour = parsed.getHours();
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${weekday}, ${monthShort} ${day} · ${hour12}:${minute} ${period}`;
+  const period = parts.hour >= 12 ? "PM" : "AM";
+  const hour12 = parts.hour % 12 === 0 ? 12 : parts.hour % 12;
+  return `${parts.weekday}, ${parts.monthShort} ${parts.day} · ${hour12}:${String(parts.minute).padStart(2, "0")} ${period}`;
 }
 
 /** Format a next-occurrence timestamp as a short hint, e.g. "Next: Sun, Oct 4". */
-function nextOccurrenceLabel(next: string | null): string | null {
+function nextOccurrenceLabel(next: string | null, timeZone?: string): string | null {
   if (!next) {
     return null;
   }
@@ -251,8 +259,8 @@ function nextOccurrenceLabel(next: string | null): string | null {
   if (!parsed) {
     return next;
   }
-  const monthShort = parsed.toLocaleString("en-US", { month: "short" });
-  return `Next: ${weekdayShort(parsed)}, ${monthShort} ${parsed.getDate()}`;
+  const parts = displayParts(next, parsed, timeZone);
+  return `Next: ${parts.weekday}, ${parts.monthShort} ${parts.day}`;
 }
 
 /**
@@ -274,7 +282,7 @@ export function toOccurrenceRow(o: EventOccurrence): OccurrenceRow {
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
     timeLabel: occurrenceTimeLabel(o),
-    nextOccurrenceLabel: nextOccurrenceLabel(o.next_occurrence),
+    nextOccurrenceLabel: nextOccurrenceLabel(o.next_occurrence, o.tz || undefined),
     relativeLabel: relativeLabel(o.start_at, new Date()),
   };
 }
@@ -392,11 +400,10 @@ export function timeLabel(o: EventOccurrence): string {
   if (!parsed) {
     return "";
   }
-  const hour = parsed.getHours();
-  const minute = String(parsed.getMinutes()).padStart(2, "0");
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
-  return `${hour12}:${minute} ${period}`;
+  const parts = displayParts(o.start_at, parsed, o.tz || undefined);
+  const period = parts.hour >= 12 ? "PM" : "AM";
+  const hour12 = parts.hour % 12 === 0 ? 12 : parts.hour % 12;
+  return `${hour12}:${String(parts.minute).padStart(2, "0")} ${period}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -431,10 +438,11 @@ export function toAgendaRow(o: EventOccurrence): AgendaRow {
   const tag = o.tag ? tagStyle(o.tag) : null;
   const badge = formatRecurrence(o.rrule);
   const parsed = parseIso(o.start_at);
+  const parts = parsed ? displayParts(o.start_at, parsed, o.tz || undefined) : null;
   return {
     occurrence: o,
-    dateLabel: parsed
-      ? `${weekdayShort(parsed)}, ${parsed.toLocaleString("en-US", { month: "short" })} ${parsed.getDate()}`
+    dateLabel: parts
+      ? `${parts.weekday}, ${parts.monthShort} ${parts.day}`
       : o.start_at,
     timeLabel: o.all_day ? "All day" : timeLabel(o),
     priorityColor: priority.color,

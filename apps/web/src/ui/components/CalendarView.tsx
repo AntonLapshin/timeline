@@ -41,9 +41,9 @@ export function DayCell({
       type="button"
       onClick={() => onSelect(day)}
       aria-label={`${day.isoDate}, ${day.count} event${day.count === 1 ? "" : "s"}`}
-      className={`print-month-cell flex h-16 flex-col items-center justify-start rounded-xl border p-1 text-sm leading-5 transition-all duration-150 ${
+      className={`print-month-cell flex h-16 flex-col items-center justify-start rounded-lg border p-1 text-sm leading-none transition-colors ${
         day.inMonth
-          ? "border-slate-200/80 bg-white shadow-sm hover:-translate-y-px hover:shadow-md dark:border-slate-700/70 dark:bg-slate-800 dark:hover:bg-slate-700/80"
+          ? "border-slate-200/80 bg-white shadow-sm hover:bg-slate-50 dark:border-slate-700/70 dark:bg-slate-800 dark:hover:bg-slate-700/80"
           : "border-transparent bg-slate-100/60 text-slate-300 dark:bg-slate-800/40 dark:text-slate-600"
       }`}
     >
@@ -85,7 +85,7 @@ export function OccurrenceRowView({
         return (
           <li
             key={`${o.event_id}-${o.start_at}`}
-            className={`card flex items-start gap-3 p-3 transition-all duration-150 hover:-translate-y-px hover:shadow-lg ${
+            className={`card flex items-start gap-3 p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/60 ${
               onEventClick ? "cursor-pointer" : ""
             }`}
             onClick={onEventClick ? () => onEventClick(o) : undefined}
@@ -142,7 +142,7 @@ export function WeekChip({
   return (
     <div
       className={`flex w-full items-center gap-1.5 truncate rounded-lg border border-transparent px-1.5 py-1 text-left text-[11px] leading-4 shadow-sm ${row.priorityColor} ${
-        onEventClick ? "cursor-pointer transition-all duration-150 hover:shadow-md hover:brightness-110" : ""
+        onEventClick ? "cursor-pointer" : ""
       }`}
       title={row.occurrence.title}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
@@ -201,7 +201,7 @@ export function AgendaRowView({
 }) {
   return (
     <li
-      className={`card flex items-start gap-3 p-3 transition-all duration-150 hover:-translate-y-px hover:shadow-lg ${
+      className={`card flex items-start gap-3 p-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/60 ${
         onEventClick ? "cursor-pointer" : ""
       }`}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
@@ -315,14 +315,14 @@ export function CalendarView({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 rounded-2xl border border-slate-200/70 bg-slate-100/70 p-1 print-hidden dark:border-slate-700/70 dark:bg-slate-800/70">
+      <div className="flex gap-1 rounded-lg border border-slate-200/70 bg-slate-100/70 p-1 print-hidden dark:border-slate-700/70 dark:bg-slate-800/70">
         {MODES.map((tab) => (
           <button
             key={tab.id}
             type="button"
             aria-pressed={mode === tab.id}
             onClick={() => setMode(tab.id)}
-            className={`flex-1 rounded-xl px-3 py-1.5 text-sm font-medium leading-5 transition-all duration-150 ${
+            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium leading-none transition-colors ${
               mode === tab.id
                 ? "bg-white text-slate-900 shadow-md dark:bg-slate-900 dark:text-slate-100 dark:shadow-black/40"
                 : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
@@ -379,7 +379,7 @@ export function CalendarView({
             {WEEKDAY_HEADERS.map((day) => (
               <div
                 key={day}
-                className="h-3 animate-pulse rounded bg-slate-200 dark:bg-slate-700"
+                className="h-3 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700"
               />
             ))}
           </div>
@@ -389,7 +389,7 @@ export function CalendarView({
                 {Array.from({ length: 7 }, (_, j) => (
                   <div
                     key={j}
-                    className="h-16 animate-pulse rounded bg-slate-200 dark:bg-slate-700"
+                    className="h-16 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700"
                   />
                 ))}
               </div>
@@ -447,7 +447,7 @@ export function CalendarView({
               type="button"
               onClick={closeDrawer}
               aria-label="Close"
-              className="btn-ghost px-2 py-1 text-sm leading-5"
+              className="btn-ghost px-2 py-1 text-sm leading-none"
             >
               ✕
             </button>

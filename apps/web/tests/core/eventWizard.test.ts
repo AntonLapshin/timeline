@@ -360,7 +360,7 @@ describe("eventWizard core module", () => {
   describe("exported constants", () => {
     it("exposes the recurrence choices and reminder presets", () => {
       expect(RECURRENCE_CHOICES).toContain("custom");
-      expect(REMINDER_OFFSET_PRESETS).toEqual(["7d", "1d", "2h"]);
+      expect(REMINDER_OFFSET_PRESETS).toEqual(["7d", "1d", "2h", "1h", "30m", "15m"]);
       expect(DEFAULT_TZ).toBe("UTC");
     });
   });

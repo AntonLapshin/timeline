@@ -43,7 +43,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
       aria-modal="true"
       aria-label="Create or edit event"
     >
-      <div className="w-full max-w-lg rounded-2xl border border-slate-200/70 bg-white/95 p-6 shadow-2xl backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/95 dark:shadow-black/50">
+      <div className="w-full max-w-lg rounded-lg border border-slate-200/70 bg-white/95 p-6 shadow-2xl backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/95 dark:shadow-black/50">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-semibold tracking-tight text-transparent dark:from-slate-100 dark:to-slate-400">
             {editingEvent ? "Edit event" : "New event"}
@@ -52,7 +52,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
             type="button"
             onClick={close}
             aria-label="Close wizard"
-            className="btn-ghost px-2 py-1 text-sm leading-5"
+            className="btn-ghost px-2 py-1 text-sm leading-none"
           >
             ✕
           </button>
@@ -124,7 +124,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
               type="button"
               onClick={save}
               disabled={saving}
-              className="btn bg-gradient-to-b from-emerald-500 to-emerald-700 px-4 py-2 text-white shadow-md shadow-emerald-600/25 hover:from-emerald-400 hover:to-emerald-600"
+              className="btn bg-gradient-to-b from-emerald-500 to-emerald-700 px-4 py-2 text-white shadow-md shadow-emerald-600/25"
             >
               {saving ? "Saving…" : "Save event"}
             </button>

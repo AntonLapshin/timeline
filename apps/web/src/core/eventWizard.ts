@@ -9,7 +9,12 @@
  * data transformation.
  */
 
-import { parseIso, toLocalDate } from "./dateFmt";
+import {
+  datePartsInTimezone,
+  parseIso,
+  parseNaiveWallClock,
+  toLocalDate,
+} from "./dateFmt";
 import type {
   EventChannel,
   EventCreate,
@@ -47,6 +52,9 @@ export const REMINDER_OFFSET_PRESETS: readonly string[] = [
   "7d",
   "1d",
   "2h",
+  "1h",
+  "30m",
+  "15m",
 ];
 
 /** The working draft of an event being created or edited. */
@@ -171,12 +179,39 @@ export function recurrenceChoiceFromRrule(
 export function draftFromEvent(event: EventRead): EventDraft {
   const start = parseIso(event.start_at);
   const recurrence = recurrenceChoiceFromRrule(event.rrule);
+  // Interpret the stored instant in the event's own timezone so the edit form
+  // shows the same wall-clock date/time the event was created with, no matter
+  // the browser zone. Naive timestamps ARE that wall clock — render verbatim.
+  const wallClock =
+    event.tz && event.start_at ? parseNaiveWallClock(event.start_at) : null;
+  const parts =
+    !wallClock && start && event.tz
+      ? datePartsInTimezone(start, event.tz)
+      : null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const wallDate = wallClock
+    ? `${wallClock.year}-${pad(wallClock.month)}-${pad(wallClock.day)}`
+    : null;
+  const wallTime = wallClock
+    ? `${pad(wallClock.hour)}:${pad(wallClock.minute)}`
+    : null;
   return {
     title: event.title,
     notes: event.description,
     allDay: event.all_day,
-    date: start ? toLocalDate(start) : "",
-    time: event.all_day || !start ? "" : timeOf(start),
+    date: start
+      ? (wallDate ??
+        (parts
+          ? `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`
+          : toLocalDate(start)))
+      : "",
+    time:
+      event.all_day || !start
+        ? ""
+        : (wallTime ??
+          (parts
+            ? `${pad(parts.hour)}:${pad(parts.minute)}`
+            : timeOf(start))),
     tz: event.tz || DEFAULT_TZ,
     recurrence,
     customRrule: event.rrule ?? "",

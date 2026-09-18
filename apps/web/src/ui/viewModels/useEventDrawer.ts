@@ -7,7 +7,7 @@ import {
 } from "../../core/eventDrawer";
 import { toOccurrenceRow, type OccurrenceRow } from "../../core/calendar";
 import { monthKey } from "../../core/calendar";
-import { parseIso } from "../../core/dateFmt";
+import { parseIso, parseNaiveWallClock, toMonthInTimezone } from "../../core/dateFmt";
 import { deliveryLogRows, type DeliveryLogRow } from "../../core/deliveryLog";
 import type { DeliveryLog, EventOccurrence, EventRead } from "../../core/eventTypes";
 
@@ -86,11 +86,22 @@ export function useEventDrawer(): EventDrawerState {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // The month whose occurrences we fetch: the selected event's start month.
+  // The month whose occurrences we fetch: the selected event's start month,
+  // interpreted in the event's own timezone so the drawer queries the same
+  // month the backend expands occurrences in.
   const month = useMemo(() => {
     if (!event) return null;
+    // A naive start is already the wall clock in the event's zone — its month
+    // prefix is the query month verbatim (no browser-zone round-trip).
+    if (event.tz && parseNaiveWallClock(event.start_at)) {
+      const prefix = event.start_at.trim().slice(0, 7);
+      return /^\d{4}-\d{2}$/.test(prefix) ? prefix : null;
+    }
     const start = parseIso(event.start_at);
     if (!start) return null;
+    if (event.tz) {
+      return toMonthInTimezone(start, event.tz);
+    }
     return monthKey(start.getFullYear(), start.getMonth() + 1);
   }, [event]);
 

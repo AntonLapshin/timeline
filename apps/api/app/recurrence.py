@@ -62,6 +62,24 @@ def _as_utc(dt: datetime) -> datetime:
     return dt.astimezone(UTC)
 
 
+def _as_utc_in_tz(dt: datetime, tz: str) -> datetime:
+    """Normalize a datetime to aware UTC, interpreting naive values in ``tz``.
+
+    The web UI sends ``start_at`` as a naive local timestamp plus a separate
+    IANA ``tz`` (e.g. ``2026-09-18T10:00:00`` + ``Europe/Berlin`` meaning 10:00
+    in Berlin). Treating such naive values as UTC shifts every occurrence by
+    the zone offset, which is exactly the "Next occurrences in a different
+    timezone" bug. Aware values pass through unchanged.
+    """
+    if dt.tzinfo is None:
+        try:
+            zone = ZoneInfo(tz)
+        except ZoneInfoNotFoundError as exc:
+            raise RecurrenceError(f"unknown timezone: {tz!r}") from exc
+        dt = dt.replace(tzinfo=zone)
+    return dt.astimezone(UTC)
+
+
 class _RecurrenceSource(Protocol):
     """The subset of an event the recurrence logic reads (duck-typed)."""
 
@@ -190,9 +208,10 @@ def next_occurrences(
     """Return the next ``n`` concrete occurrences of ``event``, materialized on read.
 
     ``event`` must expose ``rrule`` (RFC 5545 string or None for one-time),
-    ``start_at`` (aware/naive UTC datetime), ``tz`` (IANA name), ``all_day``
-    (bool) and ``end_at`` (UTC datetime or None). Occurrences are returned in
-    ascending order with UTC timestamps and stable ``occurrence_id`` strings.
+    ``start_at`` (aware datetime, or naive = wall clock in ``tz``), ``tz``
+    (IANA name), ``all_day`` (bool) and ``end_at`` (datetime or None).
+    Occurrences are returned in ascending order with UTC timestamps and stable
+    ``occurrence_id`` strings.
 
     When ``after`` is given, only occurrences with ``start >= after`` (UTC) are
     returned; otherwise the first ``n`` occurrences from the event start are
@@ -205,12 +224,12 @@ def next_occurrences(
         return []
 
     rrule_str = event.rrule or _SINGLE_RRULE
-    start_iso = _as_utc(event.start_at).isoformat()
-    end_at = event.end_at
-    end_iso = _as_utc(end_at).isoformat() if end_at is not None else ""
-    after_iso = _as_utc(after).isoformat() if after is not None else ""
     all_day = bool(event.all_day)
     tz = event.tz
+    start_iso = _as_utc_in_tz(event.start_at, tz).isoformat()
+    end_at = event.end_at
+    end_iso = _as_utc_in_tz(end_at, tz).isoformat() if end_at is not None else ""
+    after_iso = _as_utc(after).isoformat() if after is not None else ""
 
     return list(_cached_next(rrule_str, start_iso, tz, all_day, end_iso, n, after_iso))
 

@@ -61,7 +61,7 @@ export function WizardStepThree({
             return (
               <label
                 key={priority}
-                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm leading-5 transition-all duration-150 ${
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm leading-none transition-colors ${
                   selected
                     ? "border-indigo-500 bg-gradient-to-b from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-600/25 dark:border-indigo-400 dark:from-indigo-500 dark:to-indigo-600"
                     : "border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
@@ -94,7 +94,7 @@ export function WizardStepThree({
           {EVENT_CHANNELS.map((channel) => (
             <label
               key={channel}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm leading-5 text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm leading-none text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               <input
                 type="checkbox"
@@ -120,7 +120,7 @@ export function WizardStepThree({
             return (
               <label
                 key={offset}
-                className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm leading-5 transition-all duration-150 ${
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-sm leading-none transition-colors ${
                   selected
                     ? "border-indigo-500 bg-indigo-50 text-indigo-700 shadow-sm dark:border-indigo-400/50 dark:bg-indigo-400/10 dark:text-indigo-300"
                     : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500"

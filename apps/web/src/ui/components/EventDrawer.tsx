@@ -119,7 +119,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           type="button"
           onClick={drawer.close}
           aria-label="Close event drawer"
-          className="btn-ghost px-2 py-1 text-sm leading-5"
+          className="btn-ghost px-2 py-1 text-sm leading-none"
         >
           ✕
         </button>
@@ -178,7 +178,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           {occurrences.map(({ occurrence, row }) => (
             <li
               key={`${occurrence.event_id}-${occurrence.start_at}`}
-              className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 dark:border-slate-700/70 dark:bg-slate-800/60"
+              className="flex items-start gap-3 rounded-lg border border-slate-200/70 bg-slate-50/80 p-3 dark:border-slate-700/70 dark:bg-slate-800/60"
             >
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -209,7 +209,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           {deliveries.map((row) => (
             <li
               key={row.log.id}
-              className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-slate-50/80 p-3 dark:border-slate-700/70 dark:bg-slate-800/60"
+              className="flex items-start gap-3 rounded-lg border border-slate-200/70 bg-slate-50/80 p-3 dark:border-slate-700/70 dark:bg-slate-800/60"
             >
               <span
                 aria-hidden
@@ -254,7 +254,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           Delete event
         </button>
       ) : (
-        <div className="mt-2 rounded-xl border border-red-200 bg-red-50/80 p-3 dark:border-red-500/30 dark:bg-red-950/40">
+        <div className="mt-2 rounded-lg border border-red-200 bg-red-50/80 p-3 dark:border-red-500/30 dark:bg-red-950/40">
           <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">
             Delete this event? This cannot be undone.
           </p>
@@ -268,7 +268,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
               type="button"
               onClick={handleConfirmDelete}
               disabled={deleting}
-              className="btn flex-1 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-white shadow-md shadow-red-600/25 hover:from-red-400 hover:to-red-600"
+              className="btn flex-1 bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-white shadow-md shadow-red-600/25"
             >
               {deleting ? "Deleting…" : "Confirm delete"}
             </button>

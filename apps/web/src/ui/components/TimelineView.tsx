@@ -21,7 +21,7 @@ export function EventRowView({
 }) {
   return (
     <li
-      className={`card group flex items-start gap-3 p-3.5 transition-all duration-150 hover:-translate-y-px hover:shadow-lg ${
+      className={`card group flex items-start gap-3 p-3.5 transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/60 ${
         onEventClick ? "cursor-pointer" : ""
       }`}
       onClick={onEventClick ? () => onEventClick(row.event) : undefined}
@@ -128,7 +128,7 @@ export function TimelineView({
         aria-label="Loading events"
         data-testid="timeline-loading"
       >
-        <div className="h-5 w-1/3 animate-pulse rounded bg-slate-200 dark:bg-slate-700" />
+        <div className="h-5 w-1/3 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700" />
         <div className="h-16 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700" />
         <div className="h-16 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-700" />
       </div>
