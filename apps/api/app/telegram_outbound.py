@@ -27,7 +27,6 @@ card when no bot token is configured.
 
 from __future__ import annotations
 
-import functools
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -351,17 +350,19 @@ def snooze_allowed_for_event(session: Session, event_id: int) -> bool:
 
 #: Live Telegram reminder job functions by stable context key.
 #:
-#: APScheduler's persistent SQLite jobstore pickles every scheduled job, and
-#: only module-level callables survive pickling — scheduling the closure built
-#: by :func:`make_telegram_job_func` raises ``PicklingError: Can't pickle
-#: local object`` the moment a job is added. That took down the whole
+#: APScheduler's persistent SQLite jobstore serializes every scheduled job via
+#: a textual ``module:function`` reference (``apscheduler.util.obj_to_ref``),
+#: which explicitly rejects ``functools.partial``, lambdas and nested
+#: functions. Scheduling the closure built by :func:`make_telegram_job_func`
+#: (or a partial of the dispatcher) therefore raises ``ValueError`` the moment
+#: the scheduler starts with any job present. That took down the whole
 #: Telegram/scheduler stack at startup: the drain schedules jobs for every
 #: active event, so any seeded or real event made ``start_runtime`` fail with
-#: ``telegram: error`` on /healthz and the bot never polled (no reply to any
-#: DM). The scheduler therefore stores a picklable ``functools.partial`` of
-#: :func:`run_telegram_reminder_job`; at fire time the dispatcher looks the
-#: live closure back up here. The key is stable across restarts so jobs
-#: persisted by a previous process still resolve after ``start_runtime``
+#: ``telegram: error`` (and ``scheduler: disabled``) on /healthz and the bot
+#: never polled (no reply to any DM). The scheduler therefore stores the
+#: module-level :func:`telegram_reminder_job`; at fire time the dispatcher
+#: looks the live closure back up here. The key is stable across restarts so
+#: jobs persisted by a previous process still resolve after ``start_runtime``
 #: re-registers the fresh closure.
 _JOB_FUNC_REGISTRY: dict[str, Callable[[int, str, str], bool]] = {}
 
@@ -375,10 +376,10 @@ def run_telegram_reminder_job(
     """APScheduler entry point for Telegram reminders (must stay picklable).
 
     Looks up the live job closure registered under ``context_key`` by
-    :func:`make_telegram_job_func` and runs it. ``functools.partial`` binds the
-    key at schedule time, so the persisted job holds only this module-level
-    function plus plain strings — all picklable, unlike the closure itself
-    (which captures the bot, DB sessions and scheduler).
+    :func:`make_telegram_job_func` and runs it. Kept for backwards
+    compatibility with any already-persisted jobs; new jobs use
+    :func:`telegram_reminder_job` (a plain module-level function, which is
+    what APScheduler's ``obj_to_ref`` can serialize — ``partial`` cannot).
     """
     try:
         job_func = _JOB_FUNC_REGISTRY[context_key]
@@ -387,6 +388,19 @@ def run_telegram_reminder_job(
             f"telegram reminder job context {context_key!r} is not registered"
         ) from None
     return job_func(event_id, occurrence_id, offset)
+
+
+def telegram_reminder_job(event_id: int, occurrence_id: str, offset: str) -> bool:
+    """APScheduler entry point for Telegram reminders (serializable).
+
+    Plain module-level function so APScheduler's SQLite jobstore can persist
+    it as a ``module:function`` reference. Dispatches to the live closure
+    registered under :data:`TELEGRAM_JOB_CONTEXT_KEY` by
+    :func:`make_telegram_job_func`.
+    """
+    return run_telegram_reminder_job(
+        TELEGRAM_JOB_CONTEXT_KEY, event_id, occurrence_id, offset
+    )
 
 
 class _Bot(Protocol):
@@ -430,11 +444,11 @@ def make_telegram_job_func(
     (issue #62). Every allowlisted user id (issue #112) receives the card;
     delivery is recorded once (sent or failed) regardless of recipient count.
 
-    The returned callable is a picklable ``functools.partial`` of the
-    module-level :func:`run_telegram_reminder_job` (not the closure itself),
-    so it can be persisted by APScheduler's SQLite jobstore — scheduling a
-    closure or lambda raises ``PicklingError`` and breaks startup. Pass the
-    returned value (not the inner closure) to ``add_reminder_job`` /
+    The returned callable is the module-level :func:`telegram_reminder_job`
+    (not the closure itself), so it can be persisted by APScheduler's SQLite
+    jobstore as a ``module:function`` reference — scheduling a closure, lambda
+    or ``functools.partial`` raises and breaks startup. Pass the returned
+    value (not the inner closure) to ``add_reminder_job`` /
     ``drain_schedule`` / ``requeue_failed`` and to ``handle_callback`` for
     snooze re-scheduling.
 
@@ -497,15 +511,12 @@ def make_telegram_job_func(
                         add_reminder_job(
                             scheduler,
                             planned,
-                            functools.partial(
-                                run_telegram_reminder_job,
-                                TELEGRAM_JOB_CONTEXT_KEY,
-                            ),
+                            telegram_reminder_job,
                         )
         return delivered
 
     _JOB_FUNC_REGISTRY[TELEGRAM_JOB_CONTEXT_KEY] = job_func
-    return functools.partial(run_telegram_reminder_job, TELEGRAM_JOB_CONTEXT_KEY)
+    return telegram_reminder_job
 
 
 def _is_acked(

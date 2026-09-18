@@ -34,7 +34,6 @@ from app.enums import EventChannel, EventPriority, EventSource, EventStatus, Eve
 from app.models import DeliveryLog, Event
 from app.scheduler import build_scheduler, dedupe_key, drain_schedule
 from app.telegram_outbound import (
-    TELEGRAM_JOB_CONTEXT_KEY,
     _run_send,
     ack_delivery,
     build_reply_markup,
@@ -47,10 +46,10 @@ from app.telegram_outbound import (
     make_telegram_job_func,
     parse_callback_data,
     priority_emoji,
-    run_telegram_reminder_job,
     should_push,
     snooze_allowed_for_event,
     snooze_delivery,
+    telegram_reminder_job,
 )
 
 # --- fixtures ---------------------------------------------------------------
@@ -705,9 +704,15 @@ def test_make_telegram_job_func_is_picklable(
 
     settings = Settings(telegram_user_id="123", telegram_bot_token="token")
     job_func = make_telegram_job_func(session_factory, FakeBot(), settings, now=_now())
+    assert job_func is telegram_reminder_job
     clone = pickle.loads(pickle.dumps(job_func))
-    assert clone.func is run_telegram_reminder_job
-    assert clone.args == (TELEGRAM_JOB_CONTEXT_KEY,)
+    assert clone is telegram_reminder_job
+    # APScheduler persists jobs via a textual module:function reference and
+    # explicitly rejects partial/lambda/nested callables — the previous
+    # functools.partial return raised ValueError on scheduler.start().
+    from apscheduler.util import obj_to_ref, ref_to_obj
+
+    assert ref_to_obj(obj_to_ref(job_func)) is telegram_reminder_job
 
 
 def test_drain_schedule_with_production_job_func(
@@ -717,11 +722,14 @@ def test_drain_schedule_with_production_job_func(
 
     Mirrors ``start_runtime``: an active event with reminder offsets is drained
     into a real persistent scheduler using the real ``make_telegram_job_func``
-    value. Listing the jobs forces a pickle round-trip through the SQLite
-    jobstore — the old closure return blew up here with PicklingError.
+    value. Starting the scheduler forces serialization through the SQLite
+    jobstore — the old ``functools.partial`` return blew up here with
+    ``ValueError`` on ``scheduler.start()`` (APScheduler rejects partials).
+    The event is far-future so ``start()`` serializes without misfiring.
     """
+    future = datetime.now(UTC) + timedelta(days=30)
     with session_factory() as session:
-        session.add(_event())
+        session.add(_event(start_at=future))
         session.commit()
 
     class FakeBot:
@@ -740,6 +748,7 @@ def test_drain_schedule_with_production_job_func(
             scheduler, session_factory, job_func=job_func, now=_now()
         )
         assert added == 1
+        scheduler.start()
         assert len(scheduler.get_jobs()) == 1
     finally:
         with contextlib.suppress(Exception):
