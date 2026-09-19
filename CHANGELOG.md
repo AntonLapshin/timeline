@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Test
+
+- **Cover the default picklable reminder job-func fallback (issue #138,
+  missing test from PR #137):** `build_telegram_inbound_application` fills in
+  the module-level picklable `telegram_reminder_job` entrypoint when a
+  scheduler is supplied without an explicit `job_func` (the
+  `if scheduler is not None and job_func is None` fallback in
+  `apps/api/app/telegram_inbound.py`), but no test exercised that branch —
+  full-suite coverage reported the line as missing. A new test builds the
+  inbound application with a real (unstarted) `build_scheduler` scheduler and
+  no `job_func`, fires the draft Save callback through the registered
+  handler, and asserts the default picklable entrypoint (not a local lambda)
+  reaches `crud.create_event` — no Telegram/network involved. Line is now
+  covered; no production behavior change.
+
 ### Fixed
 
 - **Telegram reminder cards now render the occurrence in the event's own

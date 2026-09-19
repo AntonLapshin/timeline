@@ -1705,3 +1705,82 @@ def test_save_draft_schedules_nothing_for_draft_status(
     finally:
         with contextlib.suppress(Exception):
             scheduler.shutdown(wait=False)
+
+
+def test_build_telegram_inbound_application_scheduler_default_job_func(
+    tmp_path: Path,
+    session_factory: sessionmaker[Session],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scheduler without an explicit ``job_func`` defaults to the picklable
+    ``telegram_reminder_job`` entrypoint (issue #134/#137).
+
+    ``build_telegram_inbound_application(scheduler=<scheduler>)`` without
+    ``job_func`` must fill in the module-level picklable entrypoint so saved
+    drafts schedule jobs that survive restarts; a full build + save-callback
+    round-trip proves the default reaches crud (no Telegram/network involved).
+    """
+    import asyncio
+
+    from app import crud as crud_module
+    from app.scheduler import build_scheduler
+    from app.telegram_outbound import telegram_reminder_job
+
+    captured: dict[str, object] = {}
+    real_create = crud_module.create_event
+
+    def _spy(
+        session: Session,
+        payload: object,
+        *,
+        scheduler: object = None,
+        job_func: object = None,
+    ) -> object:
+        captured.update(scheduler=scheduler, job_func=job_func)
+        return real_create(session, payload)
+
+    monkeypatch.setattr(crud_module, "create_event", _spy)
+
+    scheduler = build_scheduler(Settings(data_dir=tmp_path))
+    try:
+        settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+        store = DraftStore()
+        store.set(123, PendingDraft(drafts=[_draft()], raw_input="x"))
+        # scheduler=<scheduler> and no job_func -> the build supplies the
+        # picklable default entrypoint itself.
+        app = build_telegram_inbound_application(
+            settings,
+            session_factory,
+            now=_now(),
+            draft_store=store,
+            scheduler=scheduler,
+        )
+        assert app is not None
+        callback = app.handlers[0][2].callback  # [0]=text, [1]=voice, [2]=callback
+
+        class _FakeQuery:
+            data = "draft:save:0"
+            from_user = _FakeUser(42)
+
+            async def answer(self) -> None:
+                pass
+
+        class _ReplyMessage(_FakeMessage):
+            async def reply_text(self, text: str, **kwargs: object) -> None:
+                pass
+
+        query = _FakeQuery()
+        query.message = _ReplyMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add x"
+        )
+
+        class _Update:
+            callback_query = query
+
+        asyncio.run(callback(_Update(), None))
+
+        assert captured["scheduler"] is scheduler
+        assert captured["job_func"] is telegram_reminder_job
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
