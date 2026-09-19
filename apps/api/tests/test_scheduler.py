@@ -25,6 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session, sessionmaker
@@ -948,6 +949,29 @@ def test_event_job_keys_lists_pending_only() -> None:
         _shutdown(scheduler)
 
 
+def test_event_job_keys_started_scheduler_next_run_time(tmp_path: Path) -> None:
+    """On a started scheduler the primary ``next_run_time`` path is used.
+
+    A not-yet-started scheduler only exposes the trigger's ``run_date`` (the
+    fallback the previous test pins); once started, APScheduler tracks
+    ``next_run_time`` on the job itself — the path real running schedulers
+    exercise (review finding on PR #137).
+    """
+    scheduler = build_scheduler(Settings(data_dir=tmp_path, db_name="keys.db"))
+    scheduler.start()
+    try:
+        future = datetime.now(UTC) + timedelta(days=30)
+        key = _add_job(scheduler, 1, "2026-01-01T10:00:00+00:00", "1h", future)
+        job = scheduler.get_job(key)
+        assert job is not None
+        assert job.next_run_time == future  # primary path is live
+        keys = event_job_keys(scheduler, 1)
+        assert set(keys) == {key}
+        assert keys[key] == future
+    finally:
+        _shutdown(scheduler)
+
+
 def test_plan_diff_adds_missing_and_removes_stale() -> None:
     """plan_diff returns desired-but-missing entries and stale keys."""
     existing = {
@@ -1157,6 +1181,47 @@ def test_reschedule_for_event_idempotent() -> None:
         assert reschedule_for_event(scheduler, event, _noop_job, now=now) == (2, 0)
         assert reschedule_for_event(scheduler, event, _noop_job, now=now) == (0, 0)
         assert len(scheduler.get_jobs()) == 2
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_tolerates_vanished_job(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A job firing between the snapshot and its removal doesn't crash re-plans.
+
+    Regression test for the PR #137 review race finding: APScheduler deletes
+    fired one-shot jobs itself, so a key returned by ``event_job_keys`` can
+    vanish before ``remove_job`` runs. Both removal loops tolerate the
+    resulting ``JobLookupError`` exactly like ``remove_event_jobs``.
+    """
+    event = _event(id=1, start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC))
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        key = dedupe_key(1, "2026-01-01T10:00:00+00:00", "1h")
+        # Prove the phantom key truly has no job behind it.
+        with pytest.raises(JobLookupError):
+            scheduler.remove_job(key)
+
+        # Re-timed branch: snapshot reports the key with a changed run time,
+        # but the job vanished before the pre-add removal.
+        monkeypatch.setattr(
+            "app.scheduler.event_job_keys",
+            lambda *a, **k: {key: datetime(2026, 1, 1, 8, 0, tzinfo=UTC)},
+        )
+        assert reschedule_for_event(scheduler, event, _noop_job, now=now) == (1, 0)
+        assert scheduler.get_job(key) is not None
+
+        # Stale branch: a phantom key absent from the desired plan is dropped
+        # without raising even though no such job exists.
+        phantom = "1:2026-01-03T10:00:00+00:00:1h"
+        monkeypatch.setattr(
+            "app.scheduler.event_job_keys",
+            lambda *a, **k: {phantom: now + timedelta(days=1)},
+        )
+        assert reschedule_for_event(scheduler, event, _noop_job, now=now) == (0, 1)
+        assert scheduler.get_job(key) is not None  # the real job survived
     finally:
         _shutdown(scheduler)
 

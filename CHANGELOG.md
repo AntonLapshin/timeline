@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Web core coverage restored to the 100% gate (review fix on PR #137, issue
+  #134):** the owner's direct timezone commits (`0eab950`/`984ecaf`) had
+  dropped `apps/web/src/core/**` coverage below the hard 100% threshold.
+  Added missing core tests for `dateFmt` (`displayParts`/`datePartsInTimezone`/
+  `parseNaiveWallClock`/month/timezone fallbacks), `apiClient` DELETE paths,
+  `llmParse` clarification-body edge cases, and closed branch gaps in
+  `eventWizard` (timezone-aware draft mapping), `calendar` and `timeline`
+  (`tz`-less occurrences/events, unknown-priority dot fallback). The web
+  coverage gate is green again (100% lines/statements/functions/branches).
+
+- **Runtime reminder re-plans now tolerate a job firing mid-edit (review fix
+  on PR #137, issue #134):** `reschedule_for_event` removes stale and re-timed
+  scheduler jobs unguarded; a one-shot reminder that fires between the
+  `event_job_keys()` snapshot and `remove_job()` is deleted by APScheduler
+  itself, so the removal raised `JobLookupError` and the API write 500d
+  (self-healing on the next edit). Both removal loops now wrap the call in
+  `contextlib.suppress(JobLookupError)` exactly like `remove_event_jobs`, with
+  a regression test; the scheduler-disabled CRUD path test is also pinned to a
+  deterministic disabled runtime.
+
 - **JoinGonka base URL corrected (`/openai/v1` → `/v1`):** the API posted to
   `<base>/chat/completions`, so the old default produced
   `.../openai/v1/chat/completions`, which the gateway rejects with HTTP 405.

@@ -415,11 +415,39 @@ def test_delete_event_removes_reminder_jobs(tmp_path: Path) -> None:
         _shutdown_scheduler(scheduler)
 
 
-def test_event_writes_without_scheduler_still_work(client: TestClient) -> None:
-    """With the scheduler disabled (no runtime), writes are a no-op."""
-    resp = client.post("/api/events", json=_payload())
-    assert resp.status_code == 201
-    event_id = resp.json()["id"]
-    renamed = client.patch(f"/api/events/{event_id}", json={"title": "X"})
-    assert renamed.status_code == 200
-    assert client.delete(f"/api/events/{event_id}").status_code == 204
+def _disabled_runtime_client(tmp_path: Path) -> TestClient:
+    """A TestClient whose runtime is deterministically disabled.
+
+    The default starter honours the machine's Telegram/scheduler settings, so
+    a dev box with a configured token would start a live scheduler and make
+    the disabled-path assertions environment-dependent. Injecting a starter
+    that returns all-``None`` ``RuntimeComponents`` pins the disabled
+    scenario (review finding on PR #137).
+    """
+    from app.runtime import RuntimeComponents
+
+    async def starter(settings: Settings, session_factory: object) -> RuntimeComponents:
+        return RuntimeComponents()
+
+    return TestClient(
+        create_app(
+            Settings(data_dir=tmp_path, db_name="test.db"),
+            start_runtime=starter,  # type: ignore[arg-type]
+        )
+    )
+
+
+def test_event_writes_without_scheduler_still_work(tmp_path: Path) -> None:
+    """With the scheduler disabled, event writes are a scheduling no-op.
+
+    The disabled scenario is pinned via an injected starter returning
+    ``RuntimeComponents()`` (scheduler=None) so the test can't silently
+    exercise a live scheduler on a machine with a configured token.
+    """
+    with _disabled_runtime_client(tmp_path) as disabled:
+        resp = disabled.post("/api/events", json=_payload())
+        assert resp.status_code == 201
+        event_id = resp.json()["id"]
+        renamed = disabled.patch(f"/api/events/{event_id}", json={"title": "X"})
+        assert renamed.status_code == 200
+        assert disabled.delete(f"/api/events/{event_id}").status_code == 204

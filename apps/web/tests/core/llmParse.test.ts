@@ -4,6 +4,7 @@ import {
   draftFromParsed,
   parseApiBody,
   parsedToWizardDraft,
+  NEEDS_CLARIFICATION_MESSAGE,
   type ParseResult,
 } from "../../src/core/llmParse";
 import type { FetchLike } from "../../src/core/apiClient";
@@ -83,6 +84,45 @@ describe("llmParse core module", () => {
     }
     const unknown = parseApiBody({ foo: 1 });
     expect(unknown.ok).toBe(false);
+  });
+
+  it("parseApiBody rejects non-object bodies with the default message", () => {
+    for (const body of [null, "a bare string", 42]) {
+      const result = parseApiBody(body);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error).toBe(NEEDS_CLARIFICATION_MESSAGE);
+      }
+    }
+  });
+
+  it("parseApiBody uses the default message when clarification carries no usable message", () => {
+    for (const body of [
+      { needs_clarification: true },
+      { needs_clarification: true, message: "   " },
+      { needs_clarification: true, message: 42 },
+    ]) {
+      const result = parseApiBody(body);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error).toBe(NEEDS_CLARIFICATION_MESSAGE);
+      }
+    }
+  });
+
+  it("parseApiBody surfaces the server message for an empty events array", () => {
+    const withMessage = parseApiBody({ events: [], message: "Pick a day" });
+    expect(withMessage.ok).toBe(false);
+    if (!withMessage.ok) {
+      expect(withMessage.error).toBe("Pick a day");
+    }
+    for (const message of ["   ", null]) {
+      const result = parseApiBody({ events: [], message });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error).toBe(NEEDS_CLARIFICATION_MESSAGE);
+      }
+    }
   });
 
   it("propagates the rejection when a 200 body is not JSON (view-model fallback)", async () => {

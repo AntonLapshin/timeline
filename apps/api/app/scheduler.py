@@ -603,8 +603,11 @@ def event_job_keys(
 
     Matches every job whose dedupe key starts with ``"{event_id}:"`` — the
     base plan jobs plus any pending ``~repeat@``/``~snooze@`` follow-ups
-    (issue #62). Jobs that already ran (``next_run_time is None``) are not
-    pending and are skipped.
+    (issue #62). Jobs that already ran (``next_run_time is None`` on a
+    started scheduler) are not pending and are skipped. Note the
+    ``trigger.run_date`` fallback (not-yet-started scheduler) can surface a
+    lingering already-fired job with its past run date on a stopped
+    scheduler; callers ignore past run times, so this is harmless.
     """
     prefix = f"{event_id}:"
     keys: dict[str, datetime] = {}
@@ -668,10 +671,11 @@ def reschedule_for_event(
     ``(added, removed)`` counts.
 
     An event that is no longer ``ACTIVE`` (e.g. archived) gets no jobs at all
-    — its pending follow-ups are dropped too. Pending ``~repeat@``/
-    ``~snooze@`` follow-ups of an active event are delivery-pipeline state,
-    not plan state, so they are preserved across edits; on delete use
-    :func:`remove_event_jobs` to drop everything.
+    — pending follow-ups with a future run time are dropped too (already-ran
+    ones survive, mirroring the drained-job protection below). Pending
+    ``~repeat@``/``~snooze@`` follow-ups of an active event are
+    delivery-pipeline state, not plan state, so they are preserved across
+    edits; on delete use :func:`remove_event_jobs` to drop everything.
 
     Jobs whose run time already passed (drained at startup and about to fire)
     are never removed: the fresh plan skips past run times by design, so
@@ -688,14 +692,20 @@ def reschedule_for_event(
     if not active:
         stale.extend(key for key in followups if followups[key] > now)
     for key in stale:
-        scheduler.remove_job(key, jobstore=jobstore)
+        # A one-shot job can fire between the event_job_keys() snapshot and
+        # this removal (APScheduler deletes fired one-shots itself), so a
+        # stale key may vanish mid-flight — tolerate JobLookupError exactly
+        # like remove_event_jobs does (the reminder fired; nothing to drop).
+        with contextlib.suppress(JobLookupError):
+            scheduler.remove_job(key, jobstore=jobstore)
     added = 0
     for planned in to_add:
         key = dedupe_key(planned.event_id, planned.occurrence_id, planned.offset)
         if key in base and base[key] != planned.run_at:
             # Same reminder re-timed: remove the stale job so the dedupe
             # no-op in add_reminder_job doesn't keep the old run time.
-            scheduler.remove_job(key, jobstore=jobstore)
+            with contextlib.suppress(JobLookupError):
+                scheduler.remove_job(key, jobstore=jobstore)
         if (
             add_reminder_job(scheduler, planned, job_func, now=now, jobstore=jobstore)
             is not None
