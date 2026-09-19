@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -1473,6 +1474,102 @@ def test_transcribe_voice_message_always_deletes_temp_file() -> None:
             )
         )
     assert seen and not Path(seen[0][0]).exists()
+
+
+def test_transcribe_voice_message_runs_off_event_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default (real) transcription runs in a worker thread, not the loop.
+
+    The real pipeline blocks in ``subprocess.run`` (ffmpeg + voxtype, up to a
+    300s timeout); running it on the asyncio loop froze the whole API
+    (issue #132), so the invocation must be dispatched off-loop.
+    """
+    from app import telegram_inbound as ti
+
+    threads: list[threading.Thread] = []
+
+    def fake_local(
+        ogg_path: str, duration: float | None, settings: Settings
+    ) -> SttResult:
+        threads.append(threading.current_thread())
+        return SttResult(ok=True, text="hello there")
+
+    monkeypatch.setattr(ti, "_run_local_transcription", fake_local)
+    calls: list[str] = []
+    result = asyncio.run(
+        _transcribe_voice_message(
+            _FakeBot(calls),
+            "FILE123",
+            2.0,
+            Settings(telegram_user_id="42", telegram_bot_token="123:abc"),
+        )
+    )
+    assert result.ok and result.text == "hello there"
+    # The blocking pipeline ran on a worker thread — never the event loop.
+    assert threads and threads[0] is not threading.main_thread()
+
+
+def test_slow_transcription_does_not_block_concurrent_api_request(
+    tmp_path: Path,
+) -> None:
+    """While a slow voice transcription runs, /api/events is still served (#132).
+
+    Regression test for the frozen-API bug: the local STT pipeline used to run
+    its blocking subprocesses directly on the asyncio event loop — the same
+    loop that serves the FastAPI web endpoints — so a voice message made the
+    web UI hang "as if single-threaded". The transcription must run in a
+    worker thread while the same loop keeps serving requests.
+    """
+    import httpx
+
+    from app.main import create_app
+
+    started = threading.Event()
+    release = threading.Event()
+    events: list[str] = []
+
+    def slow_transcribe(
+        ogg_path: str, duration: float | None, settings: Settings
+    ) -> SttResult:
+        events.append("transcribe-start")
+        started.set()
+        # Simulate the blocking ffmpeg/whisper subprocesses.
+        release.wait(timeout=10)
+        events.append("transcribe-end")
+        return SttResult(ok=False, error="slow transcription")
+
+    update = _FakeUpdate(_FakeVoiceMessage(_FakeChat(123, "private"), _FakeUser(42)))
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+
+    async def scenario() -> None:
+        app = create_app(Settings(data_dir=tmp_path, db_name="stt.db"))
+        async with app.router.lifespan_context(app):
+            handle_task = asyncio.create_task(
+                _handle_voice_update(
+                    update, settings, bot=_FakeBot([]), transcribe=slow_transcribe
+                )
+            )
+            # Park until the fake transcription is actually running in a
+            # worker thread (it sets ``started`` before blocking on release).
+            assert await asyncio.to_thread(started.wait, 10)
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                resp = await client.get("/api/events")
+            events.append("request-done")
+            assert resp.status_code == 200
+            # The transcription is still parked — the request did not wait.
+            assert not release.is_set()
+            release.set()
+            reply = await handle_task
+            assert reply is not None
+            assert "couldn't transcribe" in reply.text.lower()
+
+    asyncio.run(scenario())
+    # The API request was served while the transcription was still blocked.
+    assert events.index("request-done") < events.index("transcribe-end")
 
 
 def test_build_telegram_inbound_application_voice_handler(

@@ -50,6 +50,7 @@ and is kept to a minimum.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import logging
 import os
@@ -77,7 +78,13 @@ logger = logging.getLogger(__name__)
 
 
 class VoiceTranscriber(Protocol):
-    """The local transcription callable the voice handler uses (``app.stt``)."""
+    """The local transcription callable the voice handler uses (``app.stt``).
+
+    A *blocking* callable (``subprocess.run`` for ffmpeg/voxtype, up to 300s);
+    the voice handler must dispatch it off the asyncio event loop
+    (``asyncio.to_thread``) so the shared API process stays responsive
+    (issue #132).
+    """
 
     def __call__(
         self, ogg_path: str, duration_seconds: float | None, settings: Settings
@@ -1015,13 +1022,21 @@ async def _transcribe_voice_message(
     voxtype only, never a network command. ``transcribe`` is injectable so
     tests can fake transcription without any subprocess. The temp file is
     always removed afterwards.
+
+    The transcription is a *blocking* call (``subprocess.run`` inside
+    ``app.stt.run_command``, up to the 300s timeout), so it is dispatched off
+    the asyncio event loop via ``asyncio.to_thread`` (issue #132): the same
+    loop serves the FastAPI web endpoints, and running the local STT pipeline
+    inline used to freeze the whole API for the duration of the transcription.
     """
     runner: VoiceTranscriber = (
         transcribe if transcribe is not None else _run_local_transcription
     )
     ogg_path = await _download_voice_file(bot, file_id)
     try:
-        return runner(ogg_path, duration, settings)
+        # Off the event loop: ffmpeg/whisper block for seconds (up to the 300s
+        # subprocess timeout) and this loop also serves the web API (#132).
+        return await asyncio.to_thread(runner, ogg_path, duration, settings)
     finally:
         with contextlib.suppress(OSError):
             os.unlink(ogg_path)

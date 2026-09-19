@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Voice-message STT no longer freezes the whole API (issue #132/#135):**
+  the local transcription pipeline (ffmpeg convert → voxtype/whisper, blocking
+  in `subprocess.run` with up to a 300s timeout) ran synchronously on the
+  asyncio event loop that also serves the FastAPI web endpoints, so submitting
+  a Telegram voice message froze the web UI "as if single-threaded" for as
+  long as the transcription ran. `_transcribe_voice_message` now dispatches
+  the blocking transcriber via `asyncio.to_thread`, keeping the loop
+  responsive — proven by a regression test that serves `/api/events` on the
+  same loop while a fake slow transcription is parked, plus a test that the
+  default (real) pipeline runs on a worker thread, never the loop. Behavior
+  is otherwise unchanged: local-only STT (no audio leaves the machine),
+  2-minute cap, `unavailable` degradation when voxtype/whisper is absent,
+  pending ack before transcription, and clear error/none replies.
+
 - **Web core coverage restored to the 100% gate (review fix on PR #137, issue
   #134):** the owner's direct timezone commits (`0eab950`/`984ecaf`) had
   dropped `apps/web/src/core/**` coverage below the hard 100% threshold.
