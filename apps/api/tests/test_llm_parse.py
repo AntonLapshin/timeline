@@ -429,9 +429,7 @@ class _SequenceClient:
         self._script = list(script)
         self.posts = 0
 
-    def post(
-        self, url: str, *, headers: dict[str, str], json: dict[str, object]
-    ):
+    def post(self, url: str, *, headers: dict[str, str], json: dict[str, object]):
         self.posts += 1
         item = self._script.pop(0) if self._script else self._script[-1]
         if isinstance(item, Exception):

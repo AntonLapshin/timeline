@@ -180,7 +180,7 @@ class ParseOutcome:
 
 def _retry_delay_sec(failed_attempt: int) -> float:
     """Exponential-backoff delay after failed attempt N (1-based)."""
-    return _RETRY_BASE_DELAY_SEC * (2 ** (failed_attempt - 1))
+    return _RETRY_BASE_DELAY_SEC * (2.0 ** (failed_attempt - 1))
 
 
 def _is_retryable_status(status_code: Any) -> bool:
@@ -215,19 +215,13 @@ def extract_model_payload(data: Any) -> Any:
     as-is. Anything else raises ``ValueError``.
     """
     if isinstance(data, dict):
-        if (
-            "events" in data
-            or "needs_clarification" in data
-            or "title" in data
-        ):
+        if "events" in data or "needs_clarification" in data or "title" in data:
             return data
         choices = data.get("choices")
         if isinstance(choices, list) and choices:
             first = choices[0]
             message: Any = first.get("message", {}) if isinstance(first, dict) else {}
-            content: Any = (
-                message.get("content") if isinstance(message, dict) else None
-            )
+            content: Any = message.get("content") if isinstance(message, dict) else None
             if isinstance(content, dict):
                 return content
             if isinstance(content, str):
