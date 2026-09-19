@@ -3,7 +3,7 @@ import { toOccurrenceRow } from "../../src/core/calendar";
 import { eventTimeLabel } from "../../src/core/timeline";
 import type { EventOccurrence } from "../../src/core/eventTypes";
 
-function occ(overrides: Partial<EventOccurrence>): EventOccurrence {
+function occ(overrides: Partial<EventOccurrence> = {}): EventOccurrence {
   return {
     event_id: 1,
     title: "T",
