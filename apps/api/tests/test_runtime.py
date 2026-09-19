@@ -30,6 +30,7 @@ from app.db import create_engine_from_settings, make_session_factory
 from app.main import create_app
 from app.models import Base
 from app.runtime import RuntimeComponents, components_status
+from app.telegram_outbound import telegram_reminder_job
 
 # --- fakes (no network, no real Telegram) -------------------------------------
 
@@ -130,7 +131,7 @@ def test_start_runtime_warns_on_empty_allowlist(
     """Token set but no allowlist -> fail-closed startup warning (issue #112)."""
     fake_app = _FakeTelegramApp()
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     settings = Settings(
         data_dir=tmp_path,
@@ -159,7 +160,7 @@ def test_start_runtime_warns_on_invalid_allowlist_entries(
     """Invalid allowlist entries are named in the startup warning (issue #112)."""
     fake_app = _FakeTelegramApp()
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     settings = Settings(
         data_dir=tmp_path,
@@ -185,7 +186,7 @@ def test_start_runtime_no_allowlist_warning_when_valid(
     """A valid allowlist logs no allowlist warning (issue #112)."""
     fake_app = _FakeTelegramApp()
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     with caplog.at_level(logging.WARNING):
         components = asyncio.run(
@@ -201,7 +202,7 @@ def test_start_runtime_starts_scheduler_and_bot(
     """With a token the scheduler runs, polling starts, and the drain ran."""
     fake_app = _FakeTelegramApp()
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     components = asyncio.run(
         runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
@@ -222,13 +223,50 @@ def test_start_runtime_starts_scheduler_and_bot(
     assert components.scheduler.running is False
 
 
+def test_start_runtime_wires_scheduler_and_job_func(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The inbound save path and components share the scheduler + job func.
+
+    Issue #134: the inbound application receives the running scheduler (so
+    saved drafts can schedule reminders) and the components expose the
+    picklable job entrypoint for route/CRUD re-scheduling.
+    """
+    fake_app = _FakeTelegramApp()
+    captured: dict[str, object] = {}
+
+    def _fake_build(
+        settings: Settings,
+        sf: sessionmaker[Session],
+        *,
+        scheduler: object = None,
+        job_func: object = None,
+    ) -> Any:
+        captured.update(scheduler=scheduler, job_func=job_func)
+        return fake_app
+
+    monkeypatch.setattr(runtime, "build_telegram_inbound_application", _fake_build)
+    components = asyncio.run(
+        runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
+    )
+    try:
+        # The same scheduler instance is shared with the inbound handlers.
+        assert captured["scheduler"] is components.scheduler
+        assert captured["scheduler"] is not None
+        # The job func is the picklable module-level entrypoint.
+        assert components.job_func is telegram_reminder_job
+        assert captured["job_func"] is telegram_reminder_job
+    finally:
+        asyncio.run(components.shutdown())
+
+
 def test_start_runtime_shutdown_is_safe_twice(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Calling shutdown twice never raises (best-effort, idempotent teardown)."""
     fake_app = _FakeTelegramApp()
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     components = asyncio.run(
         runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
@@ -246,7 +284,7 @@ def test_start_runtime_shutdown_swallows_component_errors(
     """A failing component never blocks the rest of the teardown."""
     fake_app = _FakeTelegramApp(fail_on="stop")
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     components = asyncio.run(
         runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
@@ -263,7 +301,7 @@ def test_start_runtime_telegram_build_failure_marks_error(
 ) -> None:
     """A bot startup failure keeps the API serving with telegram=error."""
 
-    def _boom(settings: Settings, sf: sessionmaker[Session]) -> Any:
+    def _boom(settings: Settings, sf: sessionmaker[Session], **kwargs: Any) -> Any:
         raise RuntimeError("telegram down")
 
     monkeypatch.setattr(runtime, "build_telegram_inbound_application", _boom)
@@ -278,10 +316,10 @@ def test_start_runtime_telegram_build_failure_marks_error(
 
 
 @pytest.mark.parametrize(
-    ("patch_target", "message"),
+    ("patch_target", "message", "expect_initialized"),
     [
-        ("build_scheduler", "scheduler jobstore broken"),
-        ("drain_schedule", "drain exploded"),
+        ("build_scheduler", "scheduler jobstore broken", False),
+        ("drain_schedule", "drain exploded", True),
     ],
 )
 def test_start_runtime_scheduler_failure_reports_error(
@@ -289,11 +327,12 @@ def test_start_runtime_scheduler_failure_reports_error(
     monkeypatch: pytest.MonkeyPatch,
     patch_target: str,
     message: str,
+    expect_initialized: bool,
 ) -> None:
     """A scheduler build/drain failure surfaces as telegram=error, not a crash."""
     fake_app = _FakeTelegramApp()
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
 
     def _boom(*args: Any, **kwargs: Any) -> Any:
@@ -306,9 +345,11 @@ def test_start_runtime_scheduler_failure_reports_error(
     assert components.scheduler is None
     assert components.telegram_status == "error"
     assert message in (components.telegram_error or "")
-    # The bot got as far as initialize but was torn down again.
-    assert "initialize" in fake_app.calls
-    assert "stop" in fake_app.calls
+    # The bot only gets built after the scheduler, so a build_scheduler
+    # failure happens before any app lifecycle call; a drain failure tears
+    # the initialized app back down.
+    assert ("initialize" in fake_app.calls) is expect_initialized
+    assert ("stop" in fake_app.calls) is expect_initialized
 
 
 def test_start_runtime_failure_shuts_down_partially_started(
@@ -317,7 +358,7 @@ def test_start_runtime_failure_shuts_down_partially_started(
     """A failure after the bot initialized stops it and the scheduler."""
     fake_app = _FakeTelegramApp(fail_on="start")
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     components = asyncio.run(
         runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))
@@ -340,7 +381,7 @@ def test_start_runtime_polling_failure_reports_error(
 
     fake_app.updater = _FailingUpdater(fake_app.calls)
     monkeypatch.setattr(
-        runtime, "build_telegram_inbound_application", lambda s, sf: fake_app
+        runtime, "build_telegram_inbound_application", lambda s, sf, **kw: fake_app
     )
     components = asyncio.run(
         runtime.start_runtime(_settings(tmp_path), _session_factory(tmp_path))

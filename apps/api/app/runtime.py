@@ -33,7 +33,7 @@ from .config import Settings
 from .scheduler import build_scheduler, drain_schedule, requeue_failed
 from .telegram_allowlist import startup_warning
 from .telegram_inbound import build_telegram_inbound_application
-from .telegram_outbound import make_telegram_job_func
+from .telegram_outbound import make_telegram_job_func, telegram_reminder_job
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,10 @@ class RuntimeComponents:
     scheduler: BackgroundScheduler | None = None
     #: The python-telegram-bot Application running inbound polling (or None).
     telegram_app: Any | None = None
+    #: The picklable reminder job entrypoint used for every scheduled job
+    #: (``telegram_reminder_job``); routes/CRUD reuse it when re-scheduling
+    #: after event writes (issue #134).
+    job_func: Callable[..., object] | None = None
     #: Human-readable failure when the Telegram/scheduler stack failed to start.
     telegram_error: str | None = None
 
@@ -118,12 +122,17 @@ async def start_runtime(
     application = None
     scheduler = None
     try:
-        application = build_telegram_inbound_application(settings, session_factory)
+        scheduler = build_scheduler(settings)
+        application = build_telegram_inbound_application(
+            settings,
+            session_factory,
+            scheduler=scheduler,
+            job_func=telegram_reminder_job,
+        )
         if application is None:  # pragma: no cover — guarded by the token check
             logger.info("Telegram bot + reminder scheduler disabled (no bot token).")
             return RuntimeComponents()
         await application.initialize()
-        scheduler = build_scheduler(settings)
         job_func = make_telegram_job_func(
             session_factory, application.bot, settings, scheduler=scheduler
         )
@@ -139,7 +148,9 @@ async def start_runtime(
             "(%d reminder job(s) scheduled).",
             added + requeued,
         )
-        return RuntimeComponents(scheduler=scheduler, telegram_app=application)
+        return RuntimeComponents(
+            scheduler=scheduler, telegram_app=application, job_func=job_func
+        )
     except Exception as exc:  # noqa: BLE001 — keep the API serving, log loudly
         logger.exception("Telegram bot / reminder scheduler failed to start: %s", exc)
         failed = RuntimeComponents(

@@ -8,10 +8,11 @@ and maps results to response models. No business logic lives here.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from typing import Annotated
 
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ from .config import Settings, get_settings
 from .enums import EventStatus
 from .llm_parse import parse_events
 from .models import DeliveryLog, Event
+from .runtime import RuntimeComponents
 from .schemas import (
     DeliveryLogRead,
     EventCreate,
@@ -48,6 +50,29 @@ def get_db(request: Request) -> Iterator[Session]:
 SessionDep = Annotated[Session, Depends(get_db)]
 
 
+def get_runtime(request: Request) -> RuntimeComponents | None:
+    """Return the app's runtime components (None before the lifespan ran)."""
+    return getattr(request.app.state, "runtime", None)
+
+
+#: FastAPI dependency alias for the runtime components (may be None in tests
+#: or before startup).
+RuntimeDep = Annotated[RuntimeComponents | None, Depends(get_runtime)]
+
+
+def _reminder_engine(
+    runtime: RuntimeComponents | None,
+) -> tuple[BackgroundScheduler | None, Callable[..., object] | None]:
+    """Extract ``(scheduler, job_func)`` when the reminder engine is running.
+
+    Returns ``(None, None)`` when the lifespan hasn't started the runtime or
+    the scheduler is disabled, so event writes stay a scheduling no-op.
+    """
+    if runtime is None or runtime.scheduler is None:
+        return None, None
+    return runtime.scheduler, runtime.job_func
+
+
 def _parse_month(month: str) -> tuple[int, int]:
     """Parse and validate a YYYY-MM month string, returning (year, month)."""
     if not _MONTH_RE.match(month):
@@ -72,9 +97,11 @@ def _parse_month(month: str) -> tuple[int, int]:
 def create_event(
     payload: EventCreate,
     db: SessionDep,
+    rt: RuntimeDep,
 ) -> Event:
-    """Create a new event."""
-    return crud.create_event(db, payload)
+    """Create a new event and schedule its reminders (issue #134)."""
+    scheduler, job_func = _reminder_engine(rt)
+    return crud.create_event(db, payload, scheduler=scheduler, job_func=job_func)
 
 
 @router.get("/events", response_model=list[EventRead])
@@ -139,25 +166,28 @@ def update_event(
     event_id: int,
     payload: EventUpdate,
     db: SessionDep,
+    rt: RuntimeDep,
 ) -> Event:
-    """Partially update an existing event."""
+    """Partially update an existing event and re-plan its reminders."""
     event = crud.get_event(db, event_id)
     if event is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="event not found"
         )
-    return crud.update_event(db, event, payload)
+    scheduler, job_func = _reminder_engine(rt)
+    return crud.update_event(db, event, payload, scheduler=scheduler, job_func=job_func)
 
 
 @router.delete("/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_event(event_id: int, db: SessionDep) -> None:
-    """Delete an event by id."""
+def delete_event(event_id: int, db: SessionDep, rt: RuntimeDep) -> None:
+    """Delete an event by id and drop its pending reminders."""
     event = crud.get_event(db, event_id)
     if event is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="event not found"
         )
-    crud.delete_event(db, event)
+    scheduler, _job_func = _reminder_engine(rt)
+    crud.delete_event(db, event, scheduler=scheduler)
 
 
 @router.get("/summary", response_model=SummaryResponse)

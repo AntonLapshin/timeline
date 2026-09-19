@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   parseIso,
   toLocalDate,
@@ -9,6 +9,13 @@ import {
   relativeLabel,
   monthLabel,
   weekdayShort,
+  weekdayForDate,
+  monthShortForNumber,
+  datePartsInTimezone,
+  toDateInTimezone,
+  toMonthInTimezone,
+  parseNaiveWallClock,
+  displayParts,
 } from "../../src/core/dateFmt";
 
 describe("dateFmt core module", () => {
@@ -109,5 +116,149 @@ describe("dateFmt core module", () => {
   it("returns a short weekday label", () => {
     // 2026-09-07 is a Monday.
     expect(weekdayShort(new Date(2026, 8, 7))).toBe("Mon");
+  });
+
+  it("returns a short weekday label for a calendar date", () => {
+    expect(weekdayForDate(2026, 9, 7)).toBe("Mon");
+  });
+});
+
+describe("timezone-aware formatting", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns an empty short month for out-of-range month numbers", () => {
+    expect(monthShortForNumber(0)).toBe("");
+    expect(monthShortForNumber(13)).toBe("");
+    expect(monthShortForNumber(9)).toBe("Sep");
+  });
+
+  it("splits a Date into parts in the requested timezone", () => {
+    // 2026-09-05T10:00:00Z is noon in Berlin (CEST, UTC+2) on a Saturday.
+    const parts = datePartsInTimezone(
+      new Date("2026-09-05T10:00:00Z"),
+      "Europe/Berlin",
+    );
+    expect(parts).toEqual({
+      year: 2026,
+      month: 9,
+      day: 5,
+      hour: 12,
+      minute: 0,
+      weekday: "Sat",
+      monthShort: "Sep",
+    });
+  });
+
+  it("returns null for an invalid timezone", () => {
+    expect(
+      datePartsInTimezone(new Date("2026-09-05T10:00:00Z"), "Mars/Olympus"),
+    ).toBeNull();
+  });
+
+  it("returns null when the runtime omits an expected part", () => {
+    // Defensive guard for exotic ICU builds that drop parts.
+    vi.spyOn(Intl.DateTimeFormat.prototype, "formatToParts").mockReturnValue([
+      { type: "year", value: "2026" },
+      { type: "month", value: "9" },
+      { type: "day", value: "5" },
+      { type: "hour", value: "10" },
+      // no "minute" part
+    ]);
+    expect(
+      datePartsInTimezone(new Date("2026-09-05T10:00:00Z"), "UTC"),
+    ).toBeNull();
+  });
+
+  it("normalizes ICU hour 24 to midnight", () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, "formatToParts").mockReturnValue([
+      { type: "year", value: "2026" },
+      { type: "month", value: "9" },
+      { type: "day", value: "5" },
+      { type: "hour", value: "24" },
+      { type: "minute", value: "0" },
+      { type: "weekday", value: "Sat" },
+    ]);
+    const parts = datePartsInTimezone(new Date("2026-09-05T00:00:00Z"), "UTC");
+    expect(parts).toEqual({
+      year: 2026,
+      month: 9,
+      day: 5,
+      hour: 0,
+      minute: 0,
+      weekday: "Sat",
+      monthShort: "Sep",
+    });
+  });
+
+  it("renders an empty weekday when the runtime omits it", () => {
+    vi.spyOn(Intl.DateTimeFormat.prototype, "formatToParts").mockReturnValue([
+      { type: "year", value: "2026" },
+      { type: "month", value: "9" },
+      { type: "day", value: "5" },
+      { type: "hour", value: "12" },
+      { type: "minute", value: "0" },
+      // no "weekday" part
+    ]);
+    const parts = datePartsInTimezone(new Date("2026-09-05T10:00:00Z"), "UTC");
+    expect(parts?.weekday).toBe("");
+    expect(parts?.year).toBe(2026);
+  });
+
+  it("formats a date in the given timezone and falls back to local for invalid zones", () => {
+    const date = new Date("2026-09-05T10:00:00Z");
+    expect(toDateInTimezone(date, "UTC")).toBe("2026-09-05");
+    expect(toMonthInTimezone(date, "UTC")).toBe("2026-09");
+    expect(toDateInTimezone(date, "Mars/Olympus")).toBe(toLocalDate(date));
+    expect(toMonthInTimezone(date, "Mars/Olympus")).toBe(
+      toLocalDate(date).slice(0, 7),
+    );
+  });
+
+  it("rejects out-of-range wall-clock components", () => {
+    expect(parseNaiveWallClock("2026-13-05T10:00")).toBeNull();
+    expect(parseNaiveWallClock("2026-00-05T10:00")).toBeNull();
+    expect(parseNaiveWallClock("2026-09-32T10:00")).toBeNull();
+    expect(parseNaiveWallClock("2026-09-00T10:00")).toBeNull();
+    expect(parseNaiveWallClock("2026-09-05T24:00")).toBeNull();
+    expect(parseNaiveWallClock("2026-09-05T10:60")).toBeNull();
+    expect(parseNaiveWallClock("2026-09-05T10:00")).toEqual({
+      year: 2026,
+      month: 9,
+      day: 5,
+      hour: 10,
+      minute: 0,
+    });
+  });
+
+  it("falls back to browser-local parts without a timezone", () => {
+    // A locally-constructed Date renders the same wall clock as the naive
+    // ISO string, so the expectation holds on any machine timezone.
+    const parts = displayParts("2026-09-05T10:00:00", new Date(2026, 8, 5, 10, 0));
+    expect(parts).toEqual({
+      year: 2026,
+      month: 9,
+      day: 5,
+      hour: 10,
+      minute: 0,
+      weekday: "Sat",
+      monthShort: "Sep",
+    });
+  });
+
+  it("falls back to browser-local parts when the timezone is invalid", () => {
+    const iso = "2026-09-05T10:00:00+00:00";
+    const parsed = parseIso(iso) as Date;
+    const parts = displayParts(iso, parsed, "Mars/Olympus");
+    expect(parts.year).toBe(parsed.getFullYear());
+    expect(parts.month).toBe(parsed.getMonth() + 1);
+    expect(parts.day).toBe(parsed.getDate());
+    expect(parts.hour).toBe(parsed.getHours());
+    expect(parts.minute).toBe(parsed.getMinutes());
+    expect(parts.weekday).toBe(weekdayShort(parsed));
+    expect(parts.monthShort).toBe(
+      parsed.toLocaleString("en-US", { month: "short" }),
+    );
   });
 });

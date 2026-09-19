@@ -140,4 +140,33 @@ describe("apiClient core module", () => {
     expect(error.message).toContain("not found");
     expect(error.name).toBe("ApiError");
   });
+
+  it("deletes an event via DELETE without parsing a body", async () => {
+    const fetchImpl = mockFetch((url, init) => {
+      expect(url).toBe("http://127.0.0.1:8123/api/events/9");
+      expect(init?.method).toBe("DELETE");
+      return {
+        ok: true,
+        status: 204,
+        json: async () => {
+          throw new Error("204 responses have no body");
+        },
+      };
+    });
+    const client = createApiClient("http://127.0.0.1:8123", fetchImpl);
+    await expect(client.deleteEvent(9)).resolves.toBeUndefined();
+  });
+
+  it("throws ApiError when deleting an event fails", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    }));
+    const client = createApiClient("http://127.0.0.1:8123", fetchImpl);
+    await expect(client.deleteEvent(9)).rejects.toMatchObject({
+      name: "ApiError",
+      status: 404,
+    });
+  });
 });

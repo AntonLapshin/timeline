@@ -17,6 +17,7 @@ Covers the acceptance criteria:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -45,6 +46,7 @@ from app.telegram_inbound import (
     _handle_callback_query,
     _handle_update,
     _handle_voice_update,
+    _save_draft,
     _transcribe_voice_message,
     build_draft_keyboard,
     build_inbound_record,
@@ -1517,3 +1519,92 @@ def test_build_telegram_inbound_application_voice_handler(
     assert "📝 Dentist" in replied[1]
     pending = store.get(123)
     assert pending is not None and len(pending.drafts) == 1
+
+
+# --- scheduler threading on save (issue #134, M10-T1) --------------------------
+
+
+def test_save_draft_passes_scheduler_to_crud(
+    session_factory: sessionmaker[Session], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Saving a draft threads the scheduler + job func into crud (#134)."""
+    from app import crud as crud_module
+    from app.scheduler import build_scheduler
+
+    captured: dict[str, object] = {}
+    real_create = crud_module.create_event
+
+    def _spy(
+        session: Session,
+        payload: object,
+        *,
+        scheduler: object = None,
+        job_func: object = None,
+    ) -> object:
+        captured.update(scheduler=scheduler, job_func=job_func)
+        return real_create(session, payload)
+
+    monkeypatch.setattr(crud_module, "create_event", _spy)
+
+    def _noop_job(*args: object, **kwargs: object) -> object:
+        return None
+
+    scheduler = build_scheduler(
+        Settings(data_dir=Path("/tmp"), db_name=f"inbound-{id(object())}.db")
+    )
+    try:
+        store = DraftStore()
+        pending = PendingDraft(drafts=[_draft()], raw_input="dentist tomorrow 9am")
+        store.set(123, pending)
+        reply = _save_draft(
+            session_factory,
+            _draft(),
+            pending,
+            123,
+            store,
+            scheduler=scheduler,
+            job_func=_noop_job,
+        )
+        assert "✅ Saved: Dentist" in reply.text
+        assert captured["scheduler"] is scheduler
+        assert captured["job_func"] is _noop_job
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_save_draft_schedules_nothing_for_draft_status(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Saved drafts stay status=draft, so no reminder jobs are scheduled.
+
+    The event only gets reminder jobs once it is activated (e.g. via the web
+    PATCH), which the CRUD update path handles (issue #134).
+    """
+    from app.scheduler import build_scheduler, event_job_keys
+
+    scheduler = build_scheduler(
+        Settings(data_dir=Path("/tmp"), db_name=f"draft-{id(object())}.db")
+    )
+    try:
+        store = DraftStore()
+        pending = PendingDraft(drafts=[_draft()], raw_input="dentist tomorrow 9am")
+        store.set(123, pending)
+        reply = _save_draft(
+            session_factory,
+            _draft(),
+            pending,
+            123,
+            store,
+            scheduler=scheduler,
+            job_func=lambda *a, **k: None,
+        )
+        assert "✅ Saved: Dentist" in reply.text
+        with session_factory() as session:
+            event = session.query(Event).one()
+        # Drafts are not active, so nothing is scheduled until activation.
+        assert event.status == EventStatus.DRAFT
+        assert event_job_keys(scheduler, event.id) == {}
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)

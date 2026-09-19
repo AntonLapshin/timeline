@@ -18,6 +18,7 @@ import {
   DEFAULT_TZ,
   type EventDraft,
 } from "../../src/core/eventWizard";
+import { parseIso, toLocalDate } from "../../src/core/dateFmt";
 import type { EventRead } from "../../src/core/eventTypes";
 
 /** A minimal complete, valid draft for payload tests. */
@@ -209,6 +210,28 @@ describe("eventWizard core module", () => {
     it("falls back to DEFAULT_TZ when the event has no timezone", () => {
       const draft = draftFromEvent(sampleEvent({ tz: "" }));
       expect(draft.tz).toBe("UTC");
+    });
+
+    it("renders a timezone-aware start through the event's own timezone", () => {
+      // A non-naive start means there is no wall-clock shortcut, so
+      // draftFromEvent resolves calendar parts via datePartsInTimezone.
+      const draft = draftFromEvent(
+        sampleEvent({ start_at: "2026-09-05T10:00:00+00:00", tz: "UTC" }),
+      );
+      expect(draft.date).toBe("2026-09-05");
+      expect(draft.time).toBe("10:00");
+    });
+
+    it("falls back to local parts when the event timezone is unparseable", () => {
+      // A timezone-aware start with an invalid zone yields null parts, so the
+      // date/time fall back to the browser-local wall clock.
+      const draft = draftFromEvent(
+        sampleEvent({ start_at: "2026-09-05T10:00:00+00:00", tz: "Mars/Olympus" }),
+      );
+      const start = parseIso("2026-09-05T10:00:00+00:00") as Date;
+      expect(draft.date).toBe(toLocalDate(start));
+      expect(draft.time).toMatch(/^\d{2}:\d{2}$/);
+      expect(draft.time).not.toBe("");
     });
   });
 

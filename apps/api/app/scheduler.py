@@ -18,6 +18,7 @@ sender (M4-T2).
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import re
 from collections.abc import Callable
@@ -26,6 +27,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from zoneinfo import ZoneInfo
 
+from apscheduler.jobstores.base import JobLookupError
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
@@ -586,3 +588,146 @@ def requeue_failed(
             ):
                 requeued += 1
     return requeued
+
+
+# --- runtime event re-scheduling (issue #134, M10-T1) ------------------------
+
+
+def event_job_keys(
+    scheduler: BackgroundScheduler,
+    event_id: int,
+    *,
+    jobstore: str = "default",
+) -> dict[str, datetime]:
+    """List one event's pending reminder jobs as ``{key: next_run_time}``.
+
+    Matches every job whose dedupe key starts with ``"{event_id}:"`` — the
+    base plan jobs plus any pending ``~repeat@``/``~snooze@`` follow-ups
+    (issue #62). Jobs that already ran (``next_run_time is None`` on a
+    started scheduler) are not pending and are skipped. Note the
+    ``trigger.run_date`` fallback (not-yet-started scheduler) can surface a
+    lingering already-fired job with its past run date on a stopped
+    scheduler; callers ignore past run times, so this is harmless.
+    """
+    prefix = f"{event_id}:"
+    keys: dict[str, datetime] = {}
+    for job in scheduler.get_jobs(jobstore=jobstore):
+        key = str(job.id)
+        if not key.startswith(prefix):
+            continue
+        # Started schedulers expose next_run_time; a not-yet-started one only
+        # carries the trigger's run_date (pending jobs). Jobs with neither
+        # have already fired and are not pending.
+        run_at = getattr(job, "next_run_time", None)
+        if run_at is None:
+            run_at = getattr(job.trigger, "run_date", None)
+        if run_at is not None:
+            keys[key] = run_at
+    return keys
+
+
+def _is_followup_key(key: str) -> bool:
+    """Whether a job key belongs to a repeat/snooze follow-up delivery."""
+    _, occurrence_id, _ = parse_dedupe_key(key)
+    return base_occurrence_id(occurrence_id) != occurrence_id
+
+
+def plan_diff(
+    existing: dict[str, datetime],
+    desired: list[PlannedReminder],
+) -> tuple[list[PlannedReminder], list[str]]:
+    """Diff existing reminder jobs against a desired plan (pure).
+
+    Returns ``(to_add, to_remove)``: desired reminders missing from
+    ``existing`` or whose run time changed, and existing keys the desired plan
+    no longer contains. Callers own the add/remove side effects (and any
+    drained-job protection).
+    """
+    desired_keys = {dedupe_key(p.event_id, p.occurrence_id, p.offset) for p in desired}
+    to_add: list[PlannedReminder] = []
+    for planned in desired:
+        key = dedupe_key(planned.event_id, planned.occurrence_id, planned.offset)
+        if existing.get(key) != planned.run_at:
+            to_add.append(planned)
+    to_remove = [key for key in existing if key not in desired_keys]
+    return to_add, to_remove
+
+
+def reschedule_for_event(
+    scheduler: BackgroundScheduler,
+    event: _SchedulableEvent,
+    job_func: Callable[..., object],
+    *,
+    now: datetime | None = None,
+    jobstore: str = "default",
+) -> tuple[int, int]:
+    """Re-plan one event's reminder jobs on a running scheduler (impure).
+
+    Diffs the desired ``schedule_plan(event)`` against the event's existing
+    pending jobs and applies the delta: adds missing reminders, removes stale
+    ones, and replaces jobs whose run time changed (e.g. a moved
+    ``remind_time_of_day`` — ``add_reminder_job`` no-ops on an existing key,
+    so the changed job is removed before being re-added). Returns
+    ``(added, removed)`` counts.
+
+    An event that is no longer ``ACTIVE`` (e.g. archived) gets no jobs at all
+    — pending follow-ups with a future run time are dropped too (already-ran
+    ones survive, mirroring the drained-job protection below). Pending
+    ``~repeat@``/``~snooze@`` follow-ups of an active event are
+    delivery-pipeline state, not plan state, so they are preserved across
+    edits; on delete use :func:`remove_event_jobs` to drop everything.
+
+    Jobs whose run time already passed (drained at startup and about to fire)
+    are never removed: the fresh plan skips past run times by design, so
+    removing them would lose a due reminder.
+    """
+    now = now or datetime.now(UTC)
+    active = getattr(event, "status", EventStatus.ACTIVE) == EventStatus.ACTIVE
+    desired = schedule_plan(event, now=now) if active else []
+    existing = event_job_keys(scheduler, event.id, jobstore=jobstore)
+    followups = {k: v for k, v in existing.items() if _is_followup_key(k)}
+    base = {k: v for k, v in existing.items() if k not in followups}
+    to_add, to_remove = plan_diff(base, desired)
+    stale = [key for key in to_remove if base[key] > now]
+    if not active:
+        stale.extend(key for key in followups if followups[key] > now)
+    for key in stale:
+        # A one-shot job can fire between the event_job_keys() snapshot and
+        # this removal (APScheduler deletes fired one-shots itself), so a
+        # stale key may vanish mid-flight — tolerate JobLookupError exactly
+        # like remove_event_jobs does (the reminder fired; nothing to drop).
+        with contextlib.suppress(JobLookupError):
+            scheduler.remove_job(key, jobstore=jobstore)
+    added = 0
+    for planned in to_add:
+        key = dedupe_key(planned.event_id, planned.occurrence_id, planned.offset)
+        if key in base and base[key] != planned.run_at:
+            # Same reminder re-timed: remove the stale job so the dedupe
+            # no-op in add_reminder_job doesn't keep the old run time.
+            with contextlib.suppress(JobLookupError):
+                scheduler.remove_job(key, jobstore=jobstore)
+        if (
+            add_reminder_job(scheduler, planned, job_func, now=now, jobstore=jobstore)
+            is not None
+        ):
+            added += 1
+    return added, len(stale)
+
+
+def remove_event_jobs(
+    scheduler: BackgroundScheduler,
+    event_id: int,
+    *,
+    jobstore: str = "default",
+) -> int:
+    """Remove every pending job (plan + follow-ups) for one event.
+
+    Returns the number of jobs removed; missing jobs (already fired) are
+    tolerated so delete stays idempotent.
+    """
+    removed = 0
+    for key in event_job_keys(scheduler, event_id, jobstore=jobstore):
+        with contextlib.suppress(JobLookupError):
+            scheduler.remove_job(key, jobstore=jobstore)
+            removed += 1
+    return removed

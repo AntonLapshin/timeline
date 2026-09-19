@@ -144,6 +144,11 @@ describe("timeline core module", () => {
       const event = makeEvent({ start_at: "not-a-date", all_day: false });
       expect(eventTimeLabel(event)).toBe("not-a-date");
     });
+
+    it("formats an event that lacks a timezone", () => {
+      const event = makeEvent({ start_at: "2026-09-05T10:00:00", tz: "" });
+      expect(eventTimeLabel(event)).toBe("Sat, Sep 5 · 10:00 AM");
+    });
   });
 
   describe("weekInMonth", () => {
@@ -202,6 +207,14 @@ describe("timeline core module", () => {
       const before = events.map((e) => e.id);
       groupByMonth(events);
       expect(events.map((e) => e.id)).toEqual(before);
+    });
+
+    it("groups an event that lacks a timezone", () => {
+      const groups = groupByMonth([
+        makeEvent({ id: 1, start_at: "2026-09-05T10:00:00", tz: "" }),
+      ]);
+      expect(groups[0].key).toBe("2026-09");
+      expect(groups[0].weeks[0].rows[0].event.id).toBe(1);
     });
   });
 

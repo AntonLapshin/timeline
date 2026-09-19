@@ -15,6 +15,7 @@ import {
   withWeekOccurrences,
   daySlots,
   timeLabel,
+  priorityDotClass,
   upcomingAgenda,
   toAgendaRow,
   type CalendarDay,
@@ -47,6 +48,20 @@ function dayByIso(grid: ReturnType<typeof monthGrid>, isoDate: string): Calendar
 }
 
 describe("calendar core module", () => {
+  describe("priorityDotClass", () => {
+    it("colors each supported priority", () => {
+      expect(priorityDotClass("critical")).toContain("red");
+      expect(priorityDotClass("medium")).toContain("amber");
+      expect(priorityDotClass("low")).toContain("sky");
+    });
+
+    it("falls back to medium for an unrecognized priority", () => {
+      expect(priorityDotClass("spam" as "medium")).toBe(
+        priorityDotClass("medium"),
+      );
+    });
+  });
+
   describe("monthKey", () => {
     it("formats a YYYY-MM key with zero padding", () => {
       expect(monthKey(2026, 9)).toBe("2026-09");
@@ -177,6 +192,16 @@ describe("calendar core module", () => {
       expect(result).toEqual([]);
     });
 
+    it("filters occurrences that lack a timezone", () => {
+      const grid = monthGrid(2026, 9);
+      const day = dayByIso(grid, "2026-09-05");
+      const result = dayOccurrences(
+        [makeOccurrence({ event_id: 1, start_at: "2026-09-05T10:00:00", tz: "" })],
+        day,
+      );
+      expect(result.map((o) => o.event_id)).toEqual([1]);
+    });
+
     it("drops occurrences with an unparseable start", () => {
       const grid = monthGrid(2026, 9);
       const day = dayByIso(grid, "2026-09-05");
@@ -223,6 +248,14 @@ describe("calendar core module", () => {
       expect(dayByIso(grid, "2026-09-05").count).toBe(before);
     });
 
+    it("places occurrences that lack a timezone", () => {
+      const grid = monthGrid(2026, 9);
+      const filled = withOccurrences(grid, [
+        makeOccurrence({ event_id: 1, start_at: "2026-09-05T10:00:00", tz: "" }),
+      ]);
+      expect(dayByIso(filled, "2026-09-05").count).toBe(1);
+    });
+
     it("drops occurrences with an unparseable start", () => {
       const grid = monthGrid(2026, 9);
       const filled = withOccurrences(
@@ -251,6 +284,18 @@ describe("calendar core module", () => {
       expect(row.recurrenceBadge).toBe("every quarter");
       expect(row.timeLabel).toBe("Sat, Sep 5 · 10:00 AM");
       expect(row.nextOccurrenceLabel).toBe("Next: Sat, Dec 5");
+    });
+
+    it("derives styling for an occurrence without a timezone", () => {
+      const row = toOccurrenceRow(
+        makeOccurrence({
+          start_at: "2026-09-05T10:00:00",
+          tz: "",
+          next_occurrence: "2026-12-05T10:00:00",
+        }),
+      );
+      expect(row.timeLabel).toMatch(/10:00 AM/);
+      expect(row.nextOccurrenceLabel).toMatch(/Next:/);
     });
 
     it("formats an all-day occurrence without a time", () => {
@@ -480,6 +525,12 @@ describe("calendar core module", () => {
     it("returns an empty string for an unparseable start", () => {
       expect(timeLabel(makeOccurrence({ start_at: "not-a-date" }))).toBe("");
     });
+
+    it("formats a time for an occurrence without a timezone", () => {
+      expect(
+        timeLabel(makeOccurrence({ start_at: "2026-09-05T10:00:00", tz: "" })),
+      ).toBe("10:00 AM");
+    });
   });
 
   describe("upcomingAgenda", () => {
@@ -598,6 +649,15 @@ describe("calendar core module", () => {
 
     it("derives a humanized relative label for the occurrence start", () => {
       const row = toAgendaRow(makeOccurrence({ start_at: "2026-09-05T10:00:00" }));
+      expect(row.relativeLabel).toBeTypeOf("string");
+    });
+
+    it("derives agenda fields for an occurrence without a timezone", () => {
+      const row = toAgendaRow(
+        makeOccurrence({ start_at: "2026-09-05T10:00:00", tz: "" }),
+      );
+      expect(row.dateLabel).toBe("Sat, Sep 5");
+      expect(row.timeLabel).toBe("10:00 AM");
       expect(row.relativeLabel).toBeTypeOf("string");
     });
   });
