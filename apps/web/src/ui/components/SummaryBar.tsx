@@ -22,10 +22,10 @@ export function SummaryBar({ refreshKey }: { refreshKey?: number }) {
   const { model, loading, error } = useSummary(refreshKey);
 
   if (loading) {
-    return <p className="text-sm leading-5 text-slate-500 dark:text-slate-400">Loading summary…</p>;
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Loading summary…</p>;
   }
   if (error) {
-    return <p className="text-sm leading-5 text-red-600 dark:text-red-400">{error}</p>;
+    return <p className="text-sm text-red-600 dark:text-red-400">{error}</p>;
   }
   if (!model) {
     return null;
@@ -35,7 +35,7 @@ export function SummaryBar({ refreshKey }: { refreshKey?: number }) {
   const hasCounts = monthly.total > 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm leading-5">
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
       <div className="flex items-center gap-2">
         <span className="font-semibold tracking-tight text-slate-900 dark:text-slate-100">
           {monthly.total} event{monthly.total === 1 ? "" : "s"} this month

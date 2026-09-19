@@ -38,7 +38,7 @@ export function EventRowView({
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-sm leading-5 text-slate-500 dark:text-slate-400">
+        <div className="mt-0.5 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           <span>{row.event.description}</span>
         </div>
         <div className="mt-1.5 flex items-center gap-2 text-xs leading-4 text-slate-500 dark:text-slate-400">
@@ -141,7 +141,7 @@ export function TimelineView({
         className="card border-red-200/70 bg-gradient-to-b from-red-50/80 to-white p-6 text-center dark:border-red-500/20 dark:from-red-950/40 dark:to-slate-800"
         role="alert"
       >
-        <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">{error}</p>
+        <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
         <button
           type="button"
           onClick={retry}
@@ -156,7 +156,7 @@ export function TimelineView({
   if (groups.length === 0) {
     return (
       <div className="card border-dashed p-8 text-center">
-        <p className="text-sm font-medium leading-5 text-slate-600 dark:text-slate-300">
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
           {filter && isFiltering(filter) ? "No matches." : "No events yet."}
         </p>
         {(!filter || !isFiltering(filter)) && onCreate && (

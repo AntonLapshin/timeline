@@ -251,7 +251,7 @@ export function AgendaList({
   if (rows.length === 0) {
     return (
       <div className="card border-dashed p-8 text-center">
-        <p className="text-sm leading-5 text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
           No upcoming events. Enjoy the calm!
         </p>
       </div>
@@ -358,7 +358,7 @@ export function CalendarView({
           className="card border-red-200/70 bg-gradient-to-b from-red-50/80 to-white p-6 text-center dark:border-red-500/20 dark:from-red-950/40 dark:to-slate-800"
           role="alert"
         >
-          <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">{error}</p>
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">{error}</p>
           <button
             type="button"
             onClick={retry}

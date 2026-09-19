@@ -29,10 +29,10 @@ export function DemoPanel({
     <section className="card mx-auto max-w-md p-6">
       <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{info.name}</h2>
       {info.description && (
-        <p className="mt-1 text-sm leading-5 text-slate-600 dark:text-slate-400">{info.description}</p>
+        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{info.description}</p>
       )}
 
-      <dl className="mt-4 space-y-2 text-sm leading-5">
+      <dl className="mt-4 space-y-2 text-sm">
         <div className="flex items-center justify-between">
           <dt className="text-slate-500 dark:text-slate-400">Status</dt>
           <dd>

@@ -133,7 +133,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
         Reminders
       </h3>
       {preview && preview.hasReminders ? (
-        <div className="mb-4 space-y-1 text-sm leading-5 text-slate-700 dark:text-slate-300">
+        <div className="mb-4 space-y-1 text-sm text-slate-700 dark:text-slate-300">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium">Channels:</span>
             {EVENT_CHANNELS.filter((c) => preview.channels.includes(c)).map(
@@ -255,11 +255,11 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
         </button>
       ) : (
         <div className="mt-2 rounded-lg border border-red-200 bg-red-50/80 p-3 dark:border-red-500/30 dark:bg-red-950/40">
-          <p className="text-sm font-medium leading-5 text-red-700 dark:text-red-300">
+          <p className="text-sm font-medium text-red-700 dark:text-red-300">
             Delete this event? This cannot be undone.
           </p>
           {deleteError && (
-            <p className="mt-1 text-sm leading-5 text-red-600 dark:text-red-400" role="alert">
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">
               {deleteError}
             </p>
           )}

@@ -18,13 +18,17 @@
     line-height: 1;
     vertical-align: middle;
     text-wrap: balance;
-    height: 2.25rem;
+    height: 32px;
   }
 
   input,
   select,
   textarea {
-    line-height: 1.25rem;
+    line-height: 1;
+  }
+
+  select {
+    height: 32px;
   }
 
   input[type="checkbox"],
@@ -33,6 +37,7 @@
     vertical-align: middle;
     margin: 0;
     flex-shrink: 0;
+    height: 32px;
   }
 
   /* Native date/time pickers render an unthemed white popup in dark mode
@@ -60,7 +65,7 @@
    * consistent (and dark mode never falls back to a white box).
    */
   .field-input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm leading-5 text-slate-900 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:disabled:bg-slate-800 dark:disabled:text-slate-500;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:disabled:bg-slate-800 dark:disabled:text-slate-500;
   }
 
   .field-label {

@@ -61,7 +61,7 @@ export function WizardStepOne({
           onChange={(e) => onChange({ allDay: e.target.checked })}
           className="h-4 w-4 rounded accent-indigo-600 dark:accent-indigo-400"
         />
-        <label htmlFor="wizard-all-day" className="text-sm leading-5 text-slate-700 dark:text-slate-300">
+        <label htmlFor="wizard-all-day" className="text-sm text-slate-700 dark:text-slate-300">
           All day
         </label>
       </div>

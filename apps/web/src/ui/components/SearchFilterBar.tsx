@@ -32,7 +32,7 @@ export interface SearchFilterBarProps {
 }
 
 const SELECT_CLASSES =
-  "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm leading-5 text-slate-700 shadow-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30";
+  "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 shadow-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30";
 
 /**
  * The app-wide search/filter bar (issue #46).
@@ -70,7 +70,7 @@ export function SearchFilterBar({
         }}
         placeholder="Search events…"
         aria-label="Search events"
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm leading-5 text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 sm:w-56"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 sm:w-56"
       />
       <select
         value={filter.priority ?? ""}
