@@ -44,13 +44,17 @@ from app.scheduler import (
     defer_to_morning_digest,
     deliver_reminder,
     drain_schedule,
+    event_job_keys,
     in_quiet_hours,
     parse_dedupe_key,
     parse_offset,
+    plan_diff,
     quiet_hours_run_time,
     reminder_run_time,
+    remove_event_jobs,
     repeat_until_ack_plan,
     requeue_failed,
+    reschedule_for_event,
     schedule_plan,
     should_repeat_until_ack,
     with_retry,
@@ -840,6 +844,365 @@ def test_requeue_failed_skips_missing_fields(
             now=datetime(2026, 1, 1, tzinfo=UTC),
         )
         assert requeued == 0
+        assert scheduler.get_jobs() == []
+    finally:
+        _shutdown(scheduler)
+
+
+# --- runtime event re-scheduling (issue #134, M10-T1) -------------------------
+
+
+def _wire_scheduler() -> BackgroundScheduler:
+    """A throwaway scheduler for reschedule wiring tests (never started)."""
+    return build_scheduler(
+        Settings(data_dir=Path("/tmp"), db_name=f"resched-{id(object())}.db")
+    )
+
+
+def _add_job(
+    scheduler: BackgroundScheduler,
+    event_id: int,
+    occurrence_id: str,
+    offset: str,
+    run_at: datetime,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Schedule one reminder via the normal add path and return its key."""
+    key = add_reminder_job(
+        scheduler,
+        PlannedReminder(
+            event_id=event_id,
+            occurrence_id=occurrence_id,
+            offset=offset,
+            run_at=run_at,
+        ),
+        _noop_job,
+        now=now,
+    )
+    assert key is not None
+    return key
+
+
+def test_event_job_keys_lists_pending_only() -> None:
+    """event_job_keys returns pending jobs of one event, keyed by dedupe key."""
+    scheduler = _wire_scheduler()
+    try:
+        # 'now' predates every run time so nothing is drained to real-now.
+        past = datetime(2025, 12, 1, tzinfo=UTC)
+        _add_job(
+            scheduler,
+            1,
+            "2026-01-01T10:00:00+00:00",
+            "1h",
+            datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
+            now=past,
+        )
+        _add_job(
+            scheduler,
+            1,
+            "2026-01-02T10:00:00+00:00",
+            "1d",
+            datetime(2025, 12, 31, 10, 0, tzinfo=UTC),
+            now=past,
+        )
+        # A follow-up job for the same event (repeat-until-ack marker).
+        _add_job(
+            scheduler,
+            1,
+            "2026-01-01T10:00:00+00:00~repeat@1",
+            "1h",
+            datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+            now=past,
+        )
+        # A different event's job and a non-event job must be excluded.
+        _add_job(
+            scheduler,
+            11,
+            "2026-01-01T10:00:00+00:00",
+            "1h",
+            datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
+            now=past,
+        )
+        scheduler.add_job(
+            _noop_job,
+            "date",
+            run_date=datetime(2026, 1, 1, tzinfo=UTC),
+            id="unrelated-job",
+        )
+
+        keys = event_job_keys(scheduler, 1)
+        assert set(keys) == {
+            dedupe_key(1, "2026-01-01T10:00:00+00:00", "1h"),
+            dedupe_key(1, "2026-01-01T10:00:00+00:00~repeat@1", "1h"),
+            dedupe_key(1, "2026-01-02T10:00:00+00:00", "1d"),
+        }
+        assert keys[dedupe_key(1, "2026-01-01T10:00:00+00:00", "1h")] == datetime(
+            2026, 1, 1, 9, 0, tzinfo=UTC
+        )
+        # Event 11 is distinguished from event 1 by the colon in the prefix.
+        assert set(event_job_keys(scheduler, 11)) == {
+            dedupe_key(11, "2026-01-01T10:00:00+00:00", "1h")
+        }
+    finally:
+        _shutdown(scheduler)
+
+
+def test_plan_diff_adds_missing_and_removes_stale() -> None:
+    """plan_diff returns desired-but-missing entries and stale keys."""
+    existing = {
+        dedupe_key(1, "2026-01-01T10:00:00+00:00", "1h"): datetime(
+            2026, 1, 1, 9, 0, tzinfo=UTC
+        ),
+        "1:occ-gone:1d": datetime(2026, 1, 2, 9, 0, tzinfo=UTC),
+    }
+    desired = [
+        _planned(),  # occ-a/1h — already scheduled identically
+        _planned(occurrence_id="2026-01-03T10:00:00+00:00"),
+    ]
+    to_add, to_remove = plan_diff(existing, desired)
+    assert [p.occurrence_id for p in to_add] == ["2026-01-03T10:00:00+00:00"]
+    assert to_remove == ["1:occ-gone:1d"]
+
+
+def test_plan_diff_flags_changed_run_time() -> None:
+    """A same-key reminder whose run time changed is re-added (not removed)."""
+    existing = {
+        "1:2026-01-01T10:00:00+00:00:1h": datetime(2026, 1, 1, 8, 0, tzinfo=UTC)
+    }
+    to_add, to_remove = plan_diff(existing, [_planned()])
+    assert [p.occurrence_id for p in to_add] == ["2026-01-01T10:00:00+00:00"]
+    assert to_remove == []
+
+
+def test_plan_diff_noop_on_identical_plan() -> None:
+    """An unchanged plan diffs to empty add/remove lists."""
+    planned = _planned()
+    existing = {dedupe_key(1, planned.occurrence_id, "1h"): planned.run_at}
+    assert plan_diff(existing, [planned]) == ([], [])
+
+
+def test_reschedule_for_event_schedules_new_event() -> None:
+    """Creating an event with a running scheduler schedules its jobs (#133)."""
+    event = _event(
+        id=1,
+        start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+        reminder_offsets=["1h", "1d"],
+    )
+    scheduler = _wire_scheduler()
+    try:
+        added, removed = reschedule_for_event(
+            scheduler, event, _noop_job, now=datetime(2025, 12, 1, tzinfo=UTC)
+        )
+        assert (added, removed) == (2, 0)
+        assert len(event_job_keys(scheduler, event.id)) == 2
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_update_moves_jobs() -> None:
+    """Moving an event replaces its jobs: no stale duplicates, dedupe holds."""
+    event = _event(id=1, start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC))
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        reschedule_for_event(scheduler, event, _noop_job, now=now)
+        old_key = dedupe_key(event.id, "2026-01-01T10:00:00+00:00", "1h")
+        assert scheduler.get_job(old_key) is not None
+
+        # User moves the event by a day: the old job is removed, a new one
+        # appears for the new occurrence, and no duplicate remains.
+        event.start_at = datetime(2026, 1, 2, 10, 0, tzinfo=UTC)
+        added, removed = reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert (added, removed) == (1, 1)
+        assert scheduler.get_job(old_key) is None
+        new_key = dedupe_key(event.id, "2026-01-02T10:00:00+00:00", "1h")
+        assert scheduler.get_job(new_key) is not None
+        assert len(scheduler.get_jobs()) == 1
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_retimes_same_key() -> None:
+    """A changed remind_time_of_day replaces the job (add no-ops on keys)."""
+    event = _event(
+        id=1,
+        start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+        remind_time_of_day="09:00",
+    )
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        reschedule_for_event(scheduler, event, _noop_job, now=now)
+        key = dedupe_key(event.id, "2026-01-01T10:00:00+00:00", "1h")
+        assert scheduler.get_job(key).trigger.run_date == datetime(
+            2026, 1, 1, 9, 0, tzinfo=UTC
+        )
+
+        # Same key (same occurrence + offset), new run time -> replaced.
+        event.remind_time_of_day = "08:30"
+        added, removed = reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert (added, removed) == (1, 0)
+        assert scheduler.get_job(key).trigger.run_date == datetime(
+            2026, 1, 1, 8, 30, tzinfo=UTC
+        )
+        assert len(scheduler.get_jobs()) == 1
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_removes_dropped_offset() -> None:
+    """Removing a reminder offset removes its pending job."""
+    event = _event(
+        id=1,
+        start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+        reminder_offsets=["1h", "1d"],
+    )
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert len(scheduler.get_jobs()) == 2
+
+        event.reminder_offsets = ["1h"]
+        added, removed = reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert (added, removed) == (0, 1)
+        keys = {job.id for job in scheduler.get_jobs()}
+        assert keys == {dedupe_key(event.id, "2026-01-01T10:00:00+00:00", "1h")}
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_archived_clears_jobs() -> None:
+    """Archiving an event (via update) removes all its pending jobs."""
+    event = _event(id=1, start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC))
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert len(scheduler.get_jobs()) == 1
+
+        event.status = EventStatus.ARCHIVED
+        added, removed = reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert (added, removed) == (0, 1)
+        assert scheduler.get_jobs() == []
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_preserves_drained_job() -> None:
+    """A due-now job (drained at startup) survives an unrelated update."""
+    event = _event(id=1, start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC))
+    scheduler = _wire_scheduler()
+    try:
+        # The reminder (09:00) was missed (app down): add_reminder_job drains
+        # it to fire immediately, i.e. run_date == now — the startup-drain
+        # state this test simulates.
+        now = datetime(2026, 1, 1, 9, 30, tzinfo=UTC)
+        key = _add_job(
+            scheduler,
+            event.id,
+            "2026-01-01T10:00:00+00:00",
+            "1h",
+            datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
+            now=now,
+        )
+        assert scheduler.get_job(key).trigger.run_date == now
+
+        # An unrelated edit re-plans; the drained job is not dropped even
+        # though the fresh plan skips past run times.
+        event.title = "Renamed standup"
+        added, removed = reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert (added, removed) == (0, 0)
+        assert scheduler.get_job(key) is not None
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_preserves_followups() -> None:
+    """Pending snooze/repeat follow-ups survive an event edit."""
+    event = _event(id=1, start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC))
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        reschedule_for_event(scheduler, event, _noop_job, now=now)
+        # Simulate a user snooze: a follow-up job with a ~snooze@ marker.
+        snooze_key = _add_job(
+            scheduler,
+            event.id,
+            "2026-01-01T10:00:00+00:00~snooze@600",
+            "1h",
+            datetime(2026, 1, 1, 9, 10, tzinfo=UTC),
+        )
+
+        event.title = "Renamed standup"
+        added, removed = reschedule_for_event(scheduler, event, _noop_job, now=now)
+        assert (added, removed) == (0, 0)
+        assert scheduler.get_job(snooze_key) is not None
+        assert len(scheduler.get_jobs()) == 2
+    finally:
+        _shutdown(scheduler)
+
+
+def test_reschedule_for_event_idempotent() -> None:
+    """Re-scheduling an unchanged event is a no-op (dedupe still holds)."""
+    event = _event(
+        id=1,
+        start_at=datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+        reminder_offsets=["1h", "1d"],
+    )
+    scheduler = _wire_scheduler()
+    try:
+        now = datetime(2025, 12, 1, tzinfo=UTC)
+        assert reschedule_for_event(scheduler, event, _noop_job, now=now) == (2, 0)
+        assert reschedule_for_event(scheduler, event, _noop_job, now=now) == (0, 0)
+        assert len(scheduler.get_jobs()) == 2
+    finally:
+        _shutdown(scheduler)
+
+
+def test_remove_event_jobs_removes_all_including_followups() -> None:
+    """Deleting an event drops its plan jobs and pending follow-ups."""
+    scheduler = _wire_scheduler()
+    try:
+        _add_job(
+            scheduler,
+            7,
+            "2026-01-01T10:00:00+00:00",
+            "1h",
+            datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
+        )
+        _add_job(
+            scheduler,
+            7,
+            "2026-01-01T10:00:00+00:00~repeat@1",
+            "1h",
+            datetime(2026, 1, 1, 10, 0, tzinfo=UTC),
+        )
+        # A job of another event must survive.
+        _add_job(
+            scheduler,
+            8,
+            "2026-01-01T10:00:00+00:00",
+            "1h",
+            datetime(2026, 1, 1, 9, 0, tzinfo=UTC),
+        )
+
+        removed = remove_event_jobs(scheduler, 7)
+        assert removed == 2
+        # Only event 8's job remains.
+        assert len(scheduler.get_jobs()) == 1
+        assert scheduler.get_job(dedupe_key(8, "2026-01-01T10:00:00+00:00", "1h"))
+    finally:
+        _shutdown(scheduler)
+
+
+def test_remove_event_jobs_idempotent() -> None:
+    """Removing jobs for an event with none pending is a no-op returning 0."""
+    scheduler = _wire_scheduler()
+    try:
+        assert remove_event_jobs(scheduler, 999) == 0
+        assert remove_event_jobs(scheduler, 999) == 0
         assert scheduler.get_jobs() == []
     finally:
         _shutdown(scheduler)

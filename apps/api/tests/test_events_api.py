@@ -8,8 +8,9 @@ pattern) and 404 handling.
 
 from __future__ import annotations
 
+import contextlib
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -19,6 +20,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings, get_settings
 from app.main import create_app
 from app.models import DeliveryLog
+from app.scheduler import build_scheduler, event_job_keys
 
 
 @pytest.fixture()
@@ -42,6 +44,17 @@ def _payload(**overrides: object) -> dict[str, object]:
     }
     values.update(overrides)
     return values
+
+
+def _noop_job(*args: object, **kwargs: object) -> object:
+    """A placeholder reminder job (no Telegram, no DB)."""
+    return None
+
+
+def _shutdown_scheduler(scheduler: object) -> None:
+    """Tear down a scheduler that may never have been started."""
+    with contextlib.suppress(Exception):
+        scheduler.shutdown(wait=False)  # type: ignore[attr-defined]
 
 
 def test_create_event(client: TestClient) -> None:
@@ -302,3 +315,111 @@ def test_parse_endpoint_requires_text(client: TestClient) -> None:
     """An empty text payload is rejected with 422."""
     resp = client.post("/api/events/parse", json={"text": ""})
     assert resp.status_code == 422
+
+
+# --- runtime scheduling wiring (issue #134, M10-T1) ----------------------------
+
+
+def _runtime_client(tmp_path: Path, scheduler: object) -> TestClient:
+    """A TestClient whose runtime runs the given (real) scheduler."""
+    from app.runtime import RuntimeComponents
+
+    async def starter(settings: Settings, session_factory: object) -> RuntimeComponents:
+        return RuntimeComponents(
+            scheduler=scheduler, telegram_app=object(), job_func=_noop_job
+        )
+
+    return TestClient(
+        create_app(
+            Settings(data_dir=tmp_path, db_name="test.db"),
+            start_runtime=starter,  # type: ignore[arg-type]
+        )
+    )
+
+
+def test_create_event_schedules_reminder_job(tmp_path: Path) -> None:
+    """POST /api/events schedules the event's reminders immediately (#133)."""
+    scheduler = build_scheduler(
+        Settings(data_dir=tmp_path, db_name=f"api-jobs-{id(object())}.db")
+    )
+    try:
+        with _runtime_client(tmp_path, scheduler) as client:
+            future = (
+                datetime.now(UTC).replace(microsecond=0) + timedelta(days=30)
+            ).isoformat()
+            resp = client.post(
+                "/api/events",
+                json=_payload(start_at=future, reminder_offsets=["1h"]),
+            )
+            assert resp.status_code == 201
+            event_id = resp.json()["id"]
+            keys = event_job_keys(scheduler, event_id)
+            assert len(keys) == 1
+            assert next(iter(keys)).startswith(f"{event_id}:")
+    finally:
+        _shutdown_scheduler(scheduler)
+
+
+def test_update_event_replans_reminder_job(tmp_path: Path) -> None:
+    """PUT /api/events re-plans the event's jobs (no stale duplicates)."""
+    scheduler = build_scheduler(
+        Settings(data_dir=tmp_path, db_name=f"api-jobs-{id(object())}.db")
+    )
+    try:
+        with _runtime_client(tmp_path, scheduler) as client:
+            future = (
+                datetime.now(UTC).replace(microsecond=0) + timedelta(days=30)
+            ).isoformat()
+            created = client.post(
+                "/api/events",
+                json=_payload(start_at=future, reminder_offsets=["1h"]),
+            ).json()
+            event_id = created["id"]
+            assert len(scheduler.get_jobs()) == 1
+            old_key = next(iter(scheduler.get_jobs())).id
+
+            moved = (
+                datetime.now(UTC).replace(microsecond=0) + timedelta(days=31)
+            ).isoformat()
+            resp = client.patch(f"/api/events/{event_id}", json={"start_at": moved})
+            assert resp.status_code == 200
+
+            keys = event_job_keys(scheduler, event_id)
+            assert len(keys) == 1
+            assert old_key not in keys  # old occurrence's job is gone
+    finally:
+        _shutdown_scheduler(scheduler)
+
+
+def test_delete_event_removes_reminder_jobs(tmp_path: Path) -> None:
+    """DELETE /api/events/{id} drops the event's pending reminder jobs."""
+    scheduler = build_scheduler(
+        Settings(data_dir=tmp_path, db_name=f"api-jobs-{id(object())}.db")
+    )
+    try:
+        with _runtime_client(tmp_path, scheduler) as client:
+            future = (
+                datetime.now(UTC).replace(microsecond=0) + timedelta(days=30)
+            ).isoformat()
+            created = client.post(
+                "/api/events",
+                json=_payload(start_at=future, reminder_offsets=["1h"]),
+            ).json()
+            event_id = created["id"]
+            assert len(scheduler.get_jobs()) == 1
+
+            resp = client.delete(f"/api/events/{event_id}")
+            assert resp.status_code == 204
+            assert scheduler.get_jobs() == []
+    finally:
+        _shutdown_scheduler(scheduler)
+
+
+def test_event_writes_without_scheduler_still_work(client: TestClient) -> None:
+    """With the scheduler disabled (no runtime), writes are a no-op."""
+    resp = client.post("/api/events", json=_payload())
+    assert resp.status_code == 201
+    event_id = resp.json()["id"]
+    renamed = client.patch(f"/api/events/{event_id}", json={"title": "X"})
+    assert renamed.status_code == 200
+    assert client.delete(f"/api/events/{event_id}").status_code == 204

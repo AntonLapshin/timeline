@@ -54,7 +54,7 @@ import contextlib
 import logging
 import os
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -71,7 +71,7 @@ from .recurrence import Occurrence, next_occurrences
 from .redaction import redact_text
 from .schemas import EventCreate
 from .stt import SttResult, run_command, transcribe_voice
-from .telegram_outbound import priority_emoji
+from .telegram_outbound import priority_emoji, telegram_reminder_job
 
 logger = logging.getLogger(__name__)
 
@@ -872,6 +872,8 @@ def _handle_callback_query(
     draft_store: DraftStore | None,
     *,
     now: datetime | None = None,
+    scheduler: Any | None = None,
+    job_func: Callable[..., object] | None = None,
 ) -> BotReply | None:
     """Route a draft-button callback (Save / Edit / Discard) to its action.
 
@@ -922,7 +924,15 @@ def _handle_callback_query(
 
     draft = pending.drafts[action.index]
     if action.action == "save":
-        return _save_draft(session_factory, draft, pending, chat_id, draft_store)
+        return _save_draft(
+            session_factory,
+            draft,
+            pending,
+            chat_id,
+            draft_store,
+            scheduler=scheduler,
+            job_func=job_func,
+        )
     if action.action == "edit":
         logger.info("Draft callback edit re-prompt user=%s chat=%s.", user_id, chat_id)
         return BotReply(
@@ -941,6 +951,9 @@ def _save_draft(
     pending: PendingDraft,
     chat_id: Any,
     draft_store: DraftStore,
+    *,
+    scheduler: Any | None = None,
+    job_func: Callable[..., object] | None = None,
 ) -> BotReply:
     """Persist a confirmed draft as a real event and clear the pending draft."""
     if session_factory is None:
@@ -948,7 +961,9 @@ def _save_draft(
         return BotReply("Can't save right now (no database).")
     payload = draft_to_event_create(draft, pending.raw_input)
     with session_factory() as session:
-        event = crud.create_event(session, payload)
+        event = crud.create_event(
+            session, payload, scheduler=scheduler, job_func=job_func
+        )
     draft_store.pop(chat_id)
     logger.info(
         "Saved Telegram draft as event id=%s chat=%s ref=%s",
@@ -1134,6 +1149,8 @@ def build_telegram_inbound_application(
     http_client: Any | None = None,
     draft_store: DraftStore | None = None,
     transcribe: VoiceTranscriber | None = None,
+    scheduler: Any | None = None,
+    job_func: Callable[..., object] | None = None,
 ) -> Any:
     """Build the python-telegram-bot Application with an inbound DM handler.
 
@@ -1142,6 +1159,11 @@ def build_telegram_inbound_application(
     handler for commands, a voice handler (local transcription → parse flow,
     issue #111) and a ``CallbackQueryHandler`` for the draft buttons. The
     caller is responsible for ``run_polling()`` (the API lifespan does this).
+
+    When a running reminder scheduler is supplied (issue #134), saved drafts
+    also schedule their reminder jobs immediately instead of waiting for the
+    next startup drain; ``job_func`` is the picklable job entrypoint to use
+    (defaults to the outbound module's ``telegram_reminder_job``).
     """
     if not settings.telegram_bot_token:
         return None
@@ -1152,6 +1174,10 @@ def build_telegram_inbound_application(
         filters,
     )
 
+    if scheduler is not None and job_func is None:
+        # The picklable entrypoint persisted with every job; the outbound
+        # module registers its live dispatcher in the job-func registry.
+        job_func = telegram_reminder_job
     app = Application.builder().token(settings.telegram_bot_token).build()
     if http_client is None:
         import httpx
@@ -1211,7 +1237,13 @@ def build_telegram_inbound_application(
         if query is None:
             return
         reply = _handle_callback_query(
-            query, settings, session_factory, draft_store, now=now
+            query,
+            settings,
+            session_factory,
+            draft_store,
+            now=now,
+            scheduler=scheduler,
+            job_func=job_func,
         )
         if reply is None:
             return
