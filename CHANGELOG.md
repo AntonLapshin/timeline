@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Telegram reminder cards now render the occurrence in the event's own
+  timezone (issue #131/#136):** `format_reminder_card` formatted the stored
+  `start_at` as a UTC wall-clock (`start.replace(tzinfo=UTC)` then
+  `%H:%M`), so every reminder card showed the -4h UTC shift the owner
+  reported while the web UI showed the event's own local time. The card now
+  renders in the event's own IANA zone (`event.tz`) via `zoneinfo`: a naive
+  `start_at` is the wall clock in that zone (how the web UI stores it —
+  rendered verbatim), an aware value is converted into the zone, and the
+  countdown is computed from the true absolute instant (a naive 10:00 in
+  Berlin is 08:00 UTC, not 10:00 UTC). A missing/unknown `tz` falls back to
+  UTC so a bad timezone string can never crash a delivery. Regression tests
+  cover the aware conversion (wall clock + calendar date follow the zone),
+  the naive wall-clock render with a correct event-instant countdown, and
+  the UTC fallback.
+
+- **Smart-input parse pre-fill now shows the parsed event's own wall clock
+  (issue #131):** `draftFromParsed` mapped the parsed (aware) `start_at` to
+  browser-local date/time while labeling the wizard draft with the parsed
+  event's `tz`, so an AI-parsed event in a zone different from the browser
+  pre-filled the wrong wall clock (the same browser-mismatch class the
+  drawer/timeline had). It now resolves the wall clock in the parsed zone —
+  naive `start_at` verbatim, aware via `datePartsInTimezone`, browser-local
+  fallback when the parse carries no (valid) zone — mirroring
+  `draftFromEvent`, with tests for the converted/fallback branches.
+
 - **Voice-message STT no longer freezes the whole API (issue #132/#135):**
   the local transcription pipeline (ffmpeg convert → voxtype/whisper, blocking
   in `subprocess.run` with up to a 300s timeout) ran synchronously on the

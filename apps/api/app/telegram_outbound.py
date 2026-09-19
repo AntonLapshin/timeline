@@ -29,8 +29,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -86,6 +87,21 @@ class _CardEvent(Protocol):
     description: str
     start_at: datetime
     priority: EventPriority
+    tz: str
+
+
+def _card_zone(tz: str | None) -> tzinfo:
+    """The event's IANA zone for card rendering, falling back to UTC.
+
+    A reminder delivery must never crash because of a bad timezone string, so
+    a missing/empty/unknown ``tz`` renders as UTC (the pre-#131 behavior).
+    """
+    if tz:
+        try:
+            return ZoneInfo(tz)
+        except (ValueError, ZoneInfoNotFoundError):
+            pass
+    return UTC
 
 
 def priority_emoji(priority: EventPriority) -> str:
@@ -129,16 +145,26 @@ def format_reminder_card(
     The card shows an emoji, the event title, the occurrence date/time, a
     countdown to the occurrence, and the event notes (description). ``offset``
     is the reminder offset that fired (e.g. ``"1h"``).
+
+    The occurrence is rendered in the event's own IANA timezone (``event.tz``,
+    issue #131): a naive ``start_at`` is the wall clock in that zone (how the
+    web UI stores it), and an aware value is converted into the zone. An
+    unknown/missing ``tz`` falls back to UTC. Formatting the raw stored value
+    as UTC wall-clock was the -4h shift the owner saw on every reminder card.
     """
     now = now or datetime.now(UTC)
     start = event.start_at
-    # Datetimes are stored naive (UTC) in SQLite; normalize for countdown math.
+    zone = _card_zone(getattr(event, "tz", None))
+    # Datetimes are stored naive (wall clock in the event's own tz) in SQLite;
+    # make the value aware for the countdown math, then render it in the
+    # event's own zone so the card matches the web UI and the create modal.
     if start.tzinfo is None:
-        start = start.replace(tzinfo=UTC)
+        start = start.replace(tzinfo=zone)
+    local = start.astimezone(zone)
     emoji = priority_emoji(event.priority)
     lines: list[str] = [
         f"{emoji} {event.title}",
-        f"🕐 {start:%a, %b %d, %Y} {start:%H:%M} ({countdown_text(start, now)})",
+        f"🕐 {local:%a, %b %d, %Y} {local:%H:%M} ({countdown_text(start, now)})",
         f"⏳ reminder {offset} before",
     ]
     if event.description:

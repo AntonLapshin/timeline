@@ -146,6 +146,68 @@ def test_format_reminder_card_omits_notes_when_empty() -> None:
     assert "📝" not in card
 
 
+# --- event-zone rendering (issue #131) ---------------------------------------
+
+
+def test_format_reminder_card_renders_aware_start_in_event_timezone() -> None:
+    """An aware start is converted into the event's own zone, not UTC."""
+    event = _event(
+        title="Dentist",
+        start_at=datetime(2026, 1, 2, 2, 0, tzinfo=UTC),
+        tz="America/New_York",
+    )
+    card = format_reminder_card(event, "occ-1", "1h", now=_now())
+    # 2026-01-02 02:00 UTC is Jan 1, 21:00 in New York (EST, UTC-5): both the
+    # wall clock and the calendar date must follow the event's zone.
+    assert "21:00" in card
+    assert "Thu, Jan 01, 2026" in card
+    assert "15:00" not in card
+    assert "02:00" not in card
+
+
+def test_format_reminder_card_naive_start_is_event_zone_wall_clock() -> None:
+    """A naive start_at is the wall clock in the event's zone (verbatim).
+
+    The web UI stores naive local timestamps plus a separate IANA tz; the card
+    must render that wall clock verbatim and compute the countdown from the
+    true absolute instant (naive 10:00 Berlin = 08:00 UTC, not 10:00 UTC).
+    """
+    event = _event(
+        start_at=datetime(2026, 6, 1, 10, 0),
+        tz="Europe/Berlin",
+    )
+    # 10:00 Berlin (CEST) = 08:00 UTC, so from 07:45 UTC it fires in 15m.
+    now = datetime(2026, 6, 1, 7, 45, tzinfo=UTC)
+    card = format_reminder_card(event, "occ-1", "1h", now=now)
+    assert "10:00" in card
+    assert "Mon, Jun 01, 2026" in card
+    assert "in 15m" in card
+
+
+def test_format_reminder_card_unknown_tz_falls_back_to_utc() -> None:
+    """An unknown/missing tz renders UTC instead of crashing the delivery."""
+    naive_start = datetime(2026, 1, 1, 10, 0)
+    event = _event(start_at=naive_start, tz="Mars/Olympus")
+    card = format_reminder_card(event, "occ-1", "1h", now=_now())
+    assert "10:00" in card
+    assert "Thu, Jan 01, 2026" in card
+    # Empty/None tz falls back to UTC the same way.
+    empty_tz = _event(start_at=naive_start, tz="")
+    assert "10:00" in format_reminder_card(empty_tz, "occ-1", "1h", now=_now())
+
+
+def test_format_reminder_card_countdown_uses_event_instant() -> None:
+    """The countdown is computed from the event-zone instant, not raw naive.
+
+    A naive 10:00 in Berlin is 09:00 UTC: at 09:30 UTC the reminder is due
+    ("now"), whereas the old UTC assumption would have shown "in 30m".
+    """
+    event = _event(start_at=datetime(2026, 1, 1, 10, 0), tz="Europe/Berlin")
+    now = datetime(2026, 1, 1, 9, 30, tzinfo=UTC)
+    card = format_reminder_card(event, "occ-1", "1h", now=now)
+    assert "(now)" in card
+
+
 # --- callback codec ----------------------------------------------------------
 
 
