@@ -47,3 +47,6 @@ ignore_missing_imports = true
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+markers = [
+    "keep_machine_env: keep machine env vars (skip the conftest hermetic purge) for this test (issue #140)",
+]
