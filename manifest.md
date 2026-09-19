@@ -4,15 +4,19 @@
 > auto-pi PM persona as the project evolves. The milestones below are the
 > backbone of the project: the PM plans issues against them.
 
-**Status: in progress** (M1–M8 engineering complete + deployed as of
-2026-09-16; owner feedback round filed as #106–#109 on 2026-09-17 and planned
-as milestone **M9** — runtime wiring for the Telegram bot/scheduler, UI fixes,
-smart-input parse errors, Docker/Makefile. M9-T1–T3 merged (#114/#115/#117);
-M9-T4–T6 merged (#124/#125/#126); M9-T7 merged via #129 and M9-T8 via #130 on
-2026-09-18 — **all non-owner-gated M9 sub-issues are now merged**. Every
-non-owner-gated manifest sub-issue (M1–M9) is implemented and merged; the
-project is waiting only on owner-gated items: UAT M7-T3 (`pi:needs-human`
-#95) and the email decision (`need-owner` #8).)
+**Status: in progress** — **M10 (owner bug reports #131–#133)** opened by the
+PM on 2026-09-19 (owner reported three runtime bugs as unlabeled issues:
+reminders never firing for events created at runtime #133, the API freezing on
+voice-message transcription #132, and inconsistent event timezones across the
+UI + Telegram card #131). Note: the owner pushed direct commits to `main`
+(0eab950/984ecaf) that partially fix #131 (drawer/timeline/calendar zoning) and
+add 1h/30m/15m reminder offsets, but the deeper roots remain: no
+schedule-on-create (#133), STT blocked on the event loop (#132), and the
+Telegram reminder card still shows UTC (#131) — plus the new timezone code
+dropped core coverage below the 100% CI gate. All prior milestones
+(M1–M9 non-owner-gated) are implemented and merged; the project is waiting on
+owner-gated items: UAT M7-T3 (`pi:needs-human` #95) and the email decision
+(`need-owner` #8).)
 
 **completed_at (M1–M8):** 2026-09-16T04:50:00Z — reopened for M9 on
 2026-09-17 (owner feedback #106–#109).
@@ -187,6 +191,24 @@ A personal, local-first global schedule that remembers everything: capture one-t
 - [x] M8-T3 — README cleanup: remove project-plan text, keep app description + steps. (merged via #102)
 - [x] M8-T4 — Check off M8-T3 in milestone.md; mark M7–M8 follow-ups done. (merged via #104)
 - [x] M8-T5 — Align docs/comments with the dev-server 0.0.0.0 bind. (merged via #110)
+
+### M10 — Owner bug reports round 3: runtime scheduling, STT freeze, timezone (from #131–#133 + CI coverage gate)
+
+**Goal:** Resolve the three runtime bugs the owner reported after the M9
+round, and restore the red CI coverage gate:
+- **#133 — Notification bug:** a new event ("Test" in 30m with a 15m offset) never fired its Telegram reminder, even though Telegram was working for creation. Root cause: `drain_schedule` runs only at startup, so reminder jobs are never scheduled for events created/updated at runtime (web or Telegram). Fix: schedule reminder jobs on event create/update (and remove on delete) against the running scheduler.
+- **#132 — API freeze on voice:** submitting a Telegram voice message froze the API so the UI couldn't load data (single-thread feel). Root cause: `transcribe_voice` → `subprocess.run()` (ffmpeg + voxtype, up to 300s timeout) runs synchronously in the asyncio event loop, blocking the whole process (which also serves the web app). Fix: offload transcription to a worker thread (`asyncio.to_thread` / executor) so the loop stays responsive.
+- **#131 — Timezone inconsistency:** the create modal shows the correct local time but other spots show -4h (UTC). Partial fix already on main (drawer/timeline/calendar via `displayParts` with event `tz`); remaining: the Telegram reminder card still formats `start_at` as UTC, and the new `dateFmt` timezone code fell below the 100% core-coverage CI gate.
+
+**Scope:**
+  - Runtime scheduling on mutation: schedule/drop reminder jobs when events are created, updated (offsets/times/channels), or deleted via the API, using the already-running APScheduler (idempotent via dedupe key).
+  - Non-blocking local STT: run the ffmpeg + voxtype subprocess off the event loop (thread executor) so voice transcription never freezes the API/web.
+  - Timezone: render every event time (incl. Telegram reminder card) in the event's own `tz`; add missing `dateFmt`/`apiClient`/`eventWizard`/`llmParse` coverage to restore the 100% core-coverage gate (CI green on `npm run test:coverage`).
+
+### M10 — Owner bug reports round 3
+- [ ] M10-T1 — Schedule reminder jobs for events created/updated at runtime (and remove on delete) so a "Test in 30m with 15m offset" event actually fires; mirrors `drain_schedule` against the running scheduler (fix #133).
+- [ ] M10-T2 — Run local STT (ffmpeg + voxtype subprocess) off the asyncio event loop (thread executor) so voice transcription never blocks the API/web (fix #132).
+- [ ] M10-T3 — Render every event time (incl. Telegram reminder card) in the event's own `tz`; restore 100% core coverage on the new timezone/dateFmt code so the CI coverage gate is green (fix #131 + CI gate).
 
 ### M9 — Owner feedback round 2: runtime wiring, UX, Docker (from #106–#109)
 - [x] M9-T1 — Wire Telegram bot + reminder scheduler into the API runtime (lifespan, behind `BOT_TOKEN`); `/healthz` component status; Docker STT limitation documented. (merged via #114)

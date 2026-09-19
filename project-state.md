@@ -4,6 +4,25 @@
 
 ## Status
 
+**M10 filed — three owner bug reports #131–#133 planned as milestone M10 (#134/#135/#136).**
+(PM 2026-09-19, unplanned-work dispatch: the owner opened three unlabeled bug
+issues — notifications never firing for runtime-created events (#133), the API
+freezing on voice-message STT (#132), and inconsistent event timezones (#131).
+Investigated all three in the repo and planned them as the new **milestone
+M10** with `pi:ready` sub-issues: **#134 M10-T1** (p1 — schedule reminder jobs
+for events created/updated at runtime; root cause verified: `drain_schedule`
+runs only at startup so new events get zero jobs), **#135 M10-T2** (p1 — run
+local STT off the asyncio event loop; root cause verified:
+`subprocess.run` with up-to-300s timeout blocks the loop that also serves the
+web), **#136 M10-T3** (p2 — render every event time in its own `tz` incl. the
+Telegram card + restore the red 100% core-coverage gate; note the owner's own
+direct commits 0eab950/984ecaf already fixed the drawer/timeline/calendar
+zoning and added 1h/30m/15m offsets, but `format_reminder_card` still shows UTC
+and coverage sits at ~97%). Closed the three parent issues #131/#132/#133.
+CI web coverage was red on main when this was filed (new `dateFmt` timezone
+code below the 100% gate) — covered by M10-T3. The two owner-gated items (#8
+email decision, #95 owner UAT) remain `pi:blocked`/`need-owner` untouched.)
+
 **Owner-gated wait re-confirmed (dispatch #19) — backlog exhausted; nothing to file.**
 (PM 2026-09-18, blocked-only dispatch #19: fresh re-verification — #8 (email
 decision) and #95 (owner UAT) still have zero comments, no `Owner:` replies
