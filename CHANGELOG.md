@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Test
 
+- **Hermetic API test suite: leaked machine env vars no longer reach
+  `Settings` (issue #140):** running `pytest` in `apps/api` on the owner
+  machine failed 8 tests that pass in CI because real env vars
+  (`TELEGRAM_USER_IDS`, `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`,
+  `TIMELINE_LOG_FILE`, `TIMELINE_LOG_MAX_BYTES`, `TIMELINE_LOG_BACKUP_COUNT`,
+  `STT_VOXTYPE_PATH`) leaked into the env-backed `Settings` dataclass —
+  "defaults" tests saw non-default values and outbound tests targeted the
+  real allowlisted chat id. A new `apps/api/tests/conftest.py` adds an
+  autouse `hermetic_env` fixture that deletes every `TELEGRAM_*` / `LLM_*` /
+  `TIMELINE_*` / `STT_*` variable before each test (via `monkeypatch.delenv`,
+  restored at teardown); a test opts out with the registered
+  `@pytest.mark.keep_machine_env` marker. New `tests/test_hermetic_env.py`
+  pins the mechanism: the prefix purge leaves non-matching vars untouched,
+  a simulated owner-machine leak (module-scoped fixture exporting fake
+  production vars) is invisible to `Settings` under the autouse purge, the
+  marker keeps the leak visible, and the prefix constant matches the
+  acceptance criteria. Suite now passes identically with the production env
+  exported (verified with `TELEGRAM_USER_IDS=123 LLM_API_KEY=x
+  TIMELINE_LOG_FILE=./data/timeline.log pytest` → 549 passed) and in a clean
+  CI env (549 passed); no production behavior change.
+
 - **Cover the default picklable reminder job-func fallback (issue #138,
   missing test from PR #137):** `build_telegram_inbound_application` fills in
   the module-level picklable `telegram_reminder_job` entrypoint when a
