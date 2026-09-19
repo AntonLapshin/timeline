@@ -7,6 +7,7 @@ import {
   NEEDS_CLARIFICATION_MESSAGE,
   type ParseResult,
 } from "../../src/core/llmParse";
+import { parseIso, toLocalDate } from "../../src/core/dateFmt";
 import type { FetchLike } from "../../src/core/apiClient";
 import type { ParsedDraft } from "../../src/core/parseGuards";
 
@@ -282,6 +283,51 @@ describe("draftFromParsed", () => {
     const draft = draftFromParsed({} as ParsedDraft);
     expect(draft.title).toBe("");
     expect(draft.tz).toBe("UTC");
+  });
+
+  it("converts an aware start into the parsed event's own zone", () => {
+    // The parse carries an offset-bearing start_at plus the event's IANA tz;
+    // the pre-filled wall clock must be that zone's, not the browser's.
+    const draft = draftFromParsed({
+      title: "Office",
+      start_at: "2026-09-16T09:00:00+02:00",
+      tz: "Europe/Berlin",
+    });
+    expect(draft.date).toBe("2026-09-16");
+    expect(draft.time).toBe("09:00");
+    expect(draft.tz).toBe("Europe/Berlin");
+  });
+
+  it("falls back to local parts when the parsed timezone is unparseable", () => {
+    const draft = draftFromParsed({
+      title: "X",
+      start_at: "2026-09-05T10:00:00+00:00",
+      tz: "Mars/Olympus",
+    });
+    const start = parseIso("2026-09-05T10:00:00+00:00") as Date;
+    expect(draft.date).toBe(toLocalDate(start));
+    expect(draft.time).toMatch(/^\d{2}:\d{2}$/);
+  });
+
+  it("falls back to local parts when the parse has no timezone", () => {
+    const draft = draftFromParsed({
+      title: "X",
+      start_at: "2026-09-05T10:00:00+00:00",
+    });
+    const start = parseIso("2026-09-05T10:00:00+00:00") as Date;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    expect(draft.date).toBe(toLocalDate(start));
+    expect(draft.time).toBe(
+      `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    );
+    expect(draft.tz).toBe("UTC");
+  });
+
+  it("blanks the date when a tz is set but start_at is missing", () => {
+    const draft = draftFromParsed({ title: "X", tz: "Europe/Berlin" });
+    expect(draft.date).toBe("");
+    expect(draft.time).toBe("");
+    expect(draft.tz).toBe("Europe/Berlin");
   });
 });
 

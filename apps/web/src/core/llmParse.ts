@@ -17,7 +17,12 @@ import {
   type EventDraft,
 } from "./eventWizard";
 import type { EventPriority } from "./eventTypes";
-import { parseIso, toLocalDate } from "./dateFmt";
+import {
+  datePartsInTimezone,
+  parseIso,
+  parseNaiveWallClock,
+  toLocalDate,
+} from "./dateFmt";
 import type { FetchLike } from "./apiClient";
 
 /** Result of a parse call: either a draft or an error message. */
@@ -200,12 +205,38 @@ export function draftFromParsed(
 ): EventDraft {
   const start = parsed.start_at ? parseIso(parsed.start_at) : null;
   const recurrence = recurrenceChoiceFromRrule(parsed.rrule ?? null);
+  // Resolve the wall clock in the parsed event's own zone (issue #131): a
+  // naive start_at IS that wall clock (render verbatim); an aware one is
+  // converted into the zone. Browser-local fallback keeps the old behavior
+  // when the parse carries no (valid) zone — showing browser-local time while
+  // labeling the draft with the event's zone shifted AI-parsed pre-fills by
+  // the zone difference, the same mismatch the drawer/timeline had.
+  const wallClock =
+    parsed.tz && parsed.start_at ? parseNaiveWallClock(parsed.start_at) : null;
+  const parts =
+    !wallClock && start && parsed.tz
+      ? datePartsInTimezone(start, parsed.tz)
+      : null;
+  const pad = (n: number) => String(n).padStart(2, "0");
   return {
     title: parsed.title ?? "",
     notes: "",
     allDay: parsed.all_day ?? false,
-    date: start ? toLocalDate(start) : "",
-    time: parsed.all_day || !start ? "" : timeOf(start),
+    date: start
+      ? (wallClock
+          ? `${wallClock.year}-${pad(wallClock.month)}-${pad(wallClock.day)}`
+          : parts
+            ? `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`
+            : toLocalDate(start))
+      : "",
+    time:
+      parsed.all_day || !start
+        ? ""
+        : (wallClock
+            ? `${pad(wallClock.hour)}:${pad(wallClock.minute)}`
+            : parts
+              ? `${pad(parts.hour)}:${pad(parts.minute)}`
+              : timeOf(start)),
     tz: parsed.tz || DEFAULT_TZ,
     recurrence,
     customRrule: parsed.rrule ?? "",
