@@ -28,16 +28,17 @@ WorkingDirectory=@REPO_DIR@/apps/api
 # Repo .env provides secrets (BOT_TOKEN, LLM_API_KEY, ...); `-` tolerates a
 # missing file on first install (make start creates it via the env target).
 EnvironmentFile=-@REPO_DIR@/.env
-# Stack ports mirror the compose stack; these override .env values.
-Environment=TIMELINE_HOST=0.0.0.0
-Environment=TIMELINE_PORT=8124
-Environment=TIMELINE_ALLOW_NON_LOOPBACK=1
-Environment=TIMELINE_DATA_DIR=@REPO_DIR@/data
-Environment=TIMELINE_BACKUPS_DIR=@REPO_DIR@/backups
+# Stack ports mirror the compose stack; these must win over the .env defaults.
+# NOTE: plain `Environment=` lines cannot do that — systemd applies
+# EnvironmentFile assignments after (and over) `Environment=` ones, so they
+# would silently lose to the .env values (wrong data dir, API on the web port
+# 8123, loopback opt-in off while bound to 0.0.0.0). Prefixing the commands
+# with /usr/bin/env applies after all unit environment processing, so these
+# values always take effect.
 # Apply pending Alembic migrations before serving (parity with the API image
 # CMD, which runs `alembic upgrade head` on every container start).
-ExecStartPre=@REPO_DIR@/apps/api/.venv/bin/alembic upgrade head
-ExecStart=@REPO_DIR@/apps/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8124
+ExecStartPre=/usr/bin/env TIMELINE_DATA_DIR=@REPO_DIR@/data TIMELINE_BACKUPS_DIR=@REPO_DIR@/backups @REPO_DIR@/apps/api/.venv/bin/alembic upgrade head
+ExecStart=/usr/bin/env TIMELINE_HOST=0.0.0.0 TIMELINE_PORT=8124 TIMELINE_DATA_DIR=@REPO_DIR@/data TIMELINE_BACKUPS_DIR=@REPO_DIR@/backups TIMELINE_ALLOW_NON_LOOPBACK=1 @REPO_DIR@/apps/api/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8124
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
