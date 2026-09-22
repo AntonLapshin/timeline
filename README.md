@@ -116,6 +116,10 @@ documented in `.env.example` and the comments in `docker-compose.yml`.
   is not transcribed in the compose stack (the bot says so explicitly and points
   at `/add <text>`). Voice requires the host run (`make start`, voxtype +
   ffmpeg installed — Omarchy: Install > AI > Dictation).
+- **Event times off by hours (e.g. submitted 2:50pm, scheduled 19:19)** — `TZ`
+  in `.env` is still `UTC` while you live elsewhere. Telegram/voice parses
+  stamp `TZ`, so set it to your local IANA zone (e.g. `TZ=America/New_York`)
+  and restart (`make restart` — systemd reads `.env` at service start).
 
 ## Backup & restore
 

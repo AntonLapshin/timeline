@@ -39,8 +39,9 @@ parser (``parse_upcoming_days``), the event-listing helpers
 pending-ack helpers (``pending_add_reply`` / ``voice_pending_reply`` /
 ``saved_confirmation_reply`` / ``is_add_flow_text``), the inbound-record
 builder (``build_inbound_record``) and the draft-flow helpers
-(``format_draft_card`` / ``build_draft_keyboard`` / ``parse_draft_callback`` /
-``draft_to_event_create`` / ``DraftStore``) and the voice replies
+(``format_draft_card`` / ``format_draft_when`` / ``build_draft_keyboard`` /
+``parse_draft_callback`` / ``draft_to_event_create`` / ``DraftStore``) and
+the voice replies
 (``voice_unavailable_reply`` / ``voice_error_reply``). The impure Telegram
 wiring (``_handle_update`` / ``_handle_voice_update`` /
 ``_handle_callback_query`` / ``build_telegram_inbound_application`` /
@@ -59,7 +60,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -536,15 +537,49 @@ def _reply_add(args: str) -> CommandResult:
     return CommandResult(reply=text, message_type="add_parse")
 
 
+def format_draft_when(draft: ParsedDraft) -> str | None:
+    """Render a draft's start time in its own tz with an explicit zone label (pure).
+
+    The draft card is the owner's only chance to catch a mis-parsed time before
+    tapping Save: showing the raw model ISO (e.g. ``2026-09-22T19:19:43+00:00``)
+    reads as local wall-clock and hides a UTC-vs-local shift (the reported
+    "submitted 2:50pm, scheduled 19:19" — a correctly resolved 19:19 UTC instant
+    stamped while the owner's zone is America/New_York, i.e. 15:19 local).
+    Rendering the wall clock in the draft's own zone with the zone name keeps
+    the instant unambiguous. A naive ``start_at`` is the wall clock in the
+    draft zone; an unparseable value falls back to the raw string so the card
+    never breaks.
+    """
+    if not draft.start_at:
+        return None
+    zone_label = draft.tz or "UTC"
+    try:
+        zone = ZoneInfo(zone_label)
+    except (ValueError, ZoneInfoNotFoundError):
+        return draft.start_at
+    try:
+        parsed = datetime.fromisoformat(draft.start_at)
+    except (ValueError, TypeError):
+        return draft.start_at
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=zone)
+    local = parsed.astimezone(zone)
+    return f"{local:%a, %b %d %H:%M} ({zone_label})"
+
+
 def format_draft_card(draft: ParsedDraft) -> str:
     """Render a parsed draft as a readable Telegram draft card (pure).
 
     Shows the title plus any fields the model was confident about (start time,
-    all-day, recurrence, priority, channels, reminder offsets, tags).
+    all-day, recurrence, priority, channels, reminder offsets, tags). The start
+    time renders via ``format_draft_when`` (wall clock in the draft's own zone
+    with an explicit zone label) so a UTC-stamped draft never masquerades as
+    local time.
     """
     lines = [f"📝 {draft.title}"]
-    if draft.start_at:
-        lines.append(f"  When: {draft.start_at}")
+    when = format_draft_when(draft)
+    if when is not None:
+        lines.append(f"  When: {when}")
     if draft.all_day:
         lines.append("  All day: yes")
     if draft.rrule:

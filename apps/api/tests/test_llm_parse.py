@@ -19,6 +19,7 @@ from app.llm_parse import (
     build_prompt,
     build_request,
     extract_model_payload,
+    now_in_tz,
     parse_events,
     validate_parse_response,
 )
@@ -73,9 +74,36 @@ def test_build_prompt_injects_now_and_tz() -> None:
     """The user prompt embeds the current time and timezone."""
     system, user = build_prompt("dentist tomorrow 9am", NOW, TZ)
     assert "calendar assistant" in system
-    assert NOW.isoformat() in user
+    # NOW is 09:00 UTC; the prompt anchors it in the user's zone (11:00+02:00)
+    # so the model never does offset arithmetic for relative phrases.
+    assert "2026-09-15T11:00:00+02:00" in user
+    assert NOW.isoformat() not in user
     assert TZ in user
     assert "dentist tomorrow 9am" in user
+
+
+def test_now_in_tz_converts_aware_now() -> None:
+    """An aware now is expressed in the target zone (same instant)."""
+    local = now_in_tz(NOW, TZ)
+    assert local.isoformat() == "2026-09-15T11:00:00+02:00"
+    assert local.utcoffset() == NOW.astimezone(local.tzinfo).utcoffset()
+
+
+def test_now_in_tz_reads_naive_now_as_utc() -> None:
+    """A naive now is read as UTC before converting to the target zone."""
+    naive = datetime(2026, 9, 15, 9, 0)
+    assert now_in_tz(naive, TZ).isoformat() == "2026-09-15T11:00:00+02:00"
+
+
+def test_now_in_tz_leaves_now_untouched_for_bad_tz() -> None:
+    """Unknown/empty zones fail open: the prompt keeps the raw timestamp."""
+    assert now_in_tz(NOW, "Not/AZone") is NOW
+    assert now_in_tz(NOW, "") is NOW
+
+
+def test_now_in_tz_utc_passthrough() -> None:
+    """UTC stays UTC (the pre-existing default path is unchanged)."""
+    assert now_in_tz(NOW, "UTC").isoformat() == NOW.isoformat()
 
 
 def test_build_prompt_system_describes_json_schema() -> None:
@@ -112,7 +140,7 @@ def test_build_request_injects_now_tz_and_text() -> None:
     """The user message carries now/tz/text for relative-date resolution."""
     req = build_request("pay rent tomorrow", NOW, TZ, _settings())
     user_msg = req.json["messages"][1]["content"]
-    assert NOW.isoformat() in user_msg
+    assert "2026-09-15T11:00:00+02:00" in user_msg
     assert TZ in user_msg
     assert "pay rent tomorrow" in user_msg
 
@@ -767,7 +795,11 @@ def test_parse_backfills_missing_reminder_offsets() -> None:
     client = _FakeClient(
         _FakeResponse(
             200,
-            {"events": [{"title": "Interview", "start_at": "2026-09-16T09:00:00+02:00"}]},
+            {
+                "events": [
+                    {"title": "Interview", "start_at": "2026-09-16T09:00:00+02:00"}
+                ]
+            },
         )
     )
     result = parse_events(

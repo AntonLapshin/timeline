@@ -28,8 +28,9 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -84,15 +85,40 @@ _SYSTEM_PROMPT = (
 # ---------------------------------------------------------------------------
 
 
+def now_in_tz(now: datetime, tz: str) -> datetime:
+    """Express ``now`` in ``tz`` so relative phrases resolve in-zone (pure).
+
+    The prompt pairs ``Current date/time`` with ``Timezone``; when the server
+    clock is UTC but the owner lives in e.g. ``America/New_York``, sending the
+    raw UTC timestamp forces the model to do offset arithmetic before resolving
+    "in half an hour" — a reliable source of multi-hour shifts. Converting
+    first anchors the timestamp to the zone the model is told to use. A naive
+    ``now`` is read as UTC; an unknown/empty ``tz`` leaves ``now`` untouched
+    (fail open — the prompt stays well-formed).
+    """
+    if not tz:
+        return now
+    try:
+        zone = ZoneInfo(tz)
+    except (ValueError, ZoneInfoNotFoundError):
+        return now
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    return now.astimezone(zone)
+
+
 def build_prompt(text: str, now: datetime, tz: str) -> tuple[str, str]:
     """Build the (system, user) prompt pair for a parse request.
 
     Pure: no I/O, no side effects. ``now`` is injected so the model can resolve
-    relative dates ("tomorrow", "next monday"); ``tz`` tells it what timezone
-    the user is in.
+    relative dates ("tomorrow", "next monday", "in half an hour"); it is
+    expressed in ``tz`` (``now_in_tz``) so the timestamp matches the timezone
+    the model is told the user is in.
     """
     user_prompt = (
-        f"Current date/time: {now.isoformat()}\nTimezone: {tz}\nUser text: {text}\n"
+        f"Current date/time: {now_in_tz(now, tz).isoformat()}\n"
+        f"Timezone: {tz}\n"
+        f"User text: {text}\n"
     )
     return _SYSTEM_PROMPT, user_prompt
 

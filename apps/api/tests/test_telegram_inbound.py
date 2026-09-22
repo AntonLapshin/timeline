@@ -57,6 +57,7 @@ from app.telegram_inbound import (
     events_today,
     events_upcoming,
     format_draft_card,
+    format_draft_when,
     format_event_line,
     handle_command,
     is_private_chat,
@@ -341,9 +342,49 @@ def test_format_draft_card() -> None:
     """A draft card renders the title and the confident fields."""
     card = format_draft_card(_draft())
     assert "📝 Dentist" in card
-    assert "2026-01-02T09:00:00+00:00" in card
+    # The When line shows the wall clock in the draft zone with a zone label
+    # (never a bare ISO that reads as local time).
+    assert "Jan 02 09:00 (UTC)" in card
+    assert "2026-01-02T09:00:00+00:00" not in card
     assert "Priority: medium" in card
     assert "Channels: telegram" in card
+
+
+def test_format_draft_when_converts_to_draft_tz() -> None:
+    """A UTC-stamped draft for an EDT owner renders as local time (the #131 class).
+
+    Regression test for the reported voice message: submitted ~14:50 EDT,
+    "in half an hour" resolved to 19:19 UTC — correct instant, but the card
+    showed the bare 19:19 ISO. It must read 15:19 in the draft zone.
+    """
+    when = format_draft_when(
+        _draft(start_at="2026-09-22T19:19:43+00:00", tz="America/New_York")
+    )
+    assert when is not None
+    assert "15:19" in when
+    assert "America/New_York" in when
+    assert "19:19" not in when
+
+
+def test_format_draft_when_naive_is_wall_clock_in_draft_zone() -> None:
+    """A naive start_at is the wall clock in the draft zone (web-UI convention)."""
+    when = format_draft_when(_draft(start_at="2026-01-02T09:00:00", tz="UTC"))
+    assert when is not None
+    assert "Jan 02 09:00 (UTC)" in when
+
+
+def test_format_draft_when_falls_back_to_raw() -> None:
+    """Unparseable times / unknown zones never break the card (raw fallback)."""
+    assert format_draft_when(_draft(start_at="not-a-time", tz="UTC")) == "not-a-time"
+    raw = "2026-01-02T09:00:00+00:00"
+    assert format_draft_when(_draft(start_at=raw, tz="Not/AZone")) == raw
+    assert format_draft_when(_draft(start_at=None)) is None
+
+
+def test_format_draft_card_omits_when_without_start() -> None:
+    """A draft without a start time has no When line."""
+    card = format_draft_card(_draft(start_at=None))
+    assert "When:" not in card
 
 
 def test_format_draft_card_omits_unknown_fields() -> None:
