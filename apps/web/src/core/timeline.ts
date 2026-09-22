@@ -194,21 +194,16 @@ export function eventTimeLabel(event: EventRead, startIso?: string): string {
 }
 
 /**
- * Group events into month buckets, each with week buckets, sorted
- * chronologically by occurrence start time.
+ * Build the full sorted row list for events (one row per occurrence).
  *
- * Recurrent events contribute one row per occurrence (expanded via
- * `expandOccurrences`, mirroring the backend recurrence engine), so a
- * quarterly event starting in January also appears under October —
- * previously it only ever showed in its start month. One-time events and
- * unsupported rules contribute their single master row, exactly as before.
- * The row keeps the master `event` (edits/drawer keep working on the real
- * record) while its labels reflect the occurrence start.
- *
- * Events with an unparseable `start_at` are placed in a trailing "Unsorted"
- * bucket so no event is ever dropped from the view.
+ * Expands recurrent events via `expandOccurrences`, derives each row with
+ * `toEventRow`, and sorts chronologically by occurrence start. This is the
+ * unit pagination operates on: a single recurrent master can yield dozens of
+ * rows, so paginating master events would still flood the first page (e.g.
+ * one daily rule rendering years of occurrences). Paginate these rows
+ * instead, then group the visible slice with `groupRows`.
  */
-export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
+export function buildTimelineRows(events: readonly EventRead[]): EventRow[] {
   const pairs: Array<{ event: EventRead; startIso: string }> = [];
   for (const event of events) {
     for (const startIso of expandOccurrences(event)) {
@@ -216,12 +211,21 @@ export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
     }
   }
   pairs.sort((a, b) => a.startIso.localeCompare(b.startIso));
+  return pairs.map(({ event, startIso }) => toEventRow(event, startIso));
+}
+
+/**
+ * Group pre-built (already sorted) rows into month/week buckets.
+ *
+ * Rows with an unparseable `startIso` go to a trailing "Unsorted" bucket so
+ * no event is ever dropped from the view.
+ */
+export function groupRows(rows: readonly EventRow[]): MonthGroup[] {
   const months = new Map<string, MonthGroup>();
   const unsortedRows: EventRow[] = [];
 
-  for (const { event, startIso } of pairs) {
-    const row = toEventRow(event, startIso);
-    const parsed = parseIso(startIso);
+  for (const row of rows) {
+    const parsed = parseIso(row.startIso);
     if (!parsed) {
       unsortedRows.push(row);
       continue;
@@ -229,7 +233,7 @@ export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
     // Month AND week both come from the occurrence date in the event's own
     // timezone (not browser-local getters, which shift the placement
     // whenever the zones differ).
-    const parts = displayParts(startIso, parsed, event.tz || undefined);
+    const parts = displayParts(row.startIso, parsed, row.event.tz || undefined);
     const pad = (n: number) => String(n).padStart(2, "0");
     const month = `${parts.year}-${pad(parts.month)}`;
     let monthGroup = months.get(month);
@@ -259,30 +263,58 @@ export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
 }
 
 /**
- * Slice a chronologically sorted event list for "load more" pagination.
+ * Group events into month buckets, each with week buckets, sorted
+ * chronologically by occurrence start time.
  *
- * Returns a **cumulative** slice — everything revealed so far, i.e.
- * `[0, (page + 1) * pageSize)`. This is the infinite-scroll contract the
- * Timeline view relies on: clicking "Load more" appends the next page to the
- * previously visible events instead of replacing them.
+ * Recurrent events contribute one row per occurrence (expanded via
+ * `expandOccurrences`, mirroring the backend recurrence engine), so a
+ * quarterly event starting in January also appears under October —
+ * previously it only ever showed in its start month. One-time events and
+ * unsupported rules contribute their single master row, exactly as before.
+ * The row keeps the master `event` (edits/drawer keep working on the real
+ * record) while its labels reflect the occurrence start.
+ *
+ * Events with an unparseable `start_at` are placed in a trailing "Unsorted"
+ * bucket so no event is ever dropped from the view.
+ *
+ * This expands the FULL row list — callers that paginate must use
+ * `buildTimelineRows` + `paginate` + `groupRows` so only the visible slice
+ * is grouped (otherwise a single recurrent event floods the first page with
+ * years of occurrences).
  */
-export function paginate(
-  events: readonly EventRead[],
-  pageSize: number,
-  page: number,
-): EventRead[] {
-  const size = Math.max(1, Math.floor(pageSize));
-  const end = (Math.max(0, Math.floor(page)) + 1) * size;
-  return events.slice(0, end);
+export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
+  return groupRows(buildTimelineRows(events));
 }
 
-/** Whether more events remain beyond the given page. */
-export function hasMore(
-  events: readonly EventRead[],
+/**
+ * Slice a chronologically sorted list for "load more" pagination.
+ *
+ * Generic over the item type so callers can paginate expanded timeline rows
+ * (`EventRow[]`) — paginating master `EventRead` values before expansion
+ * defeats the batching because one recurrent master expands to dozens of
+ * rows. Returns a **cumulative** slice — everything revealed so far, i.e.
+ * `[0, (page + 1) * pageSize)`. This is the infinite-scroll contract the
+ * Timeline view relies on: scrolling to the end (or clicking "Load more")
+ * appends the next page to the previously visible rows instead of replacing
+ * them.
+ */
+export function paginate<T>(
+  items: readonly T[],
+  pageSize: number,
+  page: number,
+): T[] {
+  const size = Math.max(1, Math.floor(pageSize));
+  const end = (Math.max(0, Math.floor(page)) + 1) * size;
+  return items.slice(0, end);
+}
+
+/** Whether more items remain beyond the given page. */
+export function hasMore<T>(
+  items: readonly T[],
   pageSize: number,
   page: number,
 ): boolean {
   const size = Math.max(1, Math.floor(pageSize));
   const start = Math.max(0, Math.floor(page)) * size;
-  return start + size < events.length;
+  return start + size < items.length;
 }

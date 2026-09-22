@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServices } from "../services/useServices";
 import {
-  groupByMonth,
+  buildTimelineRows,
+  groupRows,
   paginate,
   hasMore,
+  type EventRow,
   type MonthGroup,
 } from "../../core/timeline";
 import {
@@ -18,9 +20,9 @@ export const TIMELINE_PAGE_SIZE = 10;
 
 /** State shape produced by the timeline view model. */
 export interface TimelineState {
-  /** Events visible so far (revealed by pagination). */
-  visible: EventRead[];
-  /** Grouped, derived view of the visible events. */
+  /** Rows visible so far (expanded occurrences, revealed by pagination). */
+  visible: EventRow[];
+  /** Grouped, derived view of the visible rows. */
   groups: MonthGroup[];
   /** Whether more events can be loaded. */
   hasMore: boolean;
@@ -104,16 +106,22 @@ export function useTimeline(
     [events, filter],
   );
 
+  // Expand BEFORE paginating: a single recurrent master yields dozens of
+  // rows, so paginating masters would still flood the first page with years
+  // of occurrences. Paginating rows keeps each batch to TIMELINE_PAGE_SIZE
+  // rows with infinite scroll revealing the rest.
+  const allRows = useMemo(() => buildTimelineRows(filtered), [filtered]);
+
   const visible = useMemo(
-    () => paginate(filtered, TIMELINE_PAGE_SIZE, page),
-    [filtered, page],
+    () => paginate(allRows, TIMELINE_PAGE_SIZE, page),
+    [allRows, page],
   );
 
-  const groups = useMemo(() => groupByMonth(visible), [visible]);
+  const groups = useMemo(() => groupRows(visible), [visible]);
 
   const more = useMemo(
-    () => hasMore(filtered, TIMELINE_PAGE_SIZE, page),
-    [filtered, page],
+    () => hasMore(allRows, TIMELINE_PAGE_SIZE, page),
+    [allRows, page],
   );
 
   return {

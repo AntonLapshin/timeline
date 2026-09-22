@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useTimeline } from "../viewModels/useTimeline";
 import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
 import { isFiltering, type EventFilter } from "../../core/searchFilter";
@@ -100,7 +101,10 @@ export function MonthGroupView({
  * The Timeline view.
  *
  * A thin, dumb view: it calls the `useTimeline` view model for state and
- * renders the grouped rows plus a "load more" control. No business logic lives
+ * renders the grouped rows plus infinite-scroll pagination. Rows are
+ * revealed in batches (see `TIMELINE_PAGE_SIZE`): scrolling to the end
+ * auto-loads the next batch via an `IntersectionObserver` sentinel, with the
+ * "Load more" button kept as an explicit fallback. No business logic lives
  * here.
  */
 export function TimelineView({
@@ -120,6 +124,33 @@ export function TimelineView({
     filter,
     refreshKey,
   );
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll: when the end sentinel scrolls into view, reveal the
+  // next batch. Works inside any scroll container (the app scrolls `<main>`
+  // internally, not the window) since IntersectionObserver observes
+  // visibility, not scroll events.
+  useEffect(() => {
+    if (!hasMore) {
+      return;
+    }
+    const el = sentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore();
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(el);
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loadMore, groups]);
 
   if (loading) {
     return (
@@ -179,13 +210,16 @@ export function TimelineView({
         <MonthGroupView key={group.key} group={group} onEventClick={onEventClick} />
       ))}
       {hasMore && (
-        <button
-          type="button"
-          onClick={loadMore}
-          className="btn-ghost w-full px-4 py-2"
-        >
-          Load more
-        </button>
+        <>
+          <div ref={sentinelRef} data-testid="timeline-sentinel" aria-hidden />
+          <button
+            type="button"
+            onClick={loadMore}
+            className="btn-ghost w-full px-4 py-2"
+          >
+            Load more
+          </button>
+        </>
       )}
     </div>
   );
