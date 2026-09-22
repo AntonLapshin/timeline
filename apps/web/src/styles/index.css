@@ -18,7 +18,7 @@
     line-height: 1;
     vertical-align: middle;
     text-wrap: balance;
-    height: 32px;
+    min-height: 32px;
   }
 
   input,
@@ -88,6 +88,26 @@
     @apply btn border border-slate-300 bg-white/80 px-3 py-1.5 text-slate-700 shadow-sm backdrop-blur hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700;
   }
 
+  /*
+   * Square icon buttons (arrows, Close, theme toggle, …): a perfect
+   * 32×32 footprint shared by every single-icon button.
+   */
+  .btn-square {
+    height: 32px;
+    width: 32px;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /*
+   * Custom dropdown options: taller than the 32px control baseline so the
+   * open panel reads as a styled menu, not a native popup.
+   */
+  .dropdown-option {
+    height: auto;
+    min-height: 40px;
+  }
+
   .card {
     @apply rounded-lg border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.05),0_8px_24px_-12px_rgb(15_23_42/0.15)] dark:border-slate-700/70 dark:bg-slate-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_12px_32px_-12px_rgb(0_0_0/0.6)];
   }
@@ -121,6 +141,20 @@
   }
   to {
     opacity: 1;
+  }
+}
+
+/*
+ * Custom dropdown panel pop-in: a subtle scale + fade from the trigger.
+ */
+@keyframes dropdown-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

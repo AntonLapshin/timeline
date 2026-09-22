@@ -13,27 +13,26 @@ function renderToggle(initial: "light" | "dark" = "light") {
 }
 
 describe("ThemeToggle", () => {
-  it("shows a sun (switch to dark) when the theme is light", () => {
+  it("targets the dark theme when the theme is light", () => {
     renderToggle("light");
-    expect(screen.getByRole("button")).toHaveTextContent("🌙");
-    expect(screen.getByRole("button")).toHaveAttribute(
-      "aria-label",
-      "Switch to Dark theme",
-    );
+    const button = screen.getByRole("button");
+    expect(button).toHaveAttribute("aria-label", "Switch to Dark theme");
+    expect(button.querySelector("svg")).not.toBeNull();
   });
 
-  it("shows a moon (switch to light) when the theme is dark", () => {
+  it("targets the light theme when the theme is dark", () => {
     renderToggle("dark");
-    expect(screen.getByRole("button")).toHaveTextContent("☀️");
-    expect(screen.getByRole("button")).toHaveAttribute(
-      "aria-label",
-      "Switch to Light theme",
-    );
+    const button = screen.getByRole("button");
+    expect(button).toHaveAttribute("aria-label", "Switch to Light theme");
+    expect(button.querySelector("svg")).not.toBeNull();
   });
 
   it("toggles the theme when clicked", () => {
     renderToggle("light");
     fireEvent.click(screen.getByRole("button"));
-    expect(screen.getByRole("button")).toHaveTextContent("☀️");
+    expect(screen.getByRole("button")).toHaveAttribute(
+      "aria-label",
+      "Switch to Light theme",
+    );
   });
 });

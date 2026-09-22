@@ -21,6 +21,12 @@ function renderBar(
   return { props, view };
 }
 
+/** Open a dropdown trigger and click one of its options by visible label. */
+function pickOption(triggerName: string, optionName: string) {
+  fireEvent.click(screen.getByRole("button", { name: triggerName }));
+  fireEvent.click(screen.getByRole("button", { name: optionName }));
+}
+
 describe("SearchFilterBar", () => {
   it("renders the search input with the current text", () => {
     renderBar({ filter: { ...EMPTY_FILTER, text: "hra" } });
@@ -37,9 +43,7 @@ describe("SearchFilterBar", () => {
 
   it("forwards priority changes", () => {
     const { props } = renderBar();
-    fireEvent.change(screen.getByLabelText("Filter by priority"), {
-      target: { value: "critical" },
-    });
+    pickOption("Filter by priority", "Critical");
     expect(props.onPriorityChange).toHaveBeenCalledWith("critical");
   });
 
@@ -47,32 +51,28 @@ describe("SearchFilterBar", () => {
     const { props } = renderBar({
       filter: { ...EMPTY_FILTER, priority: "low" },
     });
-    fireEvent.change(screen.getByLabelText("Filter by priority"), {
-      target: { value: "" },
-    });
+    pickOption("Filter by priority", "Priority");
     expect(props.onPriorityChange).toHaveBeenCalledWith(null);
   });
 
   it("forwards tag changes", () => {
     const { props } = renderBar({ tags: ["health", "social"] });
-    fireEvent.change(screen.getByLabelText("Filter by tag"), {
-      target: { value: "health" },
-    });
+    pickOption("Filter by tag", "health");
     expect(props.onTagChange).toHaveBeenCalledWith("health");
   });
 
   it("forwards month changes", () => {
     const { props } = renderBar({ months: ["2026-09", "2026-10"] });
-    fireEvent.change(screen.getByLabelText("Filter by month"), {
-      target: { value: "2026-10" },
-    });
+    pickOption("Filter by month", "2026-10");
     expect(props.onMonthChange).toHaveBeenCalledWith("2026-10");
   });
 
   it("renders the available tag and month options", () => {
     renderBar({ tags: ["health"], months: ["2026-09"] });
-    expect(screen.getByRole("option", { name: "health" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "2026-09" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Filter by tag" }));
+    expect(screen.getByRole("button", { name: "health" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Filter by month" }));
+    expect(screen.getByRole("button", { name: "2026-09" })).toBeInTheDocument();
   });
 
   it("clears filters on Escape in the search box and blurs", () => {

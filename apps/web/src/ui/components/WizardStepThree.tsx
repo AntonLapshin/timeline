@@ -2,6 +2,8 @@ import type { EventDraft } from "../../core/eventWizard";
 import { REMINDER_OFFSET_PRESETS } from "../../core/eventWizard";
 import type { EventChannel, EventPriority } from "../../core/eventTypes";
 import { EVENT_PRIORITIES, EVENT_CHANNELS } from "../../core/eventTypes";
+import { Checkbox } from "./Checkbox";
+import { SEGMENT_ACTIVE_CLASSES } from "./SegmentedControl";
 
 /** Props for the Priority & Reminders step. */
 export interface WizardStepThreeProps {
@@ -63,7 +65,7 @@ export function WizardStepThree({
                 key={priority}
                 className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm leading-none transition-colors ${
                   selected
-                    ? "border-indigo-500 bg-gradient-to-b from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-600/25 dark:border-indigo-400 dark:from-indigo-500 dark:to-indigo-600"
+                    ? `${SEGMENT_ACTIVE_CLASSES} shadow-md shadow-indigo-600/25`
                     : "border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                 }`}
               >
@@ -92,20 +94,15 @@ export function WizardStepThree({
         </legend>
         <div className="mt-2 flex gap-3">
           {EVENT_CHANNELS.map((channel) => (
-            <label
+            <Checkbox
               key={channel}
-              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm leading-none text-slate-700 transition-colors hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              <input
-                type="checkbox"
-                checked={draft.channels.includes(channel)}
-                onChange={() =>
-                  onChange({ channels: toggleValue(draft.channels, channel) })
-                }
-                className="h-4 w-4 rounded accent-indigo-600 dark:accent-indigo-400"
-              />
-              {CHANNEL_LABELS[channel]}
-            </label>
+              label={CHANNEL_LABELS[channel]}
+              checked={draft.channels.includes(channel)}
+              onChange={() =>
+                onChange({ channels: toggleValue(draft.channels, channel) })
+              }
+              className="rounded-lg px-2 py-1 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+            />
           ))}
         </div>
       </fieldset>
@@ -126,8 +123,7 @@ export function WizardStepThree({
                     : "border-slate-300 bg-white text-slate-600 hover:border-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-500"
                 }`}
               >
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selected}
                   onChange={() =>
                     onChange({
@@ -137,7 +133,6 @@ export function WizardStepThree({
                       ),
                     })
                   }
-                  className="h-4 w-4 rounded accent-indigo-600 dark:accent-indigo-400"
                 />
                 {offset}
               </label>

@@ -198,12 +198,12 @@ describe("App", () => {
     expect(screen.getByTestId("event-wizard")).toBeInTheDocument();
   });
 
-  it("opens the create wizard via the + New header action", () => {
+  it("opens the create wizard via the New header action", () => {
     const openCreate = vi.fn();
     useEventWizardMock.mockReturnValue(wizardState({ openCreate, open: false }));
     render(<App />);
 
-    fireEvent.click(screen.getByRole("button", { name: "+ New" }));
+    fireEvent.click(screen.getByRole("button", { name: "New" }));
     expect(openCreate).toHaveBeenCalledTimes(1);
   });
 

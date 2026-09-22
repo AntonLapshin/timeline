@@ -9,6 +9,7 @@ import { SearchFilterBar } from "./ui/components/SearchFilterBar";
 import { SmartInputBox } from "./ui/components/SmartInputBox";
 import { ThemeToggle } from "./ui/components/ThemeToggle";
 import { useServices } from "./ui/services/useServices";
+import { PlusIcon } from "@heroicons/react/24/outline";
 import { useEventWizard } from "./ui/viewModels/useEventWizard";
 import { useEventDrawer } from "./ui/viewModels/useEventDrawer";
 import { useSearchFilter } from "./ui/viewModels/useSearchFilter";
@@ -127,7 +128,7 @@ export default function App() {
             onClick={wizard.openCreate}
             className="btn-primary px-3 py-1.5"
           >
-            + New
+            <PlusIcon aria-hidden className="h-4 w-4" /> New
           </button>
         }
       >

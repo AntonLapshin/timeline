@@ -4,6 +4,8 @@ import { EVENT_CHANNELS } from "../../core/eventTypes";
 import { tagStyle } from "../../core/timeline";
 import { formatRecurrence } from "../../core/recurrenceFormat";
 import { PriorityDot } from "./PriorityDot";
+import { Button } from "./Button";
+import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 /** Human labels for each reminder channel. */
 const CHANNEL_LABELS: Record<string, string> = {
@@ -103,7 +105,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
             </h2>
             {badge.known && (
               <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
-                ↻ {badge.label}
+                <ArrowPathIcon aria-hidden className="h-3 w-3" /> {badge.label}
               </span>
             )}
           </div>
@@ -115,14 +117,14 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
             </span>
           )}
         </div>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          square
           onClick={drawer.close}
           aria-label="Close event drawer"
-          className="btn-ghost px-2 py-1 text-sm leading-none"
         >
-          ✕
-        </button>
+          <XMarkIcon aria-hidden className="h-4 w-4" />
+        </Button>
       </div>
 
       {event.description && (

@@ -1,4 +1,5 @@
 import type { EventDraft, DraftErrors } from "../../core/eventWizard";
+import { Checkbox } from "./Checkbox";
 
 /** Props for the What/When step. */
 export interface WizardStepOneProps {
@@ -54,16 +55,12 @@ export function WizardStepOne({
       </div>
 
       <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
+        <Checkbox
           id="wizard-all-day"
+          label="All day"
           checked={draft.allDay}
-          onChange={(e) => onChange({ allDay: e.target.checked })}
-          className="h-4 w-4 rounded accent-indigo-600 dark:accent-indigo-400"
+          onChange={(checked) => onChange({ allDay: checked })}
         />
-        <label htmlFor="wizard-all-day" className="text-sm text-slate-700 dark:text-slate-300">
-          All day
-        </label>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

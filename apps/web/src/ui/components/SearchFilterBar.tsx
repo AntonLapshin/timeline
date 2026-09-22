@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type { EventFilter } from "../../core/searchFilter";
 import type { EventPriority } from "../../core/eventTypes";
+import { Dropdown } from "./Dropdown";
 
 /** The filterable priority options in display order. */
 const PRIORITY_OPTIONS: Array<{ value: EventPriority; label: string }> = [
@@ -31,14 +32,11 @@ export interface SearchFilterBarProps {
   onClear: () => void;
 }
 
-const SELECT_CLASSES =
-  "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 shadow-sm transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30";
-
 /**
  * The app-wide search/filter bar (issue #46).
  *
  * A thin, dumb component: it renders the text search box plus priority/tag/month
- * filter selects and a clear button, and forwards user input to the callback
+ * filter dropdowns and a clear button, and forwards user input to the callback
  * props. Esc in the text box clears the filters and blurs. No business logic —
  * all matching/filtering lives in `src/core`.
  */
@@ -72,56 +70,32 @@ export function SearchFilterBar({
         aria-label="Search events"
         className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 sm:w-56"
       />
-      <select
-        value={filter.priority ?? ""}
-        onChange={(e) =>
-          onPriorityChange(
-            e.target.value === "" ? null : (e.target.value as EventPriority),
-          )
-        }
-        aria-label="Filter by priority"
-        className={SELECT_CLASSES}
-      >
-        <option value="">Priority</option>
-        {PRIORITY_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-      <select
-        value={filter.tag ?? ""}
-        onChange={(e) => onTagChange(e.target.value === "" ? null : e.target.value)}
-        aria-label="Filter by tag"
-        className={SELECT_CLASSES}
-      >
-        <option value="">Tag</option>
-        {tags.map((tag) => (
-          <option key={tag} value={tag}>
-            {tag}
-          </option>
-        ))}
-      </select>
-      <select
-        value={filter.month ?? ""}
-        onChange={(e) =>
-          onMonthChange(e.target.value === "" ? null : e.target.value)
-        }
-        aria-label="Filter by month"
-        className={SELECT_CLASSES}
-      >
-        <option value="">Month</option>
-        {months.map((month) => (
-          <option key={month} value={month}>
-            {month}
-          </option>
-        ))}
-      </select>
+      <Dropdown
+        label="Filter by priority"
+        placeholder="Priority"
+        value={filter.priority}
+        options={PRIORITY_OPTIONS}
+        onChange={(v) => onPriorityChange(v === null ? null : (v as EventPriority))}
+      />
+      <Dropdown
+        label="Filter by tag"
+        placeholder="Tag"
+        value={filter.tag}
+        options={tags.map((tag) => ({ value: tag, label: tag }))}
+        onChange={onTagChange}
+      />
+      <Dropdown
+        label="Filter by month"
+        placeholder="Month"
+        value={filter.month}
+        options={months.map((month) => ({ value: month, label: month }))}
+        onChange={onMonthChange}
+      />
       {hasOptions && (
         <button
           type="button"
           onClick={onClear}
-          className="btn-ghost px-2 py-1.5"
+          className="btn-ghost min-h-8 px-2 py-1.5"
         >
           Clear
         </button>

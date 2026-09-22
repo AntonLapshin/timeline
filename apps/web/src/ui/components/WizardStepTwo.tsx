@@ -3,6 +3,7 @@ import {
   RECURRENCE_CHOICES,
   type RecurrenceChoice,
 } from "../../core/eventWizard";
+import { SEGMENT_ACTIVE_CLASSES } from "./SegmentedControl";
 
 /** Props for the Recurrence step. */
 export interface WizardStepTwoProps {
@@ -52,7 +53,7 @@ export function WizardStepTwo({
                 key={choice}
                 className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm leading-none transition-colors ${
                   selected
-                    ? "border-indigo-500 bg-gradient-to-b from-indigo-500 to-indigo-700 text-white shadow-md shadow-indigo-600/25 dark:border-indigo-400 dark:from-indigo-500 dark:to-indigo-600"
+                    ? `${SEGMENT_ACTIVE_CLASSES} shadow-md shadow-indigo-600/25`
                     : "border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
                 }`}
               >

@@ -10,6 +10,14 @@ import {
 import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventOccurrence } from "../../core/eventTypes";
 import { PriorityDot } from "./PriorityDot";
+import { SegmentedControl } from "./SegmentedControl";
+import { Button } from "./Button";
+import {
+  ArrowPathIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
 /** Weekday column headers (Sunday-first, matching the grid). */
 const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -98,7 +106,7 @@ export function OccurrenceRowView({
                 </span>
                 {row.recurrenceBadge && (
                   <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
-                    ↻ {row.recurrenceBadge}
+                    <ArrowPathIcon aria-hidden className="h-3 w-3" /> {row.recurrenceBadge}
                   </span>
                 )}
               </div>
@@ -214,7 +222,7 @@ export function AgendaRowView({
           </span>
           {row.recurrenceBadge && (
             <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
-              ↻ {row.recurrenceBadge}
+              <ArrowPathIcon aria-hidden className="h-3 w-3" /> {row.recurrenceBadge}
             </span>
           )}
         </div>
@@ -315,42 +323,32 @@ export function CalendarView({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 rounded-lg border border-slate-200/70 bg-slate-100/70 p-1 print-hidden dark:border-slate-700/70 dark:bg-slate-800/70">
-        {MODES.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            aria-pressed={mode === tab.id}
-            onClick={() => setMode(tab.id)}
-            className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium leading-none transition-colors ${
-              mode === tab.id
-                ? "bg-white text-slate-900 shadow-md dark:bg-slate-900 dark:text-slate-100 dark:shadow-black/40"
-                : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl<CalendarMode>
+        label="Calendar mode"
+        value={mode}
+        onChange={setMode}
+        options={MODES}
+        className="print-hidden"
+      />
 
       <div className="flex items-center justify-between print-hidden">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          square
           onClick={navigation.prev}
           aria-label="Previous"
-          className="btn-ghost px-3 py-1.5"
         >
-          ←
-        </button>
+          <ChevronLeftIcon aria-hidden className="h-4 w-4" />
+        </Button>
         <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{navigation.title}</h2>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          square
           onClick={navigation.next}
           aria-label="Next"
-          className="btn-ghost px-3 py-1.5"
         >
-          →
-        </button>
+          <ChevronRightIcon aria-hidden className="h-4 w-4" />
+        </Button>
       </div>
 
       {error && (
@@ -443,14 +441,14 @@ export function CalendarView({
             <h3 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
               {selectedDay.isoDate}
             </h3>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              square
               onClick={closeDrawer}
               aria-label="Close"
-              className="btn-ghost px-2 py-1 text-sm leading-none"
             >
-              ✕
-            </button>
+              <XMarkIcon aria-hidden className="h-4 w-4" />
+            </Button>
           </div>
           {selectedDay.count === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">No events this day.</p>

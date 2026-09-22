@@ -3,6 +3,7 @@ import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
 import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventRead } from "../../core/eventTypes";
 import { PriorityDot } from "./PriorityDot";
+import { ArrowPathIcon } from "@heroicons/react/24/outline";
 
 /**
  * A single event row in the timeline.
@@ -34,7 +35,7 @@ export function EventRowView({
           </span>
           {row.recurrenceBadge && (
             <span className="chip shrink-0 border-violet-200 bg-violet-50/80 text-violet-700 dark:border-violet-400/20 dark:bg-violet-400/10 dark:text-violet-300">
-              ↻ {row.recurrenceBadge}
+              <ArrowPathIcon aria-hidden className="h-3 w-3" /> {row.recurrenceBadge}
             </span>
           )}
         </div>

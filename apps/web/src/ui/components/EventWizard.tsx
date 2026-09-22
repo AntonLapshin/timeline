@@ -2,6 +2,8 @@ import type { EventWizardState } from "../viewModels/useEventWizard";
 import { WizardStepOne } from "./WizardStepOne";
 import { WizardStepTwo } from "./WizardStepTwo";
 import { WizardStepThree } from "./WizardStepThree";
+import { Button } from "./Button";
+import { CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 /** Step titles shown at the top of the wizard. */
 const STEP_TITLES = ["What/When", "Recurrence", "Priority & Reminders"];
@@ -48,14 +50,14 @@ export function EventWizard({ wizard }: EventWizardProps) {
           <h2 className="bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-lg font-semibold tracking-tight text-transparent dark:from-slate-100 dark:to-slate-400">
             {editingEvent ? "Edit event" : "New event"}
           </h2>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            square
             onClick={close}
             aria-label="Close wizard"
-            className="btn-ghost px-2 py-1 text-sm leading-none"
           >
-            ✕
-          </button>
+            <XMarkIcon aria-hidden className="h-4 w-4" />
+          </Button>
         </div>
 
         <ol className="mb-5 flex flex-wrap items-center gap-2 text-xs font-medium leading-4">
@@ -74,7 +76,7 @@ export function EventWizard({ wizard }: EventWizardProps) {
                         : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
                   }`}
                 >
-                  {done ? "✓" : stepNum}
+                  {done ? <CheckIcon aria-hidden className="h-3 w-3" strokeWidth={3} /> : stepNum}
                 </span>
                 <span
                   className={active ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}
