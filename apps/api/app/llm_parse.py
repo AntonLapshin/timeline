@@ -11,8 +11,8 @@ client (no real network):
   into validated ``ParsedDraft``(s) or a ``needs_clarification`` request.
 - ``parse_events`` — orchestrator that returns ``unavailable`` when the LLM key
   is absent, otherwise POSTs via the injected HTTP client and validates, with
-  up to 5 attempts (exponential backoff) on transport failures and retryable
-  statuses. Every failure path is logged server-side (``logger.error`` with
+  up to 10 attempts (capped exponential backoff) on transport failures and
+  retryable statuses. Every failure path is logged server-side (``logger.error`` with
   the underlying error/status, issue #113) — never the raw text (only a
   redacted reference) and never any secret.
 
@@ -42,10 +42,10 @@ logger = logging.getLogger(__name__)
 #: The OpenAI-compatible chat completions path appended to the base URL.
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
 
-#: Maximum POST attempts per parse call (1 initial try + up to 4 retries).
+#: Maximum POST attempts per parse call (1 initial try + up to 9 retries).
 #: The JoinGonka gateway is known to be flaky (slow reads, transient 5xx),
 #: so transport failures and retryable statuses are retried with backoff.
-_MAX_ATTEMPTS = 5
+_MAX_ATTEMPTS = 10
 
 #: HTTP statuses worth retrying: rate-limit / transient gateway failures.
 #: Other 4xx (401 bad key, 403, 404 bad model, 405, …) fail immediately —
@@ -53,9 +53,15 @@ _MAX_ATTEMPTS = 5
 _RETRYABLE_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
 
 #: Base delay (seconds) for exponential backoff between attempts: the wait
-#: after failed attempt N is ``_RETRY_BASE_DELAY_SEC * 2**(N-1)``
-#: (1s, 2s, 4s, 8s for the default 5 attempts).
+#: after failed attempt N is ``min(_RETRY_BASE_DELAY_SEC * 2**(N-1),
+#: _RETRY_MAX_DELAY_SEC)``
+#: (1s, 2s, 4s, 8s, 16s, 30s, 30s, 30s, 30s for the default 10 attempts).
 _RETRY_BASE_DELAY_SEC = 1.0
+
+#: Cap (seconds) for the exponential backoff so late retries (attempts 6-10)
+#: wait a flat 30s instead of exploding (32s, 64s, …). Keeps the worst case
+#: bounded: 9 sleeps total ~141s on top of the per-attempt HTTP timeout.
+_RETRY_MAX_DELAY_SEC = 30.0
 
 #: System prompt describing the extraction task and output schema.
 _SYSTEM_PROMPT = (
@@ -210,8 +216,11 @@ class ParseOutcome:
 
 
 def _retry_delay_sec(failed_attempt: int) -> float:
-    """Exponential-backoff delay after failed attempt N (1-based)."""
-    return _RETRY_BASE_DELAY_SEC * (2.0 ** (failed_attempt - 1))
+    """Capped exponential-backoff delay after failed attempt N (1-based)."""
+    return min(
+        _RETRY_BASE_DELAY_SEC * (2.0 ** (failed_attempt - 1)),
+        _RETRY_MAX_DELAY_SEC,
+    )
 
 
 def _is_retryable_status(status_code: Any) -> bool:
@@ -586,7 +595,8 @@ def parse_events(
 
     The gateway is flaky, so transport failures (timeouts, connection errors)
     and retryable statuses (429 / transient 5xx) are retried up to
-    ``max_attempts`` times with exponential backoff (1s, 2s, 4s, 8s). Other
+    ``max_attempts`` times with capped exponential backoff
+    (1s, 2s, 4s, 8s, 16s, 30s, 30s, 30s, 30s for the default 10 attempts). Other
     4xx statuses (bad key/model) fail immediately. Every failure is logged
     server-side (``logger.error`` with the underlying error/status — never
     the raw text, prompt, or any secret) so the owner can diagnose bad

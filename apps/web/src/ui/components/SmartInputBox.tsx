@@ -16,7 +16,7 @@ export interface SmartInputBoxProps {
  * forwards the text to the view-model state, and shows an inline error when a
  * parse fails or is unavailable. While a parse is in flight the input is
  * disabled, the button shows a spinner, and a live status line sets
- * expectations (the API retries a flaky provider up to 5 times, so a slow
+ * expectations (the API retries a flaky provider up to 10 times, so a slow
  * gateway can take a while). All parsing/guarding logic lives in
  * `src/core`; the view model performs the parse I/O and opens the wizard.
  */
@@ -87,7 +87,7 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
           className="mt-1 text-xs text-slate-500 dark:text-slate-400"
         >
           Contacting the AI — this can take a while when the provider is slow.
-          Retrying automatically (up to 5 attempts); you can wait or add the
+          Retrying automatically (up to 10 attempts); you can wait or add the
           event manually.
         </p>
       )}

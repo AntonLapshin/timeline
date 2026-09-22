@@ -528,27 +528,27 @@ def test_parse_does_not_retry_auth_errors() -> None:
     assert sleeps == []
 
 
-def test_parse_gives_up_after_five_attempts() -> None:
-    """A persistently failing gateway is tried 5 times, then reported."""
+def test_parse_gives_up_after_ten_attempts() -> None:
+    """A persistently failing gateway is tried 10 times, then reported."""
     sleeps: list[float] = []
-    client = _SequenceClient([RuntimeError("The read operation timed out")] * 5)
+    client = _SequenceClient([RuntimeError("The read operation timed out")] * 10)
     result = parse_events("x", NOW, TZ, _settings(), client, sleep=sleeps.append)
     assert result.ok is False
     assert "timed out" in result.error
-    assert "after 5 attempts" in result.error
-    assert client.posts == 5
-    assert sleeps == [1.0, 2.0, 4.0, 8.0]
+    assert "after 10 attempts" in result.error
+    assert client.posts == 10
+    assert sleeps == [1.0, 2.0, 4.0, 8.0, 16.0, 30.0, 30.0, 30.0, 30.0]
 
 
-def test_parse_gives_up_after_five_attempts_on_5xx() -> None:
-    """A persistently 503 gateway is tried 5 times, then reported."""
+def test_parse_gives_up_after_ten_attempts_on_5xx() -> None:
+    """A persistently 503 gateway is tried 10 times, then reported."""
     sleeps: list[float] = []
-    client = _SequenceClient([_FakeResponse(503, {})] * 5)
+    client = _SequenceClient([_FakeResponse(503, {})] * 10)
     result = parse_events("x", NOW, TZ, _settings(), client, sleep=sleeps.append)
     assert result.ok is False
     assert "HTTP 503" in result.error
-    assert "after 5 attempts" in result.error
-    assert client.posts == 5
+    assert "after 10 attempts" in result.error
+    assert client.posts == 10
 
 
 # --- Priority / critical-financial guard (web-side contract parity) ---------

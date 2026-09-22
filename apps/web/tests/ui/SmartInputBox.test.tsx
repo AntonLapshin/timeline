@@ -66,7 +66,7 @@ describe("SmartInputBox", () => {
     render(<SmartInputBox smartInput={state({ parsing: true, text: "x" })} />);
     expect(screen.getByLabelText("Add event")).toBeDisabled();
     const status = screen.getByRole("status");
-    expect(status).toHaveTextContent(/Retrying automatically \(up to 5 attempts\)/);
+    expect(status).toHaveTextContent(/Retrying automatically \(up to 10 attempts\)/);
   });
 
   it("shows no status when idle", () => {
