@@ -66,7 +66,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import crud
 from .config import Settings
 from .enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
-from .llm_parse import ParsedDraft, parse_events
+from .llm_parse import (
+    ParsedDraft,
+    extract_reminder_offsets_from_text,
+    normalize_reminder_offset,
+    parse_events,
+)
 from .models import Event, TelegramInbound
 from .recurrence import Occurrence, next_occurrences
 from .redaction import redact_text
@@ -535,7 +540,7 @@ def format_draft_card(draft: ParsedDraft) -> str:
     """Render a parsed draft as a readable Telegram draft card (pure).
 
     Shows the title plus any fields the model was confident about (start time,
-    all-day, recurrence, priority, channels, tags).
+    all-day, recurrence, priority, channels, reminder offsets, tags).
     """
     lines = [f"📝 {draft.title}"]
     if draft.start_at:
@@ -548,6 +553,8 @@ def format_draft_card(draft: ParsedDraft) -> str:
         lines.append(f"  Priority: {draft.priority}")
     if draft.channels:
         lines.append(f"  Channels: {', '.join(draft.channels)}")
+    if draft.reminder_offsets:
+        lines.append(f"  Reminders: {', '.join(draft.reminder_offsets)} before")
     if draft.tags:
         lines.append(f"  Tags: {', '.join(draft.tags)}")
     return "\n".join(lines)
@@ -589,13 +596,38 @@ def parse_draft_callback(callback_data: str | None) -> DraftAction | None:
     return DraftAction(action=action, index=index)
 
 
-def draft_to_event_create(draft: ParsedDraft, raw_input: str) -> EventCreate:
+def draft_reminder_offsets(draft: ParsedDraft, raw_input: str) -> list[str]:
+    """Resolve the reminder offsets for a confirmed draft (pure).
+
+    Prefers the model's normalized ``reminder_offsets``; when the model gave
+    none (or only invalid ones), falls back to explicit lead-time phrases in
+    the raw text (*"15 minutes in advance"* → ``["15m"]``) so a spoken reminder
+    request is never silently dropped. Returns ``[]`` when neither source names
+    a lead time.
+    """
+    usable = [
+        n
+        for n in (normalize_reminder_offset(o) for o in draft.reminder_offsets or [])
+        if n is not None
+    ]
+    if usable:
+        return usable
+    return extract_reminder_offsets_from_text(raw_input)
+
+
+def draft_to_event_create(
+    draft: ParsedDraft, raw_input: str, *, default_tz: str = "UTC"
+) -> EventCreate:
     """Map a confirmed draft onto an ``EventCreate`` payload (pure).
 
-    The draft is persisted with ``source=telegram_text`` and ``status=draft`` —
-    it stays a draft until the web app activates it; nothing is auto-activated.
-    Missing optional fields fall back to sensible defaults (one-time, medium
-    priority, telegram channel, UTC).
+    The draft is persisted with ``source=telegram_text`` and
+    ``status=active`` — tapping **Save** in Telegram is the confirmation, so
+    the event immediately appears in the timeline, calendar, agenda and summary
+    (like a web-saved event) and its reminder jobs are scheduled. Missing
+    optional fields fall back to sensible defaults (one-time, medium priority,
+    telegram channel, the caller's ``default_tz`` — normally ``settings.tz``).
+    Reminder offsets come from the model when present, else from explicit
+    lead-time phrases in the raw text (``draft_reminder_offsets``).
     """
     return EventCreate(
         title=draft.title,
@@ -603,7 +635,7 @@ def draft_to_event_create(draft: ParsedDraft, raw_input: str) -> EventCreate:
         if draft.start_at
         else datetime.now(UTC),
         type=EventType(draft.type) if draft.type else EventType.ONE_TIME,
-        tz=draft.tz or "UTC",
+        tz=draft.tz or default_tz,
         all_day=bool(draft.all_day),
         rrule=draft.rrule,
         priority=EventPriority(draft.priority)
@@ -614,9 +646,10 @@ def draft_to_event_create(draft: ParsedDraft, raw_input: str) -> EventCreate:
             if draft.channels
             else [EventChannel.TELEGRAM]
         ),
+        reminder_offsets=draft_reminder_offsets(draft, raw_input),
         tags=list(draft.tags or []),
         source=EventSource.TELEGRAM_TEXT,
-        status=EventStatus.DRAFT,
+        status=EventStatus.ACTIVE,
         raw_input=raw_input,
     )
 
@@ -939,6 +972,7 @@ def _handle_callback_query(
             draft_store,
             scheduler=scheduler,
             job_func=job_func,
+            default_tz=settings.tz,
         )
     if action.action == "edit":
         logger.info("Draft callback edit re-prompt user=%s chat=%s.", user_id, chat_id)
@@ -961,12 +995,13 @@ def _save_draft(
     *,
     scheduler: Any | None = None,
     job_func: Callable[..., object] | None = None,
+    default_tz: str = "UTC",
 ) -> BotReply:
-    """Persist a confirmed draft as a real event and clear the pending draft."""
+    """Persist a confirmed draft as a real (active) event; clear the pending."""
     if session_factory is None:
         logger.warning("Draft save with no database chat=%s.", chat_id)
         return BotReply("Can't save right now (no database).")
-    payload = draft_to_event_create(draft, pending.raw_input)
+    payload = draft_to_event_create(draft, pending.raw_input, default_tz=default_tz)
     with session_factory() as session:
         event = crud.create_event(
             session, payload, scheduler=scheduler, job_func=job_func
@@ -1142,7 +1177,11 @@ async def _handle_voice_update(
     )
     chat = getattr(message, "chat", None)
     chat_id = getattr(chat, "id", None)
-    reply = _handle_add_flow(
+    # Off the event loop: the LLM parse is blocking (sync httpx + retry
+    # sleeps) and this loop also serves the web API — parsing inline froze
+    # the whole API for the duration of the parse.
+    reply = await asyncio.to_thread(
+        _handle_add_flow,
         result.text,
         settings,
         now=now,
@@ -1210,7 +1249,12 @@ def build_telegram_inbound_application(
             if sender is not None:
                 with contextlib.suppress(Exception):
                     await sender(pending_add_reply())
-        reply = _handle_update(
+        # Off the event loop: _handle_update runs the blocking LLM parse
+        # (sync httpx + retry sleeps) and blocking DB I/O; this loop also
+        # serves the FastAPI web endpoints, and parsing inline froze the
+        # whole API (no data fetching) until the parse finished.
+        reply = await asyncio.to_thread(
+            _handle_update,
             update,
             settings,
             session_factory,
@@ -1251,7 +1295,10 @@ def build_telegram_inbound_application(
         query = getattr(update, "callback_query", None)
         if query is None:
             return
-        reply = _handle_callback_query(
+        # Off the event loop like the other handlers: the save path does
+        # blocking DB commits + scheduler work on the shared loop.
+        reply = await asyncio.to_thread(
+            _handle_callback_query,
             query,
             settings,
             session_factory,

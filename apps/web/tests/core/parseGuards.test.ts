@@ -118,3 +118,14 @@ describe("parseGuards core module", () => {
     });
   });
 });
+
+describe("validateDraft reminder offsets", () => {
+  it("accepts valid offsets and rejects invalid ones", async () => {
+    const mod = await import("../../src/core/parseGuards");
+    expect(
+      mod.validateDraft({ title: "A", reminder_offsets: ["15m", "1h"] }).ok,
+    ).toBe(true);
+    const bad = mod.validateDraft({ title: "A", reminder_offsets: ["soon"] });
+    expect(bad.ok).toBe(false);
+  });
+});

@@ -363,3 +363,23 @@ describe("parsedToWizardDraft", () => {
     }
   });
 });
+
+describe("draftFromParsed reminder offsets", () => {
+  it("carries valid parsed offsets into the wizard pre-fill", () => {
+    const draft = draftFromParsed({
+      title: "Interview",
+      start_at: "2026-09-22T14:46:00",
+      tz: "America/New_York",
+      reminder_offsets: ["15m"],
+    });
+    expect(draft.reminderOffsets).toEqual(["15m"]);
+  });
+
+  it("drops invalid offsets instead of pre-filling them", () => {
+    const draft = draftFromParsed({
+      title: "Interview",
+      reminder_offsets: ["soon", "15m"],
+    });
+    expect(draft.reminderOffsets).toEqual(["15m"]);
+  });
+});

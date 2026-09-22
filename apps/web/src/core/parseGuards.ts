@@ -24,6 +24,7 @@ export interface ParsedDraft {
   tz?: string;
   rrule?: string | null;
   channels?: EventChannel[];
+  reminder_offsets?: string[];
   tags?: string[];
 }
 
@@ -80,6 +81,7 @@ function isPlausibleDate(value: string | undefined): boolean {
  * - start_at, when present, must look like a date.
  * - priority, when present, must be a known priority.
  * - channels, when present, must be known channels.
+ * - reminder_offsets, when present, must be valid offsets (e.g. "15m").
  */
 export function validateDraft(draft: ParsedDraft): GuardResult {
   const errors: string[] = [];
@@ -100,6 +102,17 @@ export function validateDraft(draft: ParsedDraft): GuardResult {
     for (const channel of draft.channels) {
       if (!["telegram", "email"].includes(channel)) {
         errors.push(`unknown channel: ${channel}`);
+      }
+    }
+  }
+  if (draft.reminder_offsets !== undefined) {
+    if (!Array.isArray(draft.reminder_offsets)) {
+      errors.push("reminder_offsets must be an array");
+    } else {
+      for (const offset of draft.reminder_offsets) {
+        if (typeof offset !== "string" || !/^\d+[dhmw]$/.test(offset)) {
+          errors.push(`invalid reminder offset: ${offset}`);
+        }
       }
     }
   }

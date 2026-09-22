@@ -394,7 +394,7 @@ def test_parse_draft_callback_invalid() -> None:
 
 
 def test_draft_to_event_create_maps_fields() -> None:
-    """A confirmed draft maps onto a draft-status telegram_text EventCreate."""
+    """A confirmed draft maps onto an active telegram_text EventCreate."""
     payload = draft_to_event_create(_draft(), "dentist tomorrow 9am")
     assert payload.title == "Dentist"
     assert payload.start_at.isoformat() == "2026-01-02T09:00:00+00:00"
@@ -402,7 +402,7 @@ def test_draft_to_event_create_maps_fields() -> None:
     assert payload.priority == EventPriority.MEDIUM
     assert payload.channels == [EventChannel.TELEGRAM]
     assert payload.source == EventSource.TELEGRAM_TEXT
-    assert payload.status == EventStatus.DRAFT
+    assert payload.status == EventStatus.ACTIVE
     assert payload.raw_input == "dentist tomorrow 9am"
 
 
@@ -1084,7 +1084,7 @@ def test_handle_callback_query_save_persists_event(
     with session_factory() as session:
         event = session.query(Event).one()
         assert event.title == "Dentist"
-        assert event.status == EventStatus.DRAFT
+        assert event.status == EventStatus.ACTIVE
         assert event.source == EventSource.TELEGRAM_TEXT
         assert event.raw_input == "dentist tomorrow 9am"
 
@@ -1670,13 +1670,14 @@ def test_save_draft_passes_scheduler_to_crud(
             scheduler.shutdown(wait=False)
 
 
-def test_save_draft_schedules_nothing_for_draft_status(
+def test_save_draft_schedules_nothing_without_offsets(
     session_factory: sessionmaker[Session],
 ) -> None:
-    """Saved drafts stay status=draft, so no reminder jobs are scheduled.
+    """A saved event without reminder offsets schedules no jobs.
 
-    The event only gets reminder jobs once it is activated (e.g. via the web
-    PATCH), which the CRUD update path handles (issue #134).
+    Saved Telegram events are active (visible in calendar/agenda/summary), but
+    with no offsets the plan is empty — jobs appear once offsets exist (the
+    CRUD create/update path handles it, issue #134).
     """
     from app.scheduler import build_scheduler, event_job_keys
 
@@ -1699,8 +1700,8 @@ def test_save_draft_schedules_nothing_for_draft_status(
         assert "✅ Saved: Dentist" in reply.text
         with session_factory() as session:
             event = session.query(Event).one()
-        # Drafts are not active, so nothing is scheduled until activation.
-        assert event.status == EventStatus.DRAFT
+        # No offsets on this draft, so the (active) event schedules nothing.
+        assert event.status == EventStatus.ACTIVE
         assert event_job_keys(scheduler, event.id) == {}
     finally:
         with contextlib.suppress(Exception):
@@ -1784,3 +1785,51 @@ def test_build_telegram_inbound_application_scheduler_default_job_func(
     finally:
         with contextlib.suppress(Exception):
             scheduler.shutdown(wait=False)
+
+
+def test_draft_reminder_offsets_prefers_model_value() -> None:
+    """Model offsets (normalized) win over the raw-text fallback."""
+    from app.telegram_inbound import draft_reminder_offsets
+
+    assert draft_reminder_offsets(_draft(reminder_offsets=["1 hour"]), "x") == ["1h"]
+    assert draft_reminder_offsets(
+        _draft(reminder_offsets=["15m"]),
+        "notify me 1 hour in advance",
+    ) == ["15m"]
+
+
+def test_draft_reminder_offsets_falls_back_to_text() -> None:
+    """Without model offsets, an explicit phrase still yields a reminder."""
+    from app.telegram_inbound import draft_reminder_offsets
+
+    assert draft_reminder_offsets(
+        _draft(),
+        "I have an interview in half an hour, notify me via telegram "
+        "channel 15 minutes in advance",
+    ) == ["15m"]
+    assert draft_reminder_offsets(_draft(), "dentist tomorrow 9am") == []
+
+
+def test_draft_to_event_create_maps_reminders_and_tz() -> None:
+    """Save persists reminder offsets and the caller's default tz."""
+    payload = draft_to_event_create(
+        _draft(),
+        "interview, notify me 15 minutes in advance",
+        default_tz="America/New_York",
+    )
+    assert payload.reminder_offsets == ["15m"]
+    # The draft fixture carries tz=UTC, which wins over the default.
+    assert payload.tz == "UTC"
+    payload = draft_to_event_create(
+        _draft(tz=None),
+        "dentist tomorrow 9am",
+        default_tz="America/New_York",
+    )
+    assert payload.tz == "America/New_York"
+    assert payload.reminder_offsets == []
+
+
+def test_format_draft_card_shows_reminders() -> None:
+    """The draft card surfaces the reminder so the owner can verify it."""
+    card = format_draft_card(_draft(reminder_offsets=["15m"]))
+    assert "15m" in card

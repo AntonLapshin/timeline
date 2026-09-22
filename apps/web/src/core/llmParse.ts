@@ -218,6 +218,14 @@ export function draftFromParsed(
       ? datePartsInTimezone(start, parsed.tz)
       : null;
   const pad = (n: number) => String(n).padStart(2, "0");
+  // Carry valid reminder offsets into the wizard pre-fill so a parsed
+  // "notify me 15 minutes in advance" request keeps its reminder instead of
+  // silently becoming "No reminders configured".
+  const reminderOffsets = Array.isArray(parsed.reminder_offsets)
+    ? parsed.reminder_offsets.filter(
+        (o): o is string => typeof o === "string" && /^\d+[dhmw]$/.test(o),
+      )
+    : [];
   return {
     title: parsed.title ?? "",
     notes: "",
@@ -242,7 +250,7 @@ export function draftFromParsed(
     customRrule: parsed.rrule ?? "",
     priority,
     channels: parsed.channels?.length ? parsed.channels : ["telegram"],
-    reminderOffsets: [],
+    reminderOffsets,
   };
 }
 

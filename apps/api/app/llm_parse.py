@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -68,10 +69,13 @@ _SYSTEM_PROMPT = (
     'offset, required), "all_day" (bool, default false), "tz" (IANA timezone, '
     'default the supplied tz), "rrule" (RFC 5545 recurrence rule or null for '
     'one-time), "priority" ("critical"|"medium"|"low"), "type" '
-    '("one_time"|"recurrent"), "channels" (array of "telegram"|"email"), and '
-    '"tags" (array of strings). Only include fields you are confident about; '
-    "omit uncertain optional fields. Never invent a critical financial event "
-    "without a clear signal.\n"
+    '("one_time"|"recurrent"), "channels" (array of "telegram"|"email"), '
+    '"reminder_offsets" (array of reminder offsets like "15m", "1h", "1d" — '
+    'extract from phrases like "remind me 15 minutes before", "notify me '
+    '1 hour in advance", "1 day before"; omit when the text asks for no '
+    'reminder), and "tags" (array of strings). Only include fields you are '
+    "confident about; omit uncertain optional fields. Never invent a critical "
+    "financial event without a clear signal.\n"
 )
 
 
@@ -152,6 +156,7 @@ class ParsedDraft(BaseModel):
     tz: str | None = None
     rrule: str | None = None
     channels: list[str] | None = None
+    reminder_offsets: list[str] | None = None
     tags: list[str] | None = None
 
 
@@ -200,6 +205,77 @@ def _strip_code_fences(content: str) -> str:
             lines = lines[:-1]
         text = "\n".join(lines).strip()
     return text
+
+
+#: Matches an explicit lead-time phrase like "15 minutes before", "1 hour in
+#: advance", "notify me 2h before", "remind me 1 day ahead" (pure fallback so a
+#: "notify me 15 minutes in advance" voice request keeps its reminder even when
+#: the model omits ``reminder_offsets``).
+_REMINDER_PHRASE_RE = re.compile(
+    r"(\d+)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)"
+    r"\s*(?:in\s+advance|before|ahead|early|prior)",
+    re.IGNORECASE,
+)
+
+#: Normalizes a time-unit word to the shared-schema offset suffix.
+_REMINDER_UNIT_SUFFIX = {
+    "m": "m",
+    "min": "m",
+    "mins": "m",
+    "minute": "m",
+    "minutes": "m",
+    "h": "h",
+    "hr": "h",
+    "hrs": "h",
+    "hour": "h",
+    "hours": "h",
+    "d": "d",
+    "day": "d",
+    "days": "d",
+    "w": "w",
+    "week": "w",
+    "weeks": "w",
+}
+
+
+def normalize_reminder_offset(value: str) -> str | None:
+    """Normalize a raw offset to shared-schema form (``"15m"``, ``"1h"`` …).
+
+    Returns ``None`` when the value is not a valid ``<amount><d|h|m|w>``
+    offset (amount must be positive). Accepts verbose forms (``"15 min"``,
+    ``"15 minutes"``, ``"1 hour"``) as well as the compact form.
+    """
+    match = re.fullmatch(
+        r"\s*(\d+)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)\s*",
+        value.strip(),
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    amount = int(match.group(1))
+    if amount <= 0:
+        return None
+    suffix = _REMINDER_UNIT_SUFFIX.get(match.group(2).lower())
+    if suffix is None:  # pragma: no cover — regex constrains the group
+        return None
+    return f"{amount}{suffix}"
+
+
+def extract_reminder_offsets_from_text(text: str) -> list[str]:
+    """Extract reminder offsets from explicit lead-time phrases (pure).
+
+    Scans free text for ``"<N> <unit> (in advance|before|ahead|early|prior)"``
+    phrases (e.g. *"notify me via telegram 15 minutes in advance"*) and returns
+    the normalized offsets (``["15m"]``), deduplicated in first-seen order.
+    Returns ``[]`` when the text names no lead time — the caller keeps whatever
+    the model produced (possibly no reminder at all).
+    """
+    seen: list[str] = []
+    for match in _REMINDER_PHRASE_RE.finditer(text or ""):
+        normalized = normalize_reminder_offset(f"{match.group(1)} {match.group(2)}")
+        if normalized is not None and normalized not in seen:
+            seen.append(normalized)
+    return seen
 
 
 def _looks_like_payload(obj: Any) -> bool:
@@ -410,6 +486,39 @@ def validate_parse_response(data: Any) -> ParseOutcome:
     return ParseOutcome(drafts=drafts)
 
 
+def _backfill_reminder_offsets(outcome: ParseOutcome, text: str) -> ParseOutcome:
+    """Fill missing ``reminder_offsets`` from explicit lead-time phrases (pure).
+
+    The model sometimes drops ``reminder_offsets`` even when the user names a
+    lead time (*"notify me 15 minutes in advance"*). When a draft carries no
+    usable offset, fall back to the regex extraction over the raw text so the
+    reminder survives; drafts that already have normalized offsets are left
+    untouched.
+    """
+    if outcome.needs_clarification or not outcome.drafts:
+        return outcome
+    fallback = extract_reminder_offsets_from_text(text)
+    if not fallback:
+        return outcome
+    drafts: list[ParsedDraft] = []
+    changed = False
+    for draft in outcome.drafts:
+        offsets = draft.reminder_offsets or []
+        usable = [n for n in (normalize_reminder_offset(o) for o in offsets) if n]
+        if usable:
+            if usable != (draft.reminder_offsets or []):
+                drafts.append(draft.model_copy(update={"reminder_offsets": usable}))
+                changed = True
+            else:
+                drafts.append(draft)
+        else:
+            drafts.append(draft.model_copy(update={"reminder_offsets": list(fallback)}))
+            changed = True
+    if not changed:
+        return outcome
+    return ParseOutcome(drafts=drafts, clarification=outcome.clarification)
+
+
 # ---------------------------------------------------------------------------
 # HTTP client protocol + orchestrator
 # ---------------------------------------------------------------------------
@@ -515,7 +624,7 @@ def parse_events(
             logger.error("LLM parse failed ref=%s: %s", redact_text(text), exc)
             return ParseResult(ok=False, error=str(exc))
 
-        return ParseResult(ok=True, outcome=outcome)
+        return ParseResult(ok=True, outcome=_backfill_reminder_offsets(outcome, text))
 
     if made > 1:
         last_error = f"{last_error} (after {made} attempts)"

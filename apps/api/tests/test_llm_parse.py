@@ -728,3 +728,81 @@ def test_parse_trailing_prose_envelope_succeeds() -> None:
     assert result.outcome is not None
     assert result.outcome.drafts is not None
     assert result.outcome.drafts[0].title == "Dentist"
+
+
+def test_normalize_reminder_offset() -> None:
+    """Verbose and compact offsets normalize to shared-schema form."""
+    from app.llm_parse import normalize_reminder_offset
+
+    assert normalize_reminder_offset("15m") == "15m"
+    assert normalize_reminder_offset("15 minutes") == "15m"
+    assert normalize_reminder_offset("15 min in advance") is None
+    assert normalize_reminder_offset("1 hour") == "1h"
+    assert normalize_reminder_offset("2H") == "2h"
+    assert normalize_reminder_offset("1 day") == "1d"
+    assert normalize_reminder_offset("2 weeks") == "2w"
+    assert normalize_reminder_offset("0m") is None
+    assert normalize_reminder_offset("soon") is None
+    assert normalize_reminder_offset("") is None
+
+
+def test_extract_reminder_offsets_from_text() -> None:
+    """Explicit lead-time phrases yield normalized offsets in order."""
+    from app.llm_parse import extract_reminder_offsets_from_text
+
+    assert extract_reminder_offsets_from_text(
+        "I have an interview in half an hour, notify me via telegram "
+        "channel 15 minutes in advance"
+    ) == ["15m"]
+    assert extract_reminder_offsets_from_text("remind me 1 hour before") == ["1h"]
+    assert extract_reminder_offsets_from_text("dentist tomorrow 9am") == []
+    # Duplicates collapse to first-seen order.
+    assert extract_reminder_offsets_from_text(
+        "notify me 1 day before and 1 day in advance"
+    ) == ["1d"]
+
+
+def test_parse_backfills_missing_reminder_offsets() -> None:
+    """A draft without offsets gains them from the raw lead-time phrase."""
+    client = _FakeClient(
+        _FakeResponse(
+            200,
+            {"events": [{"title": "Interview", "start_at": "2026-09-16T09:00:00+02:00"}]},
+        )
+    )
+    result = parse_events(
+        "interview in half an hour, notify me 15 minutes in advance",
+        NOW,
+        TZ,
+        _settings(),
+        client,
+    )
+    assert result.ok is True
+    assert result.outcome is not None
+    assert result.outcome.drafts is not None
+    assert result.outcome.drafts[0].reminder_offsets == ["15m"]
+
+
+def test_parse_keeps_model_reminder_offsets() -> None:
+    """Model-provided offsets win over the text fallback."""
+    client = _FakeClient(
+        _FakeResponse(
+            200,
+            {
+                "events": [
+                    {
+                        "title": "Interview",
+                        "start_at": "2026-09-16T09:00:00+02:00",
+                        "reminder_offsets": ["1h"],
+                    }
+                ]
+            },
+        )
+    )
+    result = parse_events(
+        "interview, notify me 15 minutes in advance", NOW, TZ, _settings(), client
+    )
+    assert result.ok is True
+    assert result.outcome is not None
+    assert result.outcome.drafts is not None
+    assert result.outcome.drafts[0].reminder_offsets == ["1h"]
