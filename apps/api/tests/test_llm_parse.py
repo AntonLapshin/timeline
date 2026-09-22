@@ -622,3 +622,109 @@ def test_parse_unwraps_real_gateway_envelope() -> None:
     assert result.outcome is not None
     assert result.outcome.drafts is not None
     assert result.outcome.drafts[0].title == "Dentist"
+
+
+# --- Lenient content decoding (voice-message "Extra data" fix) --------------
+
+
+def test_extract_model_payload_tolerates_trailing_prose() -> None:
+    """Trailing prose after the JSON no longer raises Extra-data (voice fix)."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    content = json.dumps(inner) + "\nHope that helps!"
+    envelope = {"choices": [{"message": {"content": content}}]}
+    assert extract_model_payload(envelope) == inner
+
+
+def test_extract_model_payload_tolerates_leading_prose() -> None:
+    """Leading prose before the JSON is skipped."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    content = "Here is your event: " + json.dumps(inner)
+    envelope = {"choices": [{"message": {"content": content}}]}
+    assert extract_model_payload(envelope) == inner
+
+
+def test_extract_model_payload_prefers_nonempty_concatenated_object() -> None:
+    """``{"events": []} {"events": [...]}`` (char-14 Extra data) keeps drafts."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    content = json.dumps({"events": []}) + " " + json.dumps(inner)
+    envelope = {"choices": [{"message": {"content": content}}]}
+    assert extract_model_payload(envelope) == inner
+
+
+def test_extract_model_payload_empty_events_with_trailing_text() -> None:
+    """Empty events plus trailing text parses (caller maps it to clarification)."""
+    import json
+
+    content = json.dumps({"events": []}) + " trailing prose"
+    envelope = {"choices": [{"message": {"content": content}}]}
+    assert extract_model_payload(envelope) == {"events": []}
+    assert (
+        validate_parse_response(extract_model_payload(envelope)).needs_clarification
+        is True
+    )
+
+
+def test_extract_model_payload_supports_content_blocks_and_tool_calls() -> None:
+    """List content blocks, tool_calls args and bare arrays all unwrap."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    blocks = {
+        "choices": [
+            {"message": {"content": [{"type": "text", "text": json.dumps(inner)}]}}
+        ]
+    }
+    assert extract_model_payload(blocks) == inner
+    tool = {
+        "choices": [
+            {
+                "message": {
+                    "content": None,
+                    "tool_calls": [{"function": {"arguments": json.dumps(inner)}}],
+                }
+            }
+        ]
+    }
+    assert extract_model_payload(tool) == inner
+    bare = {
+        "choices": [
+            {
+                "message": {
+                    "content": json.dumps(
+                        [{"title": "A", "start_at": "2026-09-16T09:00:00+00:00"}]
+                    )
+                }
+            }
+        ]
+    }
+    assert extract_model_payload(bare) == {
+        "events": [{"title": "A", "start_at": "2026-09-16T09:00:00+00:00"}]
+    }
+
+
+def test_extract_model_payload_still_rejects_pure_prose() -> None:
+    """Prose with no JSON inside is still a clean ValueError."""
+    with pytest.raises(ValueError, match="non-JSON"):
+        extract_model_payload(
+            {"choices": [{"message": {"content": "just some chatter, no json"}}]}
+        )
+
+
+def test_parse_trailing_prose_envelope_succeeds() -> None:
+    """parse_events succeeds when the model appends prose after the JSON."""
+    import json
+
+    inner = {"events": [{"title": "Dentist", "start_at": "2026-09-16T09:00:00+02:00"}]}
+    envelope = {"choices": [{"message": {"content": json.dumps(inner) + "\nDone!"}}]}
+    client = _FakeClient(_FakeResponse(200, envelope))
+    result = parse_events("dentist tomorrow", NOW, TZ, _settings(), client)
+    assert result.ok is True
+    assert result.outcome is not None
+    assert result.outcome.drafts is not None
+    assert result.outcome.drafts[0].title == "Dentist"

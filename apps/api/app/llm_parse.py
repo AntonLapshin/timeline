@@ -202,6 +202,137 @@ def _strip_code_fences(content: str) -> str:
     return text
 
 
+def _looks_like_payload(obj: Any) -> bool:
+    """Whether a decoded JSON value looks like the model payload."""
+    return isinstance(obj, dict) and (
+        "events" in obj or "needs_clarification" in obj or "title" in obj
+    )
+
+
+def _iter_json_values(text: str) -> list[Any]:
+    """Collect every top-level JSON value embedded in ``text``.
+
+    The model sometimes wraps the payload in prose
+    (``"Here you go: {...} hope that helps"``), appends an explanation
+    after it, or concatenates two JSON objects (``{"events": []} {...}`` —
+    the reported voice-message failure: ``Extra data: line 1 column 15
+    (char 14)``). ``json.loads`` rejects all of these, so scan for ``{`` /
+    ``[`` openers and ``raw_decode`` each candidate, skipping undecodable
+    braces (e.g. prose with ``{not json}``).
+    """
+    decoder = json.JSONDecoder()
+    values: list[Any] = []
+    idx = 0
+    end = len(text)
+    while idx < end:
+        nxt = min(
+            (pos for pos in (text.find("{", idx), text.find("[", idx)) if pos != -1),
+            default=-1,
+        )
+        if nxt == -1:
+            break
+        try:
+            value, next_idx = decoder.raw_decode(text, nxt)
+        except json.JSONDecodeError:
+            idx = nxt + 1
+            continue
+        values.append(value)
+        idx = next_idx if next_idx > nxt else nxt + 1
+    return values
+
+
+def _pick_payload(candidates: list[Any]) -> Any | None:
+    """Pick the best payload-like candidate (or None when there is none)."""
+    payloads = [c for c in candidates if _looks_like_payload(c)]
+    if not payloads:
+        # A bare array of event objects (no {"events": ...} wrapper).
+        for candidate in candidates:
+            if (
+                isinstance(candidate, list)
+                and candidate
+                and all(isinstance(item, dict) for item in candidate)
+            ):
+                return {"events": candidate}
+        return None
+    # Prefer a non-empty events list over an empty one (e.g. the reported
+    # ``{"events": []} {"events": [...]}`` concatenation), then a
+    # clarification, then anything payload-like.
+    for candidate in payloads:
+        events = candidate.get("events") if isinstance(candidate, dict) else None
+        if isinstance(events, list) and len(events) > 0:
+            return candidate
+    for candidate in payloads:
+        if isinstance(candidate, dict) and candidate.get("needs_clarification"):
+            return candidate
+    return payloads[0]
+
+
+def _decode_model_text(text: str) -> Any:
+    """JSON-decode model ``content`` text, tolerating surrounding prose.
+
+    Fast path is a strict ``json.loads`` (the common gateway case). On
+    failure, fall back to extracting embedded JSON value(s) so trailing
+    explanations or concatenated objects still parse instead of surfacing
+    ``LLM returned non-JSON content: Extra data ...`` to the Telegram user.
+    Raises ``ValueError`` when nothing payload-like is found.
+    """
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError:
+        parsed = None
+    else:
+        if _looks_like_payload(parsed):
+            return parsed
+        if isinstance(parsed, list):
+            wrapped = _pick_payload([parsed])
+            if wrapped is not None:
+                return wrapped
+        # A valid JSON scalar (e.g. `true`, `123`) is never a payload —
+        # fall through to the embedded scan which may find the real object.
+    candidates = _iter_json_values(text)
+    picked = _pick_payload(candidates)
+    if picked is not None:
+        return picked
+    if candidates:
+        return candidates[0]
+    raise ValueError(f"LLM returned non-JSON content: {text[:120]!r}")
+
+
+def _content_to_text(content: Any) -> str | None:
+    """Normalize a chat message ``content`` to text (or None when unusable).
+
+    Most gateways send a plain string, but some send a list of content
+    blocks (``[{"type": "text", "text": "{...}"}, ...]``). Join the text
+    parts so the JSON extractor below still works.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict):
+                for key in ("text", "content"):
+                    value = block.get(key)
+                    if isinstance(value, str):
+                        parts.append(value)
+                        break
+        return "".join(parts) or None
+    return None
+
+
+def _tool_call_arguments(message: dict[str, Any]) -> Any | None:
+    """Return the first tool-call ``arguments`` payload, if the gateway used it."""
+    tool_calls = message.get("tool_calls")
+    if isinstance(tool_calls, list) and tool_calls:
+        first = tool_calls[0]
+        func: Any = first.get("function", {}) if isinstance(first, dict) else {}
+        args: Any = func.get("arguments") if isinstance(func, dict) else None
+        return args
+    return None
+
+
 def extract_model_payload(data: Any) -> Any:
     """Unwrap an OpenAI-compatible chat-completions body into the model payload.
 
@@ -221,17 +352,30 @@ def extract_model_payload(data: Any) -> Any:
         if isinstance(choices, list) and choices:
             first = choices[0]
             message: Any = first.get("message", {}) if isinstance(first, dict) else {}
-            content: Any = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(message, dict):
+                raise ValueError("LLM response has no usable message content")
+            content: Any = message.get("content")
             if isinstance(content, dict):
                 return content
-            if isinstance(content, str):
-                text = _strip_code_fences(content)
+            text = _content_to_text(content)
+            if text is not None:
+                text = _strip_code_fences(text)
                 if not text:
                     raise ValueError("LLM returned an empty message content")
                 try:
-                    return json.loads(text)
-                except json.JSONDecodeError as exc:
-                    raise ValueError(f"LLM returned non-JSON content: {exc}") from exc
+                    return _decode_model_text(text)
+                except ValueError as exc:
+                    raise ValueError(str(exc)) from exc
+            # Some gateways put JSON-mode output in tool_calls instead of
+            # content (function.arguments as a JSON string or dict).
+            args = _tool_call_arguments(message)
+            if isinstance(args, dict):
+                return args
+            if isinstance(args, str) and _strip_code_fences(args):
+                try:
+                    return _decode_model_text(_strip_code_fences(args))
+                except ValueError as exc:
+                    raise ValueError(str(exc)) from exc
     raise ValueError("LLM response has no usable message content")
 
 
