@@ -30,7 +30,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
-from .scheduler import build_scheduler, drain_schedule, requeue_failed
+from .scheduler import build_scheduler, catch_up_missed, drain_schedule, requeue_failed
 from .telegram_allowlist import startup_warning
 from .telegram_inbound import build_telegram_inbound_application
 from .telegram_outbound import make_telegram_job_func, telegram_reminder_job
@@ -138,6 +138,12 @@ async def start_runtime(
         )
         added = drain_schedule(scheduler, session_factory, job_func=job_func)
         requeued = requeue_failed(scheduler, session_factory, job_func=job_func)
+        caught_up = catch_up_missed(
+            scheduler,
+            session_factory,
+            job_func=job_func,
+            lookback_days=settings.catchup_lookback_days,
+        )
         scheduler.start()
         await application.start()
         updater = getattr(application, "updater", None)
@@ -145,8 +151,9 @@ async def start_runtime(
             await updater.start_polling()
         logger.info(
             "Telegram bot polling + reminder scheduler started "
-            "(%d reminder job(s) scheduled).",
+            "(%d reminder job(s) scheduled, %d missed caught up).",
             added + requeued,
+            caught_up,
         )
         return RuntimeComponents(
             scheduler=scheduler, telegram_app=application, job_func=job_func

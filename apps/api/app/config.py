@@ -176,6 +176,12 @@ class Settings:
     stt_max_seconds: float = field(
         default_factory=lambda: float(os.getenv("STT_MAX_SECONDS", "120"))
     )
+    #: Retrospective catch-up window in days: on startup, reminders due in
+    #: ``[now - lookback, now]`` that were never delivered (service was down)
+    #: are re-sent with a "missed" card. Bounded so startup stays fast.
+    catchup_lookback_days: int = field(
+        default_factory=lambda: int(os.getenv("TIMELINE_CATCHUP_LOOKBACK_DAYS", "7"))
+    )
 
     @property
     def telegram_allowlist(self) -> TelegramAllowlist:

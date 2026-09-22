@@ -44,6 +44,8 @@ from .scheduler import (
     base_occurrence_id,
     channel_allows,
     deliver_reminder,
+    quiet_hours_run_time,
+    reminder_run_time,
     repeat_until_ack_plan,
     should_repeat_until_ack,
 )
@@ -56,6 +58,11 @@ _CB_SEP = "|"
 
 #: How long a Snooze defers a reminder before it is re-sent.
 _SNOOZE_DELTA = timedelta(days=1)
+
+#: A delivery firing later than this after its planned run time renders as a
+#: retrospective "missed" card. Covers both the startup catch-up jobs and
+#: normal jobs that misfired while the service was down (APScheduler grace).
+_MISSED_THRESHOLD = timedelta(minutes=5)
 
 #: DeliveryLog statuses written by the action buttons.
 _STATUS_ACKED = "acked"
@@ -134,11 +141,37 @@ def countdown_text(target: datetime, now: datetime) -> str:
     return f"in {minutes}m"
 
 
+def overdue_text(target: datetime, now: datetime) -> str:
+    """Human overdue duration from ``target`` to ``now``, e.g. ``"2h 15m ago"``.
+
+    Inverse of :func:`countdown_text` for retrospective ("missed") cards.
+    Returns ``"now"`` when ``now`` is not after ``target``.
+    """
+    elapsed = now - target
+    if elapsed <= timedelta(0):
+        return "now"
+    total_minutes = int(elapsed.total_seconds() // 60)
+    if total_minutes < 1:
+        return "just now"
+    days, remainder = divmod(total_minutes, 24 * 60)
+    if days:
+        hours, minutes = divmod(remainder, 60)
+        if hours:
+            return f"{days}d {hours}h ago"
+        return f"{days}d ago"
+    hours, minutes = divmod(total_minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m ago" if minutes else f"{hours}h ago"
+    return f"{minutes}m ago"
+
+
 def format_reminder_card(
     event: _CardEvent,
     occurrence_id: str,
     offset: str,
     now: datetime | None = None,
+    *,
+    is_missed: bool = False,
 ) -> str:
     """Build the Telegram priority card for a delivered reminder.
 
@@ -151,6 +184,11 @@ def format_reminder_card(
     web UI stores it), and an aware value is converted into the zone. An
     unknown/missing ``tz`` falls back to UTC. Formatting the raw stored value
     as UTC wall-clock was the -4h shift the owner saw on every reminder card.
+
+    When ``is_missed`` is True the card is a retrospective catch-up (the
+    reminder came due while the service was down): it is prefixed with a
+    ``⚠️ Missed reminder`` header explaining the outage and the countdown
+    reads as overdue (``"3h ago"``) instead of ``"in …"``/``"now"``.
     """
     now = now or datetime.now(UTC)
     start = event.start_at
@@ -162,15 +200,77 @@ def format_reminder_card(
         start = start.replace(tzinfo=zone)
     local = start.astimezone(zone)
     emoji = priority_emoji(event.priority)
-    lines: list[str] = [
-        f"{emoji} {event.title}",
-        f"🕐 {local:%a, %b %d, %Y} {local:%H:%M} ({countdown_text(start, now)})",
-        f"⏳ reminder {offset} before",
-    ]
+    timing = overdue_text(start, now) if is_missed else countdown_text(start, now)
+    lines: list[str] = []
+    if is_missed:
+        lines.append("⚠️ Missed reminder — service was down, sending retrospectively")
+        lines.append(f"{emoji} {event.title}")
+    else:
+        lines.append(f"{emoji} {event.title}")
+    lines.append(f"🕐 {local:%a, %b %d, %Y} {local:%H:%M} ({timing})")
+    lines.append(f"⏳ reminder {offset} before")
     if event.description:
         lines.append(f"📝 {event.description}")
     lines.append(f"`{occurrence_id}`")
     return "\n".join(lines)
+
+
+def _occurrence_start_utc(occurrence_id: str, tz: str | None) -> datetime | None:
+    """Parse an occurrence id back to its aware UTC start (best-effort).
+
+    Returns None when the id is not a parseable timestamp (e.g. synthetic
+    test ids like ``"occ-1"``) so missed detection fails open to a normal
+    card instead of crashing the delivery.
+    """
+    base = base_occurrence_id(occurrence_id)
+    try:
+        from datetime import date as _date
+
+        try:
+            parsed = datetime.fromisoformat(base)
+        except ValueError:
+            parsed = datetime.combine(_date.fromisoformat(base), datetime.min.time())
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=_card_zone(tz))
+        return parsed.astimezone(UTC)
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def is_missed_delivery(
+    event: Any,
+    occurrence_id: str,
+    offset: str,
+    now: datetime,
+    *,
+    threshold: timedelta = _MISSED_THRESHOLD,
+) -> bool:
+    """Whether a firing reminder came due long enough ago to count as missed.
+
+    Recomputes the planned run time (same ``reminder_run_time`` + quiet-hours
+    deferral as the scheduler) from the occurrence start and reports True when
+    it is older than ``threshold``. Any unparseable input returns False so a
+    normal on-time card is sent rather than dropping the reminder.
+    """
+    try:
+        occ_start = _occurrence_start_utc(occurrence_id, getattr(event, "tz", None))
+        if occ_start is None:
+            return False
+        run_at = reminder_run_time(
+            occ_start,
+            offset,
+            getattr(event, "remind_time_of_day", None),
+            getattr(event, "tz", None) or "UTC",
+        )
+        run_at = quiet_hours_run_time(
+            run_at,
+            getattr(event, "quiet_hours_start", None),
+            getattr(event, "quiet_hours_end", None),
+            getattr(event, "tz", None) or "UTC",
+        )
+        return run_at < now - threshold
+    except Exception:  # noqa: BLE001 - missed detection must never break delivery
+        return False
 
 
 def callback_data(action: str, event_id: int, occurrence_id: str, offset: str) -> str:
@@ -481,6 +581,10 @@ def make_telegram_job_func(
     When ``scheduler`` is provided and the event has ``repeat_until_ack`` set, a
     successfully delivered reminder that hasn't been acknowledged is re-scheduled
     (repeat-until-ack, issue #62).
+
+    Late firings (catch-up jobs scheduled after an outage, or normal jobs that
+    misfired while down) automatically render as retrospective "missed" cards
+    via :func:`is_missed_delivery` — no extra job type or stored flag needed.
     """
     chat_ids = settings.telegram_allowlist.ids
 
@@ -498,7 +602,10 @@ def make_telegram_job_func(
                     return None
                 if not chat_ids:
                     raise PermissionError("telegram user not allowed")
-                text = format_reminder_card(event, occurrence_id, offset, now=now_utc)
+                missed = is_missed_delivery(event, occurrence_id, offset, now_utc)
+                text = format_reminder_card(
+                    event, occurrence_id, offset, now=now_utc, is_missed=missed
+                )
                 for chat_id in chat_ids:
                     _run_send(
                         bot,

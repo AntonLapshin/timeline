@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
 from .db import create_engine_from_settings
-from .enums import EventChannel, EventStatus
+from .enums import EventChannel, EventPriority, EventStatus
 from .models import DeliveryLog, Event
 from .recurrence import next_occurrences
 
@@ -51,6 +51,15 @@ _HORIZON_DAYS = 365
 #: A job that missed its run time by less than this still fires on restart
 #: (queue drained) rather than being silently dropped.
 _MISFIRE_GRACE_SEC = 24 * 3600
+#: Default lookback window (in days) for the startup retrospective catch-up:
+#: reminders due inside ``[now - lookback, now]`` that were never delivered
+#: (service was down) are re-sent on next startup with a "missed" card.
+#: Bounded so startup stays O(active_events * occurrences_in_window).
+_CATCHUP_LOOKBACK_DAYS = 7
+#: Terminal delivery states: a reminder with any of these logs was already
+#: handled and must never be re-sent by the catch-up (failed rows are left to
+#: ``requeue_failed``; dedupe via the job key makes double-scheduling safe).
+_DELIVERED_STATUSES = frozenset({"sent", "acked", "snoozed", "deleted"})
 #: Default delay before retrying a failed delivery (at-least-once).
 _RETRY_DELAY_SEC = 60
 #: Default max retries for a failed delivery before giving up.
@@ -339,6 +348,54 @@ def schedule_plan(
     return plan
 
 
+def missed_reminders_plan(
+    event: _SchedulableEvent,
+    now: datetime,
+    *,
+    lookback_days: int = _CATCHUP_LOOKBACK_DAYS,
+    max_occurrences: int = _MAX_OCCURRENCES,
+) -> list[PlannedReminder]:
+    """Compute reminders that came due while the service was down (pure).
+
+    Expands occurrences starting at ``now - lookback_days`` and returns one
+    ``PlannedReminder`` per (occurrence, offset) whose run time (same
+    ``reminder_run_time`` + quiet-hours deferral as the forward plan) falls
+    inside ``[window_start, now]``. Results are sorted by run time (oldest
+    missed first, so the retrospective digest reads chronologically).
+
+    Bounded by ``lookback_days`` (default 7d, covers the largest standard
+    offset plus a realistic outage) and ``max_occurrences`` so startup stays
+    performant; callers filter out already-delivered keys via ``DeliveryLog``.
+    """
+
+    offsets = list(event.reminder_offsets)
+    if not offsets or lookback_days <= 0:
+        return []
+    window_start = now - timedelta(days=lookback_days)
+    occurrences = next_occurrences(event, max_occurrences, after=window_start)
+    quiet_start = getattr(event, "quiet_hours_start", None)
+    quiet_end = getattr(event, "quiet_hours_end", None)
+    plan: list[PlannedReminder] = []
+    for occ in occurrences:
+        for offset in offsets:
+            run_at = reminder_run_time(
+                occ.start, offset, event.remind_time_of_day, event.tz
+            )
+            run_at = quiet_hours_run_time(run_at, quiet_start, quiet_end, event.tz)
+            if run_at < window_start or run_at > now:
+                continue
+            plan.append(
+                PlannedReminder(
+                    event_id=event.id,
+                    occurrence_id=occ.occurrence_id,
+                    offset=offset,
+                    run_at=run_at,
+                )
+            )
+    plan.sort(key=lambda p: p.run_at)
+    return plan
+
+
 def with_retry(
     func: Callable[..., object],
     *,
@@ -588,6 +645,93 @@ def requeue_failed(
             ):
                 requeued += 1
     return requeued
+
+
+def catch_up_missed(
+    scheduler: BackgroundScheduler,
+    session_factory: sessionmaker[Session],
+    *,
+    job_func: Callable[..., object],
+    now: datetime | None = None,
+    lookback_days: int = _CATCHUP_LOOKBACK_DAYS,
+    max_occurrences: int = _MAX_OCCURRENCES,
+    jobstore: str = "default",
+) -> int:
+    """Send retrospectively what was due while the service was down (startup).
+
+    For every active event, computes :func:`missed_reminders_plan` (reminders
+    due in ``[now - lookback_days, now]``) and schedules the ones with no
+    terminal ``DeliveryLog`` (``sent``/``acked``/``snoozed``/``deleted``) as
+    immediate jobs via :func:`add_reminder_job` (drained to ``now``). The
+    delivery itself renders a "missed" card (see ``app.telegram_outbound``),
+    so the retrospective message is explicit about the outage.
+
+    Why no extra "last-sent timestamp" table: ``DeliveryLog`` already records
+    one row per delivered (event, occurrence, offset) instance — the exact
+    per-instance record requested — and the bounded lookback keeps the scan
+    performant (``O(active_events * occurrences_in_window)`` with two batched
+    queries, no N+1). A single global timestamp would be fragile across clock
+    changes and per-offset schedules, and would still need the per-instance
+    check to stay idempotent.
+
+    Skips low-priority events and events not configured for Telegram (they
+    never push anyway), inactive events, and already-handled keys. Failed rows
+    are left to :func:`requeue_failed` (dedupe makes double-scheduling safe).
+    Returns the number of jobs scheduled.
+    """
+    now = now or datetime.now(UTC)
+    if lookback_days <= 0:
+        return 0
+    with session_factory() as session:
+        events = (
+            session.query(Event)
+            .filter(Event.status == EventStatus.ACTIVE)
+            .order_by(Event.id)
+            .all()
+        )
+        # Batch-load terminal delivery logs for these events once (no N+1):
+        # only rows that prove a reminder was already handled.
+        event_ids = [e.id for e in events]
+        delivered: set[str] = set()
+        if event_ids:
+            logs = (
+                session.query(
+                    DeliveryLog.event_id,
+                    DeliveryLog.occurrence_id,
+                    DeliveryLog.offset,
+                )
+                .filter(
+                    DeliveryLog.event_id.in_(event_ids),
+                    DeliveryLog.status.in_(_DELIVERED_STATUSES),
+                )
+                .all()
+            )
+            delivered = {
+                dedupe_key(eid, occ, off)
+                for eid, occ, off in logs
+                if occ is not None and off is not None
+            }
+    added = 0
+    for event in events:
+        if event.priority == EventPriority.LOW:
+            continue
+        if EventChannel.TELEGRAM not in (event.channels or []):
+            continue
+        for planned in missed_reminders_plan(
+            event, now, lookback_days=lookback_days, max_occurrences=max_occurrences
+        ):
+            key = dedupe_key(planned.event_id, planned.occurrence_id, planned.offset)
+            if key in delivered:
+                continue
+            if (
+                add_reminder_job(
+                    scheduler, planned, job_func, now=now, jobstore=jobstore
+                )
+                is not None
+            ):
+                added += 1
+                delivered.add(key)  # same key twice in one pass -> schedule once
+    return added
 
 
 # --- runtime event re-scheduling (issue #134, M10-T1) ------------------------
