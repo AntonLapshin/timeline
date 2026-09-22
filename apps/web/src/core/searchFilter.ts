@@ -9,7 +9,7 @@
  */
 
 import type { EventOccurrence, EventPriority, EventRead } from "./eventTypes";
-import { parseIso, toLocalDate } from "./dateFmt";
+import { dateKeyForDisplay, parseIso } from "./dateFmt";
 
 /** A combined search + filter query over events. */
 export interface EventFilter {
@@ -63,16 +63,35 @@ export function occurrenceMatchesText(
   return matchesTextFields([occurrence.title, occurrence.tag ?? ""], text);
 }
 
-/** The YYYY-MM month of an event's start, or null if unparseable. */
+/** The YYYY-MM month of an event's start in its own timezone, or null.
+ *
+ * Interpreted in `event.tz` (matching the Calendar/Timeline grouping, which
+ * place occurrences by their date in the event's zone) rather than the
+ * browser zone, so a late-night UTC instant belonging to September in New
+ * York is not filed under October.
+ */
 export function eventMonth(event: EventRead): string | null {
   const parsed = parseIso(event.start_at);
-  return parsed ? toLocalDate(parsed).slice(0, 7) : null;
+  if (!parsed) {
+    return null;
+  }
+  return dateKeyForDisplay(event.start_at, parsed, event.tz || undefined).slice(
+    0,
+    7,
+  );
 }
 
-/** The YYYY-MM month of an occurrence's start, or null if unparseable. */
+/** The YYYY-MM month of an occurrence's start in its own timezone, or null. */
 export function occurrenceMonth(occurrence: EventOccurrence): string | null {
   const parsed = parseIso(occurrence.start_at);
-  return parsed ? toLocalDate(parsed).slice(0, 7) : null;
+  if (!parsed) {
+    return null;
+  }
+  return dateKeyForDisplay(
+    occurrence.start_at,
+    parsed,
+    occurrence.tz || undefined,
+  ).slice(0, 7);
 }
 
 /** Whether any filter criterion is currently active. */

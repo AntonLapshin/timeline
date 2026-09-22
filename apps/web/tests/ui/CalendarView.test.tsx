@@ -171,12 +171,7 @@ describe("CalendarView", () => {
   it("retries the failed load when Retry is clicked", async () => {
     const today = new Date();
     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    const getOccurrences = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("boom"))
-      .mockResolvedValueOnce([
-        makeOccurrence({ event_id: 1, title: "Recovered", start_at: `${todayIso}T10:00:00` }),
-      ]);
+    const getOccurrences = vi.fn().mockRejectedValue(new Error("boom"));
     const services = {
       apiClient: apiClientWith(getOccurrences),
       llmParser: {},
@@ -187,13 +182,18 @@ describe("CalendarView", () => {
     await waitFor(() =>
       expect(screen.getByText("Failed to load occurrences")).toBeInTheDocument(),
     );
+    // The view fetches the previous, current and next months together.
+    expect(getOccurrences).toHaveBeenCalledTimes(3);
+    getOccurrences.mockResolvedValue([
+      makeOccurrence({ event_id: 1, title: "Recovered", start_at: `${todayIso}T10:00:00` }),
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() =>
       expect(screen.getByLabelText(`${todayIso}, 1 event`)).toBeInTheDocument(),
     );
     fireEvent.click(screen.getByLabelText(`${todayIso}, 1 event`));
     await waitFor(() => expect(screen.getByText("Recovered")).toBeInTheDocument());
-    expect(getOccurrences).toHaveBeenCalledTimes(2);
+    expect(getOccurrences).toHaveBeenCalledTimes(6);
   });
 
   it("refetches occurrences when the refreshKey prop changes (post-save refresh)", async () => {
@@ -210,7 +210,8 @@ describe("CalendarView", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("2026-09-05, 1 event")).toBeInTheDocument(),
     );
-    expect(getOccurrences).toHaveBeenCalledTimes(1);
+    // Previous, current and next months are fetched together.
+    expect(getOccurrences).toHaveBeenCalledTimes(3);
 
     // Bumping the refresh key (e.g. after a wizard save, issue #121) re-runs
     // the fetch without a reload.
@@ -219,7 +220,7 @@ describe("CalendarView", () => {
         <CalendarView refreshKey={1} />
       </ServicesContext.Provider>,
     );
-    await waitFor(() => expect(getOccurrences).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(getOccurrences).toHaveBeenCalledTimes(6));
     expect(screen.getByLabelText("2026-09-05, 1 event")).toBeInTheDocument();
   });
 

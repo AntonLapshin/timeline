@@ -62,11 +62,13 @@ describe("TimelineView", () => {
 
     renderWithServices(services, <TimelineView />);
 
-    await waitFor(() => expect(screen.getByText("HRA")).toBeInTheDocument());
+    // A recurrent event renders one row per occurrence, so asserted text may
+    // appear several times (start month plus later quarters).
+    await waitFor(() => expect(screen.getAllByText("HRA").length).toBeGreaterThan(0));
     expect(screen.getByText("2026-09")).toBeInTheDocument();
-    expect(screen.getByText("Week 1")).toBeInTheDocument();
-    expect(screen.getByText(/every quarter/)).toBeInTheDocument();
-    expect(screen.getByText("# health")).toBeInTheDocument();
+    expect(screen.getAllByText("Week 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/every quarter/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("# health").length).toBeGreaterThan(0);
     // Humanized relative date badge is rendered for the event start.
     expect(screen.getAllByTestId("relative-label").length).toBeGreaterThan(0);
   });

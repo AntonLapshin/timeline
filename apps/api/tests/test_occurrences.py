@@ -266,6 +266,37 @@ def test_occurrences_endpoint_december_rollover(client: TestClient) -> None:
     assert body[0]["next_occurrence"].startswith("2027-01-15")
 
 
+def test_occurrences_endpoint_quarterly_january_start_shows_october(
+    client: TestClient,
+) -> None:
+    """A quarterly event starting 2026-01-01 occurs on 2026-10-01 (Q4).
+
+    Regression test: the Q4 occurrence must be present in the October payload
+    (with the following January as its next occurrence) in every view that
+    reads per-month occurrences.
+    """
+    client.post(
+        "/api/events",
+        json={
+            "title": "Pay HRA quarterly",
+            "type": "recurrent",
+            "start_at": "2026-01-01T12:00:00",
+            "tz": "America/New_York",
+            "rrule": "FREQ=MONTHLY;INTERVAL=3",
+            "priority": "critical",
+            "source": "web",
+            "status": "active",
+        },
+    )
+    resp = client.get("/api/events/occurrences?month=2026-10")
+    body = resp.json()
+    assert resp.status_code == 200
+    assert len(body) == 1
+    assert body[0]["title"] == "Pay HRA quarterly"
+    assert body[0]["start_at"].startswith("2026-10-01")
+    assert body[0]["next_occurrence"].startswith("2027-01-01")
+
+
 def test_occurrences_endpoint_invalid_month(client: TestClient) -> None:
     """A malformed month is rejected with 422."""
     assert client.get("/api/events/occurrences?month=2026-13").status_code == 422

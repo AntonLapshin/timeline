@@ -83,7 +83,7 @@ export function MonthGroupView({
           <ul className="space-y-2">
             {week.rows.map((row) => (
               <EventRowView
-                key={row.event.id}
+                key={`${row.event.id}-${row.startIso}`}
                 row={row}
                 onEventClick={onEventClick}
               />

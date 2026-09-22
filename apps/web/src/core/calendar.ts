@@ -190,6 +190,34 @@ function groupByDate(
 }
 
 /**
+ * Merge occurrence payloads from several months into one deduplicated list.
+ *
+ * The month grid shows adjacent-month filler days (e.g. Oct 1–3 inside the
+ * September grid) and the agenda/week modes look beyond the current month,
+ * so the view model fetches the previous, current and next months. Entries
+ * are deduplicated by `(event_id, start_at)` and returned in chronological
+ * order.
+ */
+export function mergeOccurrences(
+  months: readonly (readonly EventOccurrence[])[],
+): EventOccurrence[] {
+  const seen = new Set<string>();
+  const merged: EventOccurrence[] = [];
+  for (const list of months) {
+    for (const o of list) {
+      const key = `${o.event_id}|${o.start_at}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      merged.push(o);
+    }
+  }
+  merged.sort((a, b) => a.start_at.localeCompare(b.start_at));
+  return merged;
+}
+
+/**
  * Fill a month grid with occurrences, deriving each day's event count/dots.
  *
  * Returns a new grid (the input is not mutated) where every day cell has its

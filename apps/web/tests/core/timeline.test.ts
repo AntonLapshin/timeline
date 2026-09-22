@@ -216,6 +216,65 @@ describe("timeline core module", () => {
       expect(groups[0].key).toBe("2026-09");
       expect(groups[0].weeks[0].rows[0].event.id).toBe(1);
     });
+
+    it("expands a quarterly event into each quarter (Jan/Apr/Jul/Oct)", () => {
+      const groups = groupByMonth([
+        makeEvent({
+          id: 1,
+          title: "Pay HRA quarterly",
+          start_at: "2026-01-01T12:00:00",
+          tz: "America/New_York",
+          rrule: "FREQ=MONTHLY;INTERVAL=3",
+        }),
+      ]);
+      const october = groups.find((g) => g.key === "2026-10");
+      expect(october).toBeDefined();
+      expect(october!.weeks[0].rows[0].event.title).toBe("Pay HRA quarterly");
+      expect(groups.map((g) => g.key).slice(0, 4)).toEqual([
+        "2026-01",
+        "2026-04",
+        "2026-07",
+        "2026-10",
+      ]);
+    });
+
+    it("keeps the master event on occurrence rows (edits stay on the record)", () => {
+      const groups = groupByMonth([
+        makeEvent({
+          id: 7,
+          start_at: "2026-01-01T09:00:00",
+          tz: "UTC",
+          rrule: "FREQ=MONTHLY;INTERVAL=3",
+        }),
+      ]);
+      const october = groups.find((g) => g.key === "2026-10")!;
+      const row = october.weeks[0].rows[0];
+      expect(row.event.id).toBe(7);
+      expect(row.event.start_at).toBe("2026-01-01T09:00:00");
+      expect(row.startIso).toBe("2026-10-01T09:00:00Z");
+      expect(row.timeLabel).toBe("Thu, Oct 1 · 9:00 AM");
+    });
+
+    it("expands a daily event across the month boundary", () => {
+      const groups = groupByMonth([
+        makeEvent({ id: 1, start_at: "2026-09-30T10:00:00", rrule: "FREQ=DAILY" }),
+      ]);
+      const october = groups.find((g) => g.key === "2026-10");
+      expect(october).toBeDefined();
+      expect(october!.weeks[0].rows[0].startIso.slice(0, 10)).toBe("2026-10-01");
+    });
+
+    it("shows an unsupported custom rule once, in its start month", () => {
+      const groups = groupByMonth([
+        makeEvent({
+          id: 1,
+          start_at: "2026-09-05T10:00:00",
+          rrule: "FREQ=HOURLY",
+        }),
+      ]);
+      expect(groups.map((g) => g.key)).toEqual(["2026-09"]);
+      expect(groups[0].weeks[0].rows).toHaveLength(1);
+    });
   });
 
   describe("paginate", () => {

@@ -118,11 +118,32 @@ describe("eventMonth / occurrenceMonth", () => {
   it("returns null for an unparseable event start", () => {
     expect(eventMonth(makeEvent({ start_at: "not-a-date" }))).toBeNull();
   });
+  it("interprets the month in the event's own timezone", () => {
+    // 2026-10-01T00:30:00Z is still Sep 30 in New York.
+    expect(
+      eventMonth(
+        makeEvent({
+          start_at: "2026-10-01T00:30:00Z",
+          tz: "America/New_York",
+        }),
+      ),
+    ).toBe("2026-09");
+  });
   it("extracts the YYYY-MM month of an occurrence start", () => {
     expect(occurrenceMonth(makeOccurrence({}))).toBe("2026-09");
   });
   it("returns null for an unparseable occurrence start", () => {
     expect(occurrenceMonth(makeOccurrence({ start_at: "nope" }))).toBeNull();
+  });
+  it("interprets the occurrence month in its own timezone", () => {
+    expect(
+      occurrenceMonth(
+        makeOccurrence({
+          start_at: "2026-10-01T00:30:00Z",
+          tz: "America/New_York",
+        }),
+      ),
+    ).toBe("2026-09");
   });
 });
 

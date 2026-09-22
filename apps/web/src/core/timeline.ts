@@ -11,8 +11,8 @@
 
 import type { EventPriority, EventRead } from "./eventTypes";
 import { formatRecurrence } from "./recurrenceFormat";
+import { expandOccurrences } from "./recurrence";
 import {
-  dateKeyForDisplay,
   displayParts,
   parseIso,
   relativeLabel,
@@ -37,8 +37,10 @@ export interface TagStyle {
 
 /** A fully derived row for a single event in the timeline. */
 export interface EventRow {
-  /** The underlying event. */
+  /** The underlying event (always the master event, even for a recurrence). */
   event: EventRead;
+  /** ISO start of this row's occurrence (the master start for one-time rows). */
+  startIso: string;
   /** Derived priority color class. */
   priorityColor: string;
   /** Derived priority icon glyph. */
@@ -49,7 +51,7 @@ export interface EventRow {
   tagIcon: string;
   /** Human recurrence badge, or null for a one-time event. */
   recurrenceBadge: string | null;
-  /** Human time label for the event's start. */
+  /** Human time label for the row's occurrence start. */
   timeLabel: string;
   /** Humanized relative label vs now, e.g. "today", "in 3 weeks". */
   relativeLabel: string | null;
@@ -138,21 +140,26 @@ export function tagStyle(tag: string): TagStyle {
  *
  * The recurrence badge is built from the event's `rrule` via
  * `formatRecurrence`; a one-time event (no recurrence) yields `null`.
+ * `startIso` selects which occurrence the row renders (defaults to the
+ * master start); `event` always stays the master event so edits and the
+ * drawer keep working on the real record.
  */
-export function toEventRow(event: EventRead): EventRow {
+export function toEventRow(event: EventRead, startIso?: string): EventRow {
   const priority = priorityStyle(event.priority);
   const firstTag = event.tags.length > 0 ? event.tags[0] : null;
   const tag = firstTag ? tagStyle(firstTag) : null;
   const badge = formatRecurrence(event.rrule);
+  const iso = startIso ?? event.start_at;
   return {
     event,
+    startIso: iso,
     priorityColor: priority.color,
     priorityIcon: priority.icon,
     tagColor: tag?.color ?? "border-slate-200 bg-slate-100/60 text-slate-500 dark:border-slate-600/60 dark:bg-slate-700/40 dark:text-slate-400",
     tagIcon: tag?.icon ?? "#",
     recurrenceBadge: badge.known ? badge.label : null,
-    timeLabel: eventTimeLabel(event),
-    relativeLabel: relativeLabel(event.start_at, new Date()),
+    timeLabel: eventTimeLabel(event, iso),
+    relativeLabel: relativeLabel(iso, new Date()),
   };
 }
 
@@ -168,14 +175,16 @@ export function weekInMonth(date: Date): number {
  * a UTC instant formatted with browser-local getters shifts the wall-clock
  * time whenever the two zones differ. All-day events omit the time. Events
  * with an unparseable start fall back to the raw `start_at` string so the UI
- * never renders a blank value.
+ * never renders a blank value. `startIso` selects which occurrence to label
+ * (defaults to the master start).
  */
-export function eventTimeLabel(event: EventRead): string {
-  const parsed = parseIso(event.start_at);
+export function eventTimeLabel(event: EventRead, startIso?: string): string {
+  const iso = startIso ?? event.start_at;
+  const parsed = parseIso(iso);
   if (!parsed) {
     return event.start_at;
   }
-  const parts = displayParts(event.start_at, parsed, event.tz || undefined);
+  const parts = displayParts(iso, parsed, event.tz || undefined);
   if (event.all_day) {
     return `${parts.weekday}, ${parts.monthShort} ${parts.day}`;
   }
@@ -186,35 +195,54 @@ export function eventTimeLabel(event: EventRead): string {
 
 /**
  * Group events into month buckets, each with week buckets, sorted
- * chronologically by start time.
+ * chronologically by occurrence start time.
+ *
+ * Recurrent events contribute one row per occurrence (expanded via
+ * `expandOccurrences`, mirroring the backend recurrence engine), so a
+ * quarterly event starting in January also appears under October —
+ * previously it only ever showed in its start month. One-time events and
+ * unsupported rules contribute their single master row, exactly as before.
+ * The row keeps the master `event` (edits/drawer keep working on the real
+ * record) while its labels reflect the occurrence start.
  *
  * Events with an unparseable `start_at` are placed in a trailing "Unsorted"
  * bucket so no event is ever dropped from the view.
  */
 export function groupByMonth(events: readonly EventRead[]): MonthGroup[] {
-  const sorted = [...events].sort((a, b) => a.start_at.localeCompare(b.start_at));
+  const pairs: Array<{ event: EventRead; startIso: string }> = [];
+  for (const event of events) {
+    for (const startIso of expandOccurrences(event)) {
+      pairs.push({ event, startIso });
+    }
+  }
+  pairs.sort((a, b) => a.startIso.localeCompare(b.startIso));
   const months = new Map<string, MonthGroup>();
   const unsortedRows: EventRow[] = [];
 
-  for (const event of sorted) {
-    const row = toEventRow(event);
-    const parsed = parseIso(event.start_at);
+  for (const { event, startIso } of pairs) {
+    const row = toEventRow(event, startIso);
+    const parsed = parseIso(startIso);
     if (!parsed) {
       unsortedRows.push(row);
       continue;
     }
-    const monthKey = dateKeyForDisplay(event.start_at, parsed, event.tz || undefined).slice(0, 7);
-    let month = months.get(monthKey);
-    if (!month) {
-      month = { key: monthKey, label: monthKey, weeks: [] };
-      months.set(monthKey, month);
+    // Month AND week both come from the occurrence date in the event's own
+    // timezone (not browser-local getters, which shift the placement
+    // whenever the zones differ).
+    const parts = displayParts(startIso, parsed, event.tz || undefined);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const month = `${parts.year}-${pad(parts.month)}`;
+    let monthGroup = months.get(month);
+    if (!monthGroup) {
+      monthGroup = { key: month, label: month, weeks: [] };
+      months.set(month, monthGroup);
     }
-    const weekNum = weekInMonth(parsed);
-    const weekKey = `${monthKey}:${weekNum}`;
-    let week = month.weeks.find((w) => w.key === weekKey);
+    const weekNum = Math.floor((parts.day - 1) / 7) + 1;
+    const weekKey = `${month}:${weekNum}`;
+    let week = monthGroup.weeks.find((w) => w.key === weekKey);
     if (!week) {
       week = { key: weekKey, label: `Week ${weekNum}`, rows: [] };
-      month.weeks.push(week);
+      monthGroup.weeks.push(week);
     }
     week.rows.push(row);
   }

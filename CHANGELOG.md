@@ -45,6 +45,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Quarterly (and other recurrent) events now appear on their October
+  occurrences in the Timeline and Calendar:** a quarterly event starting
+  2026-01-01 showed only its January row in the Timeline (which groups raw
+  events by start month) and the Calendar's September views stayed empty
+  (only the displayed month was fetched, so adjacent-month filler days, the
+  week grid and the agenda missed the Oct 1 occurrence just across the
+  boundary). The Timeline now expands recurrent events into per-occurrence
+  rows via a new pure `core/recurrence` module (daily/weekly/monthly/
+  quarterly/yearly with interval/count/until, DST-aware wall-clock handling
+  matching the backend `dateutil` semantics including month-end skips, capped
+  at 60 rows per event; unsupported rules fall back to the single master
+  row), grouping and labeling each row by its occurrence date in the event's
+  own timezone while edits/drawer keep working on the master record. The
+  Calendar now fetches the previous, current and next months together and
+  merges them, and the month filters interpret months in the event's own
+  timezone. Regression tests cover the reported case (quarterly Jan 1 in
+  America/New_York → Oct 1 in both views) plus expansion parity with the
+  backend and the merged Calendar fetch.
+
 - **Telegram reminder cards now render the occurrence in the event's own
   timezone (issue #131/#136):** `format_reminder_card` formatted the stored
   `start_at` as a UTC wall-clock (`start.replace(tzinfo=UTC)` then

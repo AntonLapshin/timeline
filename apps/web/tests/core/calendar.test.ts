@@ -3,6 +3,7 @@ import {
   monthKey,
   monthLabel,
   navigateMonth,
+  mergeOccurrences,
   monthGrid,
   dayOccurrences,
   withOccurrences,
@@ -167,6 +168,44 @@ describe("calendar core module", () => {
     it("throws for an out-of-range month", () => {
       expect(() => monthGrid(2026, 0)).toThrow(RangeError);
       expect(() => monthGrid(2026, 13)).toThrow(RangeError);
+    });
+  });
+
+  describe("mergeOccurrences", () => {
+    it("merges adjacent months in chronological order", () => {
+      const merged = mergeOccurrences([
+        [makeOccurrence({ event_id: 1, start_at: "2026-09-30T10:00:00" })],
+        [makeOccurrence({ event_id: 1, start_at: "2026-10-01T10:00:00" })],
+        [],
+      ]);
+      expect(merged.map((o) => o.start_at)).toEqual([
+        "2026-09-30T10:00:00",
+        "2026-10-01T10:00:00",
+      ]);
+    });
+
+    it("deduplicates overlapping entries", () => {
+      const dup = makeOccurrence({ event_id: 1, start_at: "2026-10-01T10:00:00" });
+      const merged = mergeOccurrences([[dup], [dup]]);
+      expect(merged).toHaveLength(1);
+    });
+
+    it("fills adjacent-month filler days of the grid", () => {
+      // The September 2026 grid ends with Oct 1–3 filler cells; with the
+      // October payload merged in, the Oct 1 filler shows its occurrence.
+      const filled = withOccurrences(
+        monthGrid(2026, 9),
+        mergeOccurrences([
+          [],
+          [],
+          [makeOccurrence({ event_id: 1, start_at: "2026-10-01T10:00:00" })],
+        ]),
+      );
+      expect(dayByIso(filled, "2026-10-01").count).toBe(1);
+    });
+
+    it("returns an empty list for empty inputs", () => {
+      expect(mergeOccurrences([[], []])).toEqual([]);
     });
   });
 

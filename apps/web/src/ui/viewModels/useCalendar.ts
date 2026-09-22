@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServices } from "../services/useServices";
 import {
+  mergeOccurrences,
   monthGrid,
   monthKey,
   monthLabel,
@@ -91,16 +92,28 @@ export function useCalendar(
   const [error, setError] = useState<string | null>(null);
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
 
-  const key = monthKey(cursor.year, cursor.month);
+  // The grid shows adjacent-month filler days and the week/agenda modes look
+  // beyond the displayed month, so occurrences for the previous, current and
+  // next months are fetched together (in parallel) and merged. Without the
+  // neighbours, filler days stay empty and the agenda misses upcoming
+  // occurrences just across the month boundary (e.g. an Oct 1 quarterly
+  // occurrence while viewing September).
+  const keys = useMemo(() => {    const prev = navigateMonth(cursor.year, cursor.month, -1);
+    const next = navigateMonth(cursor.year, cursor.month, 1);
+    return [
+      monthKey(prev.year, prev.month),
+      monthKey(cursor.year, cursor.month),
+      monthKey(next.year, next.month),
+    ];
+  }, [cursor]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiClient
-      .getOccurrences(key)
-      .then((list) => {
+    Promise.all(keys.map((month) => apiClient.getOccurrences(month)))
+      .then((lists) => {
         if (cancelled) return;
-        setOccurrences(list);
+        setOccurrences(mergeOccurrences(lists));
         setError(null);
       })
       .catch(() => {
@@ -115,7 +128,7 @@ export function useCalendar(
     };
     // `refreshKey` re-runs the fetch so a wizard save is reflected in the
     // grid without a reload (issue #121).
-  }, [apiClient, key, refreshKey]);
+  }, [apiClient, keys, refreshKey]);
 
   const filtered = useMemo(
     () => filterOccurrences(occurrences, filter ?? EMPTY_FILTER),
@@ -149,10 +162,9 @@ export function useCalendar(
   const retry = useCallback(() => {
     setLoading(true);
     setError(null);
-    apiClient
-      .getOccurrences(key)
-      .then((list) => {
-        setOccurrences(list);
+    Promise.all(keys.map((month) => apiClient.getOccurrences(month)))
+      .then((lists) => {
+        setOccurrences(mergeOccurrences(lists));
         setError(null);
       })
       .catch(() => {
@@ -161,7 +173,7 @@ export function useCalendar(
       .finally(() => {
         setLoading(false);
       });
-  }, [apiClient, key]);
+  }, [apiClient, keys]);
 
   const prevMonth = useCallback(
     () => setCursor((c) => navigateMonth(c.year, c.month, -1)),
