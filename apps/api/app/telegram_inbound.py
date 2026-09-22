@@ -6,14 +6,22 @@ A python-telegram-bot v21 polling updater (consistent with
 - ``/today`` — list today's events.
 - ``/upcoming [7d|30d]`` — list upcoming events (default 7 days).
 - ``/low`` — list low-priority events on demand.
-- ``/add <text>`` — route to the AI parse → draft flow (issue #75, M5-T4A):
-  parse the text via ``llm_parse.parse_events`` (the same pure module the
-  ``POST /api/events/parse`` endpoint reuses), present each parsed draft as a
-  Telegram card with inline **Save / Edit / Discard** buttons, and only persist
-  a confirmed draft (via the CRUD layer) when the owner taps **Save**.
+- ``/add <text>`` — smart parse → draft flow: first try the deterministic
+  offline parser (``app.quick_parse`` — dates, times, reminders like ``1h``,
+  priorities, recurrence words); when the text names an explicit date or time
+  the draft card is instant (no network, no LLM key needed). Vague text
+  without any date/time falls back to the AI parse → draft flow (issue #75,
+  M5-T4A): parse via ``llm_parse.parse_events`` (the same pure module the
+  ``POST /api/events/parse`` endpoint reuses). Either way each parsed draft
+  is presented as a Telegram card with inline **Save / Edit / Discard**
+  buttons, and only persisted (via the CRUD layer) when the owner taps
+  **Save**.
+- ``/quick <text>`` — always parse deterministically offline
+  (``app.quick_parse``; today is the default date) and present the same
+  Save / Edit / Discard draft card. Never touches the network.
   Plain (non-command) text is treated as an implicit ``/add`` so a natural
   message is parsed instead of being silently dropped; the bot first replies
-  with a pending ack (``pending_add_reply``) because the LLM parse can take
+  with a pending ack (``pending_add_reply``) because the LLM fallback can take
   seconds, then sends the draft card, and replies with a ``✅ Saved``
   confirmation (``saved_confirmation_reply``) when the draft is saved.
 - **voice messages** — transcribed locally (``app.stt``: ffmpeg → voxtype,
@@ -64,7 +72,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.orm import Session, sessionmaker
 
-from . import crud
+from . import crud, quick_parse
 from .config import Settings
 from .enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
 from .llm_parse import (
@@ -360,8 +368,10 @@ def handle_command(
     """Dispatch a parsed command to its handler and return the reply.
 
     ``/today``, ``/upcoming`` and ``/low`` list events from the provided
-    (active) ``events``; ``/add`` and ``/ask`` are stubs until the parse/query
-    endpoint (issue #70) is merged. Unknown commands get a usage hint.
+    (active) ``events``; ``/add`` runs the smart (deterministic-first) parse
+    flow and ``/quick`` the deterministic-only flow (the thin adapter performs
+    the parse and presents the draft card); ``/ask`` is a stub until the
+    query endpoint (issue #70) is merged. Unknown commands get a usage hint.
     """
     now = _as_utc(now or datetime.now(UTC))
     if command.name == "today":
@@ -372,12 +382,14 @@ def handle_command(
         return _reply_low(events, now)
     if command.name == "add":
         return _reply_add(command.args)
+    if command.name == "quick":
+        return _reply_quick(command.args)
     if command.name == "ask":
         return _reply_ask(command.args)
     return CommandResult(
         reply=(
             "Unknown command. Try /today, /upcoming [7d|30d], /low, "
-            "/add <text> or /ask <question>."
+            "/add <text>, /quick <text> or /ask <question>."
         )
     )
 
@@ -465,19 +477,20 @@ def saved_confirmation_reply(title: str) -> str:
 
 
 def is_add_flow_text(text: str | None) -> bool:
-    """Whether a text message will run the LLM parse flow (pure).
+    """Whether a text message will run the add parse flow (pure).
 
-    True for ``/add <non-empty text>`` and for plain (non-command) text —
-    plain DMs are treated as implicit ``/add`` so sending
-    e.g. ``"Hanging on the bar for 2 minutes each day"`` just works instead
-    of being silently ignored. Fast commands (``/today`` …) return False.
+    True for ``/add <non-empty text>``, ``/quick <non-empty text>`` and for
+    plain (non-command) text — plain DMs are treated as implicit ``/add`` so
+    sending e.g. ``"Hanging on the bar for 2 minutes each day"`` just works
+    instead of being silently ignored. Fast commands (``/today`` …) return
+    False.
     """
     if not text or not text.strip():
         return False
     command = parse_command(text.strip())
     if command is None:
         return True
-    return command.name == "add" and bool(command.args.strip())
+    return command.name in ("add", "quick") and bool(command.args.strip())
 
 
 def wants_pending_for_text_update(update: Any, settings: Settings) -> bool:
@@ -485,8 +498,9 @@ def wants_pending_for_text_update(update: Any, settings: Settings) -> bool:
 
     Mirrors the DM-only + allowlist gates of :func:`_handle_update` without
     any I/O: only an allowlisted private-chat message that will run the
-    (slow) parse flow gets a pending message. Fast commands and ignored
-    updates never get one.
+    (possibly slow, LLM-backed) ``/add`` flow gets a pending message.
+    ``/quick`` is always instant (deterministic offline parse) so it never
+    gets one, and fast commands and ignored updates never get one.
     """
     message = getattr(update, "effective_message", None) or getattr(
         update, "message", None
@@ -499,7 +513,11 @@ def wants_pending_for_text_update(update: Any, settings: Settings) -> bool:
     user_id = getattr(user, "id", None) if user is not None else None
     if not settings.telegram_allowlist.allows(user_id):
         return False
-    return is_add_flow_text(getattr(message, "text", None))
+    text = getattr(message, "text", None)
+    if not is_add_flow_text(text):
+        return False
+    command = parse_command((text or "").strip())
+    return command is None or command.name != "quick"
 
 
 def wants_pending_for_voice_update(update: Any, settings: Settings) -> bool:
@@ -524,17 +542,45 @@ def wants_pending_for_voice_update(update: Any, settings: Settings) -> bool:
 def _reply_add(args: str) -> CommandResult:
     """Handle /add: empty text gets a usage hint; otherwise mark for parsing.
 
-    The actual AI parse is impure (HTTP), so the command dispatcher returns the
-    stripped text with ``message_type="add_parse"`` and the thin adapter
-    (``_handle_update``) performs the parse and presents the draft card.
+    The actual parse is impure (deterministic first, LLM fallback over HTTP),
+    so the command dispatcher returns the stripped text with
+    ``message_type="add_parse"`` and the thin adapter (``_handle_update``)
+    performs the parse and presents the draft card.
     """
     text = args.strip()
     if not text:
         return CommandResult(
-            reply="Usage: /add <event text>, e.g. /add dentist tomorrow 9am.",
+            reply=(
+                "Usage: /add <event text>, e.g. "
+                "/add Pick up daughter on Friday at 18:00 1h — "
+                "dates, times, reminders (15m/1h/2d), priority "
+                "(low/medium/critical) and recurrence "
+                "(daily/weekly/monthly/quarterly/yearly) are parsed "
+                "instantly offline; vague text falls back to AI. "
+                "/quick <text> always parses offline (today by default)."
+            ),
             message_type="text",
         )
     return CommandResult(reply=text, message_type="add_parse")
+
+
+def _reply_quick(args: str) -> CommandResult:
+    """Handle /quick: empty text gets a usage hint; otherwise mark for parsing.
+
+    Like :func:`_reply_add` but the adapter always parses deterministically
+    offline (``message_type="quick_parse"``) — never the LLM.
+    """
+    text = args.strip()
+    if not text:
+        return CommandResult(
+            reply=(
+                "Usage: /quick <event text>, e.g. "
+                "/quick dentist tomorrow at 9am 15m — parsed instantly "
+                "offline (today by default, reminder 1d, medium priority)."
+            ),
+            message_type="text",
+        )
+    return CommandResult(reply=text, message_type="quick_parse")
 
 
 def format_draft_when(draft: ParsedDraft) -> str | None:
@@ -848,16 +894,25 @@ def _handle_update(
         result.message_type,
     )
 
-    if result.message_type == "add_parse":
+    if result.message_type in ("add_parse", "quick_parse"):
         chat_id = getattr(chat, "id", None)
-        reply = _handle_add_flow(
-            result.reply,
-            settings,
-            now=now,
-            http_client=http_client,
-            draft_store=draft_store,
-            chat_id=chat_id,
-        )
+        if result.message_type == "quick_parse":
+            reply = _handle_quick_flow(
+                result.reply,
+                settings,
+                now=now,
+                draft_store=draft_store,
+                chat_id=chat_id,
+            )
+        else:
+            reply = _handle_add_flow(
+                result.reply,
+                settings,
+                now=now,
+                http_client=http_client,
+                draft_store=draft_store,
+                chat_id=chat_id,
+            )
         if session_factory is not None:
             with session_factory() as session:
                 record_inbound(session, message, "draft")
@@ -869,6 +924,77 @@ def _handle_update(
     return BotReply(result.reply)
 
 
+def _quick_card_reply(
+    text: str,
+    settings: Settings,
+    *,
+    now: datetime | None,
+    draft_store: DraftStore | None,
+    chat_id: Any,
+) -> BotReply | None:
+    """Try the deterministic offline parse; store + render the card on success.
+
+    Returns the card reply when the text names an explicit date or time, else
+    ``None`` so the caller can fall back to the LLM. Needs only the draft
+    store (no network, no LLM key). Shared by ``/add`` (explicit dates only)
+    and ``/quick`` (forced by the caller via ``force=True``).
+    """
+    if draft_store is None or chat_id is None:
+        return None
+    quick = quick_parse.parse_quick_add(
+        text, _as_utc(now or datetime.now(UTC)), settings.tz
+    )
+    if not quick.has_explicit_date and not quick.has_explicit_time:
+        return None
+    draft_store.set(chat_id, PendingDraft(drafts=[quick.draft], raw_input=text))
+    logger.info(
+        "Quick parse produced 1 draft chat=%s ref=%s",
+        chat_id,
+        redact_text(text),
+    )
+    return BotReply(
+        format_draft_card(quick.draft),
+        reply_markup=[build_draft_keyboard(0)],
+    )
+
+
+def _handle_quick_flow(
+    text: str,
+    settings: Settings,
+    *,
+    now: datetime | None,
+    draft_store: DraftStore | None,
+    chat_id: Any,
+) -> BotReply:
+    """Run the /quick parse flow: deterministic offline parse, always.
+
+    Never touches the network: the text is parsed with ``app.quick_parse``
+    (today is the default date), stored as the chat's pending draft and
+    returned as a Save / Edit / Discard card. Every outcome is logged with a
+    content-free redacted ref (never raw text).
+    """
+    if draft_store is None or chat_id is None:
+        logger.warning(
+            "Quick flow with no pending state chat=%s ref=%s.",
+            chat_id,
+            redact_text(text),
+        )
+        return BotReply("Can't create the draft right now (no draft store).")
+    quick = quick_parse.parse_quick_add(
+        text, _as_utc(now or datetime.now(UTC)), settings.tz
+    )
+    draft_store.set(chat_id, PendingDraft(drafts=[quick.draft], raw_input=text))
+    logger.info(
+        "Quick flow parsed 1 draft chat=%s ref=%s",
+        chat_id,
+        redact_text(text),
+    )
+    return BotReply(
+        format_draft_card(quick.draft),
+        reply_markup=[build_draft_keyboard(0)],
+    )
+
+
 def _handle_add_flow(
     text: str,
     settings: Settings,
@@ -878,14 +1004,23 @@ def _handle_add_flow(
     draft_store: DraftStore | None,
     chat_id: Any,
 ) -> BotReply:
-    """Run the /add parse flow: parse, store the pending draft, render the card.
+    """Run the /add parse flow: quick offline parse first, LLM fallback.
 
-    Impure (calls ``parse_events`` via ``http_client``). On success the parsed
-    draft(s) are stored in ``draft_store`` for this chat and returned as a card
-    with Save / Edit / Discard buttons. Failures (no LLM key, transport error,
-    clarification needed) return a plain text reply and store nothing. Every
-    outcome is logged with a content-free redacted ref (never raw text).
+    When the text names an explicit date or time the deterministic offline
+    parser (``app.quick_parse``) produces the draft card instantly (no
+    network, no LLM key). Otherwise falls back to ``parse_events`` via
+    ``http_client``. On success the parsed draft(s) are stored in
+    ``draft_store`` for this chat and returned as a card with Save / Edit /
+    Discard buttons. Failures (no LLM key, transport error, clarification
+    needed) return a plain text reply and store nothing. Every outcome is
+    logged with a content-free redacted ref (never raw text).
     """
+    quick_reply = _quick_card_reply(
+        text, settings, now=now, draft_store=draft_store, chat_id=chat_id
+    )
+    if quick_reply is not None:
+        return quick_reply
+
     if http_client is None or draft_store is None or chat_id is None:
         logger.warning(
             "Add flow unavailable chat=%s ref=%s (missing client/store/chat).",

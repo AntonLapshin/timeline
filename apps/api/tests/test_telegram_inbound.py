@@ -8,6 +8,7 @@ Covers the acceptance criteria:
   on the allowlist (``TELEGRAM_USER_IDS`` combined with the legacy
   ``TELEGRAM_USER_ID``, issue #112) and from non-private chats.
 - **Commands**: ``/today``, ``/upcoming [7d|30d]``, ``/low``, ``/add <text>``
+  (deterministic-first, LLM fallback), ``/quick <text>`` (deterministic-only)
   and ``/ask <question>`` each produce the expected reply; unknown commands get
   a usage hint.
 - **No-token no-op**: ``build_telegram_inbound_application`` returns ``None``
@@ -850,7 +851,10 @@ def _parse_response() -> dict:
 def test_handle_update_add_presents_draft_card(
     session_factory: sessionmaker[Session],
 ) -> None:
-    """/add parses and returns a draft card with buttons; draft is stored."""
+    """/add parses and returns a draft card with buttons; draft is stored.
+
+    Vague text (no explicit date/time) falls back to the LLM parse.
+    """
     settings = Settings(
         telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
     )
@@ -858,7 +862,7 @@ def test_handle_update_add_presents_draft_card(
     http = _FakeHttp(_parse_response())
     update = _FakeUpdate(
         _FakeMessage(
-            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist birthday surprise"
         )
     )
     reply = _handle_update(
@@ -880,7 +884,7 @@ def test_handle_update_add_presents_draft_card(
     ]
     pending = store.get(123)
     assert pending is not None
-    assert pending.raw_input == "dentist tomorrow 9am"
+    assert pending.raw_input == "dentist birthday surprise"
     assert len(pending.drafts) == 1
     # Inbound record is persisted with message_type "draft".
     with session_factory() as session:
@@ -888,15 +892,17 @@ def test_handle_update_add_presents_draft_card(
 
 
 def test_handle_update_add_unavailable() -> None:
-    """/add with no LLM key returns a plain-text availability reply."""
+    """/add with no LLM key returns a plain-text availability reply.
+
+    Vague text (no explicit date/time) needs the LLM, so without a key the
+    bot says so; text with a date resolves offline (see the quick-flow tests).
+    """
     settings = Settings(
         telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key=None
     )
     store = DraftStore()
     update = _FakeUpdate(
-        _FakeMessage(
-            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
-        )
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/add something vague")
     )
     reply = _handle_update(
         update,
@@ -934,9 +940,7 @@ def test_handle_update_add_no_parse_client() -> None:
     """/add without a parse client replies that parsing is unavailable."""
     settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
     update = _FakeUpdate(
-        _FakeMessage(
-            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
-        )
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/add something vague")
     )
     reply = _handle_update(
         update, settings, None, now=_now(), http_client=None, draft_store=DraftStore()
@@ -946,16 +950,18 @@ def test_handle_update_add_no_parse_client() -> None:
 
 
 def test_handle_update_add_parse_error() -> None:
-    """/add with a failing parse returns the error and stores nothing."""
+    """/add with a failing parse returns the error and stores nothing.
+
+    Uses a non-retryable 4xx so the test stays instant (the retry/backoff
+    ladder itself is covered in test_llm_parse with stubbed sleeps).
+    """
     settings = Settings(
         telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
     )
     store = DraftStore()
-    http = _FakeHttp({"events": []}, status_code=500)
+    http = _FakeHttp({"events": []}, status_code=400)
     update = _FakeUpdate(
-        _FakeMessage(
-            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
-        )
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/add something vague")
     )
     reply = _handle_update(
         update, settings, None, now=_now(), http_client=http, draft_store=store
@@ -1014,7 +1020,7 @@ def test_build_telegram_inbound_application_draft_card(
 
     update = _FakeUpdate(
         _ReplyMessage(
-            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist birthday surprise"
         )
     )
     asyncio.run(handler(update, None))
@@ -1452,7 +1458,8 @@ def test_handle_voice_update_success_routes_to_draft_flow(
     ) -> SttResult:
         assert Path(ogg_path).exists()  # downloaded file exists during transcription
         seen.append((ogg_path, duration))
-        return SttResult(ok=True, text="dentist tomorrow 9am")
+        # Vague on purpose: no explicit date/time, so the LLM fallback runs.
+        return SttResult(ok=True, text="dentist birthday surprise")
 
     settings = Settings(
         telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
@@ -1483,7 +1490,7 @@ def test_handle_voice_update_success_routes_to_draft_flow(
     ]
     pending = store.get(123)
     assert pending is not None
-    assert pending.raw_input == "dentist tomorrow 9am"
+    assert pending.raw_input == "dentist birthday surprise"
     # The temp .ogg file was removed after transcription.
     assert seen and not Path(seen[0][0]).exists()
     # Inbound record is persisted with message_type "draft".
@@ -1631,7 +1638,7 @@ def test_build_telegram_inbound_application_voice_handler(
         http_client=http,
         draft_store=store,
         transcribe=lambda path, duration, s: SttResult(
-            ok=True, text="dentist tomorrow 9am"
+            ok=True, text="dentist birthday surprise"
         ),
     )
     assert app is not None
@@ -1874,3 +1881,173 @@ def test_format_draft_card_shows_reminders() -> None:
     """The draft card surfaces the reminder so the owner can verify it."""
     card = format_draft_card(_draft(reminder_offsets=["15m"]))
     assert "15m" in card
+
+
+# --- deterministic quick flow (/add smart + /quick, no LLM) ---------------------
+
+
+def test_handle_command_quick_parse_marker() -> None:
+    """/quick returns the text with a quick_parse marker for the adapter."""
+    result = handle_command(Command("quick", "Buy milk"), [], now=_now())
+    assert result.message_type == "quick_parse"
+    assert result.reply == "Buy milk"
+
+
+def test_handle_command_quick_missing_text() -> None:
+    """/quick with no text returns a usage hint."""
+    result = handle_command(Command("quick", ""), [], now=_now())
+    assert result.message_type == "text"
+    assert "Usage: /quick <event text>" in result.reply
+
+
+def test_handle_command_unknown_mentions_quick() -> None:
+    """The unknown-command hint points at /quick too."""
+    result = handle_command(Command("bogus", ""), [], now=_now())
+    assert "/quick" in result.reply
+
+
+def test_add_flow_quick_markers() -> None:
+    """The add-flow peek covers /quick (but it never needs a pending ack)."""
+    from app.telegram_inbound import (
+        is_add_flow_text,
+        wants_pending_for_text_update,
+    )
+
+    assert is_add_flow_text("/quick Buy milk") is True
+    assert is_add_flow_text("/quick") is False
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    quick = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/quick Buy milk")
+    )
+    add = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist tomorrow 9am"
+        )
+    )
+    # /quick is always instant (offline) — no pending ack; /add may hit the
+    # slow LLM fallback, so it keeps the pending ack.
+    assert wants_pending_for_text_update(quick, settings) is False
+    assert wants_pending_for_text_update(add, settings) is True
+
+
+def test_handle_update_add_with_date_resolves_offline(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """/add with an explicit date needs no HTTP client and no LLM key."""
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key=None
+    )
+    store = DraftStore()
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"),
+            _FakeUser(42),
+            "/add Pick up daughter from school on Friday at 18:00 1h",
+        )
+    )
+    reply = _handle_update(
+        update,
+        settings,
+        session_factory,
+        now=datetime(2026, 9, 22, 9, 0, tzinfo=UTC),
+        http_client=None,
+        draft_store=store,
+    )
+    assert reply is not None
+    assert "📝 Pick up daughter from school" in reply.text
+    assert "Fri, Sep 25 18:00" in reply.text
+    assert "1h before" in reply.text
+    assert reply.reply_markup == [
+        [
+            ("💾 Save", "draft:save:0"),
+            ("✏️ Edit", "draft:edit:0"),
+            ("🗑 Discard", "draft:discard:0"),
+        ]
+    ]
+    pending = store.get(123)
+    assert pending is not None
+    assert pending.raw_input == "Pick up daughter from school on Friday at 18:00 1h"
+    with session_factory() as session:
+        assert session.query(TelegramInbound).one().message_type == "draft"
+
+
+def test_handle_update_quick_always_offline() -> None:
+    """/quick parses even a dateless line (today default), key or no key."""
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key=None
+    )
+    store = DraftStore()
+    update = _FakeUpdate(
+        _FakeMessage(_FakeChat(123, "private"), _FakeUser(42), "/quick Buy milk")
+    )
+    reply = _handle_update(
+        update,
+        settings,
+        None,
+        now=datetime(2026, 9, 22, 9, 0, tzinfo=UTC),
+        http_client=None,
+        draft_store=store,
+    )
+    assert reply is not None
+    assert "📝 Buy milk" in reply.text
+    assert "Sep 22" in reply.text
+    assert "1d before" in reply.text
+    assert reply.reply_markup is not None
+    assert store.get(123) is not None
+
+
+def test_handle_update_add_vague_falls_back_to_llm() -> None:
+    """Vague /add text (no date/time) still reaches the LLM parse."""
+    settings = Settings(
+        telegram_user_id="42", telegram_bot_token="123:abc", llm_api_key="test-key"
+    )
+    store = DraftStore()
+    http = _FakeHttp(_parse_response())
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "/add dentist birthday surprise"
+        )
+    )
+    reply = _handle_update(
+        update, settings, None, now=_now(), http_client=http, draft_store=store
+    )
+    assert reply is not None
+    assert "📝 Dentist" in reply.text
+    assert store.get(123) is not None
+
+
+def test_quick_draft_save_persists_event(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Full offline loop: /quick draft card → Save → persisted active event."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    store = DraftStore()
+    update = _FakeUpdate(
+        _FakeMessage(
+            _FakeChat(123, "private"),
+            _FakeUser(42),
+            "/quick Silo season on June 12 2027",
+        )
+    )
+    reply = _handle_update(
+        update,
+        settings,
+        session_factory,
+        now=datetime(2026, 9, 22, 9, 0, tzinfo=UTC),
+        http_client=None,
+        draft_store=store,
+    )
+    assert reply is not None
+    assert "📝 Silo season" in reply.text
+
+    query = _FakeCallback("draft:save:0", 42, 123)
+    saved = _handle_callback_query(query, settings, session_factory, store)
+    assert saved is not None
+    assert "✅ Saved: Silo season" in saved.text
+    assert store.get(123) is None
+    with session_factory() as session:
+        event = session.query(Event).one()
+        assert event.title == "Silo season"
+        assert event.status == EventStatus.ACTIVE
+        assert event.source == EventSource.TELEGRAM_TEXT
+        assert event.reminder_offsets == ["1d"]
