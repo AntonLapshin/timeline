@@ -18,12 +18,15 @@ wiring (``make_telegram_job_func``, ``build_telegram_application``).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import pickle
+import threading
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -32,7 +35,7 @@ from app.config import Settings
 from app.db import create_engine_from_settings, make_session_factory
 from app.enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
 from app.models import DeliveryLog, Event
-from app.scheduler import build_scheduler, dedupe_key, drain_schedule
+from app.scheduler import _MAX_RETRIES, build_scheduler, dedupe_key, drain_schedule
 from app.telegram_outbound import (
     _run_send,
     ack_delivery,
@@ -589,6 +592,98 @@ def test_run_send_schedules_on_running_loop() -> None:
     assert sent[0]["text"] == "hello"
 
 
+def _pump_loop_in_thread(loop: asyncio.AbstractEventLoop) -> threading.Thread:
+    """Run an event loop forever on a daemon thread (fake bot application)."""
+
+    def _target() -> None:
+        asyncio.set_event_loop(loop)
+        loop.run_forever()
+
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    return thread
+
+
+def test_run_send_hands_off_to_main_loop_from_worker_thread() -> None:
+    """A scheduler-thread send runs on the bot's loop and is awaited.
+
+    Regression test for the Sep 2026 outage: driving ``send_message`` on a
+    fresh ``asyncio.run`` loop in the APScheduler worker thread broke the
+    client's connection teardown with ``RuntimeError('Event     loop is closed')``,
+    so every scheduler-thread delivery failed. With the application loop
+    provided, the send is submitted to it thread-safely and awaited.
+    """
+    sent: list[dict[str, object]] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append({"chat_id": chat_id, "text": text, "markup": reply_markup})
+
+    loop = asyncio.new_event_loop()
+    thread = _pump_loop_in_thread(loop)
+    try:
+        # Called on the test thread (no running loop here): the production
+        # topology, where the job fires on a scheduler worker thread.
+        _run_send(FakeBot(), 123, "hello", 7, "occ", "1h", main_loop=loop)
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+    assert len(sent) == 1
+    assert sent[0]["chat_id"] == 123
+    assert sent[0]["text"] == "hello"
+
+
+def test_run_send_propagates_send_error_via_main_loop() -> None:
+    """A send that fails on the bot's loop raises (failed row + retry)."""
+
+    class FailingBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            raise RuntimeError("telegram down")
+
+    loop = asyncio.new_event_loop()
+    thread = _pump_loop_in_thread(loop)
+    try:
+        with pytest.raises(RuntimeError, match="telegram down"):
+            _run_send(FailingBot(), 123, "hello", 7, "occ", "1h", main_loop=loop)
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=5)
+
+
+def test_run_send_on_target_loop_schedules_without_blocking() -> None:
+    """Calling _run_send on the target loop itself never deadlocks."""
+    sent: list[dict[str, object]] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append({"chat_id": chat_id, "text": text, "markup": reply_markup})
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        # Same-loop caller (e.g. a Telegram handler): cannot block on the
+        # loop from itself, so the send is scheduled as a task.
+        _run_send(FakeBot(), 123, "hello", 7, "occ", "1h", main_loop=loop)
+        await asyncio.sleep(0.05)
+
+    asyncio.run(scenario())
+    assert len(sent) == 1
+    assert sent[0]["chat_id"] == 123
+
+
+def test_run_send_falls_back_when_main_loop_closed() -> None:
+    """A closed captured loop degrades to driving the coroutine directly."""
+    sent: list[object] = []
+
+    class FakeBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            sent.append(text)
+
+    loop = asyncio.new_event_loop()
+    loop.close()
+    _run_send(FakeBot(), 123, "hello", 7, "occ", "1h", main_loop=loop)
+    assert sent == ["hello"]
+
+
 def test_make_telegram_job_func_sends_and_records(
     session_factory: sessionmaker[Session],
 ) -> None:
@@ -1069,6 +1164,151 @@ def test_make_telegram_job_func_first_recipient_failure_stops_fanout(
         log = session.query(DeliveryLog).one()
         assert log.status == "failed"
         assert "telegram unavailable" in (log.error or "")
+
+
+def test_make_telegram_job_func_schedules_retry_on_failure(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A failed delivery is retried automatically (no restart needed).
+
+    Regression test for the Sep 2026 incident: the failed reminder sat in
+    ``DeliveryLog(status="failed")`` with no resend because ``requeue_failed``
+    only runs at startup. Now the job function schedules a retry for the same
+    dedupe key (bounded delay) while still re-raising for log visibility.
+    """
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    class FailingBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            raise RuntimeError("telegram down")
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    scheduler = BackgroundScheduler(timezone=UTC)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FailingBot(), settings, now=_now(), scheduler=scheduler
+        )
+        with pytest.raises(RuntimeError, match="telegram down"):
+            job_func(event_id, "occ", "1h")
+        with session_factory() as session:
+            assert session.query(DeliveryLog).one().status == "failed"
+        key = dedupe_key(event_id, "occ", "1h")
+        job = scheduler.get_job(key)
+        assert job is not None
+        assert job.kwargs == {
+            "event_id": event_id,
+            "occurrence_id": "occ",
+            "offset": "1h",
+        }
+        assert job.trigger.run_date > _now()
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_make_telegram_job_func_retry_succeeds_on_second_attempt(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """A scheduled retry that then sends records sent (failed row kept)."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    class FlakyBot:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("telegram down")
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    scheduler = BackgroundScheduler(timezone=UTC)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FlakyBot(), settings, now=_now(), scheduler=scheduler
+        )
+        with pytest.raises(RuntimeError, match="telegram down"):
+            job_func(event_id, "occ", "1h")
+        # The retry job resolves through the module-level entrypoint, exactly
+        # like a persisted APScheduler job after a restart would.
+        assert telegram_reminder_job(event_id, "occ", "1h") is True
+        with session_factory() as session:
+            statuses = sorted(log.status for log in session.query(DeliveryLog).all())
+            assert statuses == ["failed", "sent"]
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_make_telegram_job_func_retry_gives_up_after_budget(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Once the retry budget is exhausted no further retry is scheduled."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.flush()
+        for _ in range(_MAX_RETRIES):
+            session.add(
+                DeliveryLog(
+                    event_id=event.id,
+                    occurrence_id="occ",
+                    offset="1h",
+                    status="failed",
+                )
+            )
+        session.commit()
+        event_id = event.id
+
+    class FailingBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            raise RuntimeError("telegram down")
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    scheduler = BackgroundScheduler(timezone=UTC)
+    try:
+        job_func = make_telegram_job_func(
+            session_factory, FailingBot(), settings, now=_now(), scheduler=scheduler
+        )
+        with pytest.raises(RuntimeError, match="telegram down"):
+            job_func(event_id, "occ", "1h")
+        key = dedupe_key(event_id, "occ", "1h")
+        assert scheduler.get_job(key) is None
+    finally:
+        with contextlib.suppress(Exception):
+            scheduler.shutdown(wait=False)
+
+
+def test_make_telegram_job_func_failure_without_scheduler_still_raises(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Without a scheduler there is nowhere to retry — still raise + record."""
+    with session_factory() as session:
+        event = _event()
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    class FailingBot:
+        async def send_message(self, chat_id, text, reply_markup=None, **kwargs):
+            raise RuntimeError("telegram down")
+
+    settings = Settings(telegram_user_id="123", telegram_bot_token="token")
+    job_func = make_telegram_job_func(
+        session_factory, FailingBot(), settings, now=_now(), scheduler=None
+    )
+    with pytest.raises(RuntimeError, match="telegram down"):
+        job_func(event_id, "occ", "1h")
+    with session_factory() as session:
+        assert session.query(DeliveryLog).one().status == "failed"
 
 
 def test_make_telegram_job_func_combines_legacy_and_multi_vars(

@@ -27,7 +27,10 @@ card when no bot token is configured.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
+from asyncio import AbstractEventLoop, Task
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta, tzinfo
 from typing import Any, Protocol
@@ -39,6 +42,8 @@ from .config import Settings
 from .enums import EventChannel, EventPriority
 from .models import DeliveryLog, Event
 from .scheduler import (
+    _MAX_RETRIES,
+    _RETRY_DELAY_SEC,
     PlannedReminder,
     add_reminder_job,
     base_occurrence_id,
@@ -58,6 +63,10 @@ _CB_SEP = "|"
 
 #: How long a Snooze defers a reminder before it is re-sent.
 _SNOOZE_DELTA = timedelta(days=1)
+
+#: How long to wait for the Telegram send on the bot's event loop before
+#: treating the delivery as failed (so a hung send still records + retries).
+_SEND_TIMEOUT_SEC = 60
 
 #: A delivery firing later than this after its planned run time renders as a
 #: retrospective "missed" card. Covers both the startup catch-up jobs and
@@ -559,6 +568,7 @@ def make_telegram_job_func(
     now: datetime | None = None,
     scheduler: Any = None,
     repeat_interval: timedelta | None = None,
+    main_loop: AbstractEventLoop | None = None,
 ) -> Callable[[int, str, str], bool]:
     """Build the scheduler job function that sends a due reminder to Telegram.
 
@@ -585,8 +595,30 @@ def make_telegram_job_func(
     Late firings (catch-up jobs scheduled after an outage, or normal jobs that
     misfired while down) automatically render as retrospective "missed" cards
     via :func:`is_missed_delivery` — no extra job type or stored flag needed.
+
+    A failed delivery is retried automatically (same dedupe key, ``scheduler``
+    retry delay, bounded by the scheduler's max-retries budget) so a transient
+    send failure is re-sent without waiting for the next process restart; the
+    next startup's :func:`app.scheduler.requeue_failed` remains the backstop.
+    The exception still re-raises so the failure stays visible in the logs.
+
+    The bot's HTTP client lives on the asyncio event loop that runs the
+    Telegram application (the API process main loop), while reminder jobs fire
+    on an APScheduler worker thread. Driving ``send_message`` on a fresh
+    ``asyncio.run`` loop in that worker thread breaks connection teardown with
+    ``RuntimeError('Event loop is closed')`` (Sep 2026: every scheduler-thread
+    send failed this way). ``main_loop`` is therefore that application loop:
+    auto-captured here when this factory runs on it (production startup is
+    async), and handed to :func:`_run_send` so the send is submitted to the
+    loop thread-safely. Tests (sync context, fake bots) pass an explicit loop
+    or none, falling back to driving the coroutine directly.
     """
     chat_ids = settings.telegram_allowlist.ids
+    if main_loop is None:
+        try:
+            main_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            main_loop = None
 
     def job_func(event_id: int, occurrence_id: str, offset: str) -> bool:
         now_utc = now or datetime.now(UTC)
@@ -615,16 +647,38 @@ def make_telegram_job_func(
                         occurrence_id,
                         offset,
                         snooze_allowed=bool(event.snooze_allowed),
+                        main_loop=main_loop,
                     )
 
-        delivered = deliver_reminder(
-            session_factory,
-            event_id,
-            occurrence_id,
-            offset,
-            now=now_utc,
-            send=send,
-        )
+        try:
+            delivered = deliver_reminder(
+                session_factory,
+                event_id,
+                occurrence_id,
+                offset,
+                now=now_utc,
+                send=send,
+            )
+        except Exception:
+            logger.exception(
+                "telegram reminder delivery failed for event %d (%s/%s); "
+                "scheduling retry",
+                event_id,
+                occurrence_id,
+                offset,
+            )
+            if scheduler is not None:
+                # Best-effort: never mask the original delivery exception.
+                with contextlib.suppress(Exception):
+                    _schedule_delivery_retry(
+                        scheduler,
+                        session_factory,
+                        event_id,
+                        occurrence_id,
+                        offset,
+                        now_utc,
+                    )
+            raise
 
         if delivered and scheduler is not None:
             with session_factory() as session:
@@ -674,6 +728,77 @@ def _is_acked(
         )
 
 
+def _log_task_error(task: Task[Any]) -> None:
+    """Log a failed fire-and-forget card send (never silence it).
+
+    Attached as a done-callback when the send is scheduled onto an already
+    running loop that cannot be blocked on (same-loop callers).
+    """
+    if task.cancelled():
+        logger.error("telegram card send was cancelled")
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.error("telegram card send failed: %s", exc)
+
+
+def _schedule_delivery_retry(
+    scheduler: Any,
+    session_factory: sessionmaker[Session],
+    event_id: int,
+    occurrence_id: str,
+    offset: str,
+    now: datetime,
+) -> bool:
+    """Schedule one retry of a failed delivery (bounded, at-least-once).
+
+    Counts the ``failed`` rows already recorded for this dedupe key (including
+    the one just written) and gives up once the scheduler's max-retries budget
+    is exhausted, leaving the ``failed`` row for the next startup's
+    :func:`app.scheduler.requeue_failed` backstop. Otherwise re-adds the same
+    dedupe key (idempotent) with the scheduler's retry delay, so the reminder
+    is re-sent without waiting for a process restart. Returns True when a
+    retry job was scheduled.
+    """
+    key = f"{event_id}:{occurrence_id}:{offset}"
+    with session_factory() as session:
+        attempts = (
+            session.query(DeliveryLog)
+            .filter_by(
+                event_id=event_id,
+                occurrence_id=occurrence_id,
+                offset=offset,
+                status="failed",
+            )
+            .count()
+        )
+    if attempts > _MAX_RETRIES:
+        logger.error(
+            "delivery %s failed %d time(s); retry budget exhausted, "
+            "leaving it for the startup requeue",
+            key,
+            attempts,
+        )
+        return False
+    planned = PlannedReminder(
+        event_id=event_id,
+        occurrence_id=occurrence_id,
+        offset=offset,
+        run_at=now + timedelta(seconds=_RETRY_DELAY_SEC),
+    )
+    added = add_reminder_job(scheduler, planned, telegram_reminder_job)
+    if added is not None:
+        logger.warning(
+            "delivery %s failed (attempt %d/%d); retrying in %ss",
+            key,
+            attempts,
+            _MAX_RETRIES,
+            _RETRY_DELAY_SEC,
+        )
+        return True
+    return False
+
+
 def _run_send(
     bot: _Bot,
     chat_id: int | None,
@@ -683,32 +808,78 @@ def _run_send(
     offset: str,
     *,
     snooze_allowed: bool = True,
+    main_loop: AbstractEventLoop | None = None,
 ) -> None:
     """Synchronously dispatch the async card send (thin adapter).
 
     Kept separate so the bot call can be injected/faked in tests; the async
-    send is awaited through the running event loop.
+    send is awaited through the bot's event loop.
+
+    ``main_loop`` is the asyncio loop running the Telegram application (see
+    :func:`make_telegram_job_func`). Reminder jobs fire on an APScheduler
+    worker thread, so the send is submitted to that loop with
+    ``run_coroutine_threadsafe`` and awaited — driving ``send_message`` on a
+    fresh ``asyncio.run`` loop in the worker thread breaks the client's
+    connection teardown with ``RuntimeError('Event loop is closed')``. When
+    already on the target loop the send is scheduled as a task with an
+    error-logging done-callback (the loop cannot be blocked on from itself);
+    with no loop information at all (sync tests, fake bots) the coroutine is
+    driven directly.
     """
     if chat_id is None:
         raise RuntimeError("telegram chat id not configured")
-    import asyncio
-
-    coro = send_reminder_card(
-        bot,
-        chat_id,
-        text,
-        build_reply_markup(
-            event_id, occurrence_id, offset, snooze_allowed=snooze_allowed
-        ),
-    )
+    target = main_loop if main_loop is not None and not main_loop.is_closed() else None
     try:
-        loop = asyncio.get_running_loop()
+        running = asyncio.get_running_loop()
     except RuntimeError:
-        # No running loop (scheduler thread): drive the coroutine directly.
-        asyncio.run(coro)
-    else:
-        # Inside a telegram handler loop: schedule on the running loop.
-        loop.create_task(coro)
+        running = None
+    if target is not None and running is not target:
+        # Scheduler worker thread (the production topology): hand the send to
+        # the bot's loop and wait, so failures propagate to deliver_reminder
+        # (failed row + retry) instead of crashing teardown with
+        # "Event loop is closed".
+        coro = send_reminder_card(
+            bot,
+            chat_id,
+            text,
+            build_reply_markup(
+                event_id, occurrence_id, offset, snooze_allowed=snooze_allowed
+            ),
+        )
+        try:
+            future = asyncio.run_coroutine_threadsafe(coro, target)
+        except RuntimeError:
+            coro.close()
+            raise
+        future.result(timeout=_SEND_TIMEOUT_SEC)
+        return
+    if running is not None:
+        # Inside a running loop (telegram handler, or tests without a captured
+        # loop): schedule on it; the done-callback keeps failures loud.
+        task = running.create_task(
+            send_reminder_card(
+                bot,
+                chat_id,
+                text,
+                build_reply_markup(
+                    event_id, occurrence_id, offset, snooze_allowed=snooze_allowed
+                ),
+            )
+        )
+        task.add_done_callback(_log_task_error)
+        return
+    # No running loop (scheduler thread without a captured loop, sync tests):
+    # drive the coroutine directly.
+    asyncio.run(
+        send_reminder_card(
+            bot,
+            chat_id,
+            text,
+            build_reply_markup(
+                event_id, occurrence_id, offset, snooze_allowed=snooze_allowed
+            ),
+        )
+    )
 
 
 def build_telegram_application(settings: Settings) -> Any:
