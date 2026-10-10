@@ -1,5 +1,11 @@
 # Timeline — one-command lifecycle.
 #
+# Setup (clean machine first):
+#
+#   make install  bootstrap host deps: .env + API venv + pip reqs + npm ci
+#   make setup    alias for `make install`
+#   make diagnose check host prerequisites (never installs, never fails)
+#
 # Host run (native) — default targets:
 #
 #   make start   prod run on the host (api :8124 + web :8123) + boot autostart
@@ -28,8 +34,9 @@
 # on first run, never overwritten). No secrets live in this file or in the
 # systemd units. Docker targets require Docker access (user in the `docker`
 # group, or run via sudo). Host targets require the API venv
-# (`apps/api/.venv`, see `apps/api/Makefile`) and web dependencies
-# (`node_modules`, via `npm ci`).
+# (`apps/api/.venv`, via `make install`) and web dependencies
+# (`node_modules`, via `make install` / `npm ci`). Run `make diagnose` to
+# check all host prerequisites at once.
 
 COMPOSE ?= docker compose
 DOCKER_BIN ?= $(shell command -v docker 2>/dev/null || echo /usr/bin/docker)
@@ -52,18 +59,25 @@ HOST_API_DST ?= $(HOST_UNIT_DIR)/$(HOST_API_NAME)
 HOST_WEB_DST ?= $(HOST_UNIT_DIR)/$(HOST_WEB_NAME)
 
 VENV_BIN ?= $(CURDIR)/apps/api/.venv/bin
+VENV_PY ?= $(VENV_BIN)/python
+PIP_BIN ?= $(VENV_BIN)/pip
 UVICORN_BIN ?= $(VENV_BIN)/uvicorn
 ALEMBIC_BIN ?= $(VENV_BIN)/alembic
 VITE_BIN ?= $(CURDIR)/node_modules/.bin/vite
+PYTHON ?= python3
 
 .DEFAULT_GOAL := help
-.PHONY: help start stop restart status logs \
+.PHONY: help install setup diagnose start stop restart status logs \
 	docker-dev docker-restart docker-start docker-stop docker-status docker-logs \
 	env build-web wait-health print-urls check-host-deps \
 	install-docker-unit remove-docker-unit install-host-units remove-host-units
 
 help:
 	@echo "Timeline — host run (native) + docker-compose stack"
+	@echo
+	@echo "  Setup (clean machine first):"
+	@echo "    make install   Bootstrap host deps: .env + API venv + pip reqs + npm ci"
+	@echo "    make diagnose  Check host prerequisites (python/node/.env/venv/vite/units/health)"
 	@echo
 	@echo "  Host (default; autostarted on boot once started):"
 	@echo "    make start   Run on the host (api :8124 + web :8123) + boot autostart"
@@ -82,6 +96,63 @@ help:
 	@echo
 	@echo 'LAN exposure is by design and unauthenticated — trusted LAN only.'
 	@echo 'Firewall whitelist: sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp'
+
+# --- setup (clean machine bootstrap) -------------------------------------------
+#
+# `make install` is idempotent: .env bootstrap + API venv + pip requirements
+# + `npm ci`. Run it once on a clean checkout, and re-run any time
+# dependencies change. `make setup` is an alias. `make diagnose` only checks
+# (never installs) and always exits 0.
+
+# Setup: bootstrap every host-run prerequisite. Idempotent.
+install: env
+	@if ! command -v $(PYTHON) >/dev/null 2>&1; then \
+		echo "ERROR: $(PYTHON) not found. Install Python 3.11+ first." >&2; exit 1; \
+	fi
+	@$(PYTHON) -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' \
+		|| { echo "ERROR: Python 3.11+ required (found: $$($(PYTHON) --version 2>&1))." >&2; exit 1; }
+	@if [ ! -x "$(VENV_PY)" ]; then \
+		echo "Creating API venv at apps/api/.venv ..."; \
+		$(PYTHON) -m venv apps/api/.venv; \
+	else \
+		echo "API venv exists — reusing apps/api/.venv"; \
+	fi
+	@echo "Installing API requirements ..."
+	@"$(PIP_BIN)" install -r apps/api/requirements.txt
+	@if ! command -v npm >/dev/null 2>&1; then \
+		echo "ERROR: npm not found. Install Node.js first." >&2; exit 1; \
+	fi
+	@echo "Installing web dependencies (npm ci) ..."
+	@npm ci
+	@echo "Install complete. Next: fill in .env, then 'make start'. For checks only, run 'make diagnose'."
+
+# Alias: `make setup` == `make install`.
+setup: install
+
+# Diagnose: report host prerequisites (never installs, never fails).
+diagnose:
+	@echo "Timeline — host diagnostics (checks only; fix with 'make install')"
+	@echo
+	@echo "-- toolchain --"
+	@{ command -v $(PYTHON) >/dev/null 2>&1 && echo "[ok] $(PYTHON): $$($(PYTHON) --version 2>&1)"; } || echo "[missing] $(PYTHON): install Python 3.11+"
+	@$(PYTHON) -c 'import sys; print("[ok] python >= 3.11" if sys.version_info >= (3, 11) else "[missing] python >= 3.11 (found %s)" % ".".join(map(str, sys.version_info[:3])))' 2>/dev/null || true
+	@{ command -v node >/dev/null 2>&1 && echo "[ok] node: $$(node --version)"; } || echo "[missing] node: install Node.js"
+	@{ command -v npm >/dev/null 2>&1 && echo "[ok] npm: $$(npm --version)"; } || echo "[missing] npm: install Node.js"
+	@{ command -v docker >/dev/null 2>&1 && echo "[ok] docker: $$(docker --version 2>/dev/null)"; } || echo "[info] docker: not found (only needed for compose targets)"
+	@echo
+	@echo "-- repo state --"
+	@{ [ -f .env ] && echo "[ok] .env exists (never overwritten by make)"; } || echo "[missing] .env (run 'make install' or 'make start' to copy from .env.example)"
+	@{ [ -x "$(VENV_PY)" ] && echo "[ok] venv python: apps/api/.venv ($$($(VENV_PY) --version 2>&1))"; } || echo "[missing] venv python: apps/api/.venv (run 'make install')"
+	@{ [ -x "$(UVICORN_BIN)" ] && echo "[ok] uvicorn: $(UVICORN_BIN)"; } || echo "[missing] uvicorn in venv (run 'make install')"
+	@{ [ -x "$(ALEMBIC_BIN)" ] && echo "[ok] alembic: $(ALEMBIC_BIN)"; } || echo "[missing] alembic in venv (run 'make install')"
+	@{ [ -x "$(VITE_BIN)" ] && echo "[ok] vite: $(VITE_BIN)"; } || echo "[missing] vite in node_modules (run 'make install')"
+	@echo
+	@echo "-- runtime --"
+	@{ command -v systemctl >/dev/null 2>&1 && systemctl --user is-active $(HOST_API_NAME) $(HOST_WEB_NAME) 2>&1 || echo "[info] host units not active (run 'make start' to start)"; }
+	@{ command -v loginctl >/dev/null 2>&1 && loginctl show-user "$$USER" -p Linger 2>/dev/null || echo "[info] linger state unknown (boot autostart needs 'loginctl enable-linger $$USER')"; }
+	@{ curl -fsS --max-time 3 $(HEALTHZ_URL) >/dev/null 2>&1 && echo "[ok] API health: $(HEALTHZ_URL)"; } || echo "[info] API not healthy at $(HEALTHZ_URL) (run 'make start' / 'make status' for details)"
+	@echo
+	@echo "Done. If anything is [missing], run 'make install', then 'make start'."
 
 # --- host run (native) -------------------------------------------------------
 #
@@ -179,13 +250,14 @@ env:
 # Internal: fail fast when the host-run prerequisites are missing.
 check-host-deps:
 	@if [ ! -x "$(UVICORN_BIN)" ] || [ ! -x "$(ALEMBIC_BIN)" ]; then \
-		echo "ERROR: API venv missing ($(VENV_BIN)). Create it first:" >&2; \
-		echo "  cd apps/api && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt" >&2; \
+		echo "ERROR: API venv missing ($(VENV_BIN)). Run 'make install' first (or manually:" >&2; \
+		echo "  cd apps/api && python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt)" >&2; \
+		echo "Hint: 'make diagnose' shows all host prerequisites." >&2; \
 		exit 1; \
 	fi
 	@if [ ! -x "$(VITE_BIN)" ]; then \
-		echo "ERROR: web dependencies missing ($(VITE_BIN)). Install them first:" >&2; \
-		echo "  npm ci" >&2; \
+		echo "ERROR: web dependencies missing ($(VITE_BIN)). Run 'make install' first (or 'npm ci')." >&2; \
+		echo "Hint: 'make diagnose' shows all host prerequisites." >&2; \
 		exit 1; \
 	fi
 

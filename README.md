@@ -10,12 +10,18 @@ Live demo: **[https://AntonLapshin.github.io/timeline/](https://AntonLapshin.git
 
 ## Quickstart
 
-Host run (native):
+Host run (native) — on a clean checkout, bootstrap first (idempotent):
 
 ```bash
-cp .env.example .env   # fill in your local secrets — .env is gitignored, never committed
-make start             # build web + start api :8124 / web :8123 + boot autostart
+make install   # .env + API venv (.venv + pip reqs) + npm ci; `make setup` is an alias
+make diagnose  # optional: check host prerequisites (never installs, never fails)
+make start     # build web + start api :8124 / web :8123 + boot autostart
 ```
+
+`make install` auto-creates `.env` from `.env.example` when missing (an
+existing `.env` is never overwritten) — fill in your local secrets in `.env`
+(`BOT_TOKEN`, `TELEGRAM_USER_IDS`, …) before or after installing, then
+re-run `make start`.
 
 Or with Docker (requires Docker access for your user — member of the `docker`
 group, or run the targets via `sudo`):
@@ -32,6 +38,8 @@ LAN, `http://<lan-ip>:8123/timeline/` (whitelist the ports first:
 Daily lifecycle (idempotent; `make help` is the default target):
 
 ```bash
+make install   # one-time bootstrap (re-run when deps change); alias: make setup
+make diagnose  # check python/node/.env/venv/vite/units/health
 make start     # host run: rebuilds web, starts api+web, waits for health,
                # + installs/enables systemd --user units for boot autostart
 make stop      # stop the host run + remove boot autostart
@@ -54,9 +62,13 @@ make docker-status  # compose ps + API health    make docker-logs  # follow logs
   from `.env.example` when it is missing (an existing `.env` is never
   overwritten — secrets stay local).
 - Boot autostart requires linger (`loginctl enable-linger $USER`).
-- Host prerequisites: API venv (`cd apps/api && python3 -m venv .venv &&
-  . .venv/bin/activate && pip install -r requirements.txt`) and web deps
-  (`npm ci`); `make start` fails fast with a hint when they are missing.
+- Host prerequisites (Python 3.11+, Node/npm, API venv, web deps) are
+  bootstrapped by `make install` (`make setup` is the same). `make start`
+  fails fast with a hint (`run 'make install'`) when the venv or
+  `node_modules` is missing; `make diagnose` shows every prerequisite at
+  once. Manual fallback (what `make install` does for you):
+  `cd apps/api && python3 -m venv .venv && . .venv/bin/activate &&
+  pip install -r requirements.txt`, plus `npm ci` at the repo root.
 - After editing `.env`, recreate the run (`make restart` for host,
   `make docker-dev` for compose) — a restart alone keeps the old
   configuration (systemd loads env at service start).
@@ -95,7 +107,14 @@ documented in `.env.example` and the comments in `docker-compose.yml`.
 
 ## Troubleshooting
 
-- **Stack won't start / `.env` missing** — `make start` / `make docker-dev` /
+- **`make start` says "API venv missing" / "web dependencies missing"** —
+  you skipped the bootstrap: run `make install` (idempotent: creates the
+  venv, installs `apps/api/requirements.txt`, runs `npm ci`), then
+  `make start` again. `npm install` alone is not enough — the API venv is a
+  separate prerequisite. `make diagnose` prints the status of every
+  prerequisite (python/node/.env/venv/vite/units/health) without changing
+  anything.
+- **Stack won't start / `.env` missing** — `make install` / `make start` /
   `make docker-start` copy `.env.example` → `.env` automatically when it's
   missing; fill in real values and re-run. Docker only reads `.env` when
   containers are created, and systemd only at service start, so re-run
@@ -148,8 +167,9 @@ packages/shared/   # Shared contracts — event JSON schema v1 + enums
 ## Development
 
 ```bash
-npm ci                      # install web dependencies
-npm run dev                 # Vite dev server (0.0.0.0:8123)
+make install              # bootstrap everything (.env + API venv + pip reqs + npm ci)
+make diagnose             # check prerequisites without changing anything
+npm run dev               # Vite dev server (0.0.0.0:8123)
 npm test / npm run test:coverage / npm run build / npm run lint
 cd apps/api && make lint typecheck test migrate dev   # ruff / mypy / pytest / alembic / uvicorn
 ```
