@@ -83,7 +83,7 @@ export function EventCard({
       <div className="flex items-start gap-3 pl-1.5">
         <span
           aria-hidden
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${TINT_CLASSES[priority]}`}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TINT_CLASSES[priority]}`}
         >
           <PriorityDot priority={priority} size="md" />
         </span>

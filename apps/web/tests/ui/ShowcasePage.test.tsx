@@ -1,18 +1,32 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, expect, afterEach } from "vitest";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { ShowcasePage } from "../../src/ui/showcase/ShowcasePage";
 
 /**
- * Smoke-level tests for the dev-only Showcase gallery (issue #56).
+ * Smoke-level tests for the dev-only Showcase gallery (issue #56) —
+ * a Storybook-style playground with a sidebar, an isolated canvas per
+ * component, and URL deep-linking (`?showcase&file=X&story=Y`).
  *
- * The Showcase page injects its own fake services via context, so rendering it
- * requires no backend or provider setup. These tests assert that every
- * component gallery section renders without crashing and that the populated
- * states (Timeline rows, summary bar, drawer, wizard) appear.
+ * The gallery injects its own fake services via the registry, so rendering
+ * requires no backend or provider setup.
  */
+
+/** Renders the gallery at the given URL (defaults to the home grid). */
+function renderAt(url: string) {
+  window.history.pushState({}, "", url);
+  return render(<ShowcasePage />);
+}
+
+afterEach(() => {
+  window.history.pushState({}, "", "/");
+});
+
 describe("ShowcasePage", () => {
-  it("renders a section for every UI component", () => {
-    render(<ShowcasePage />);
+  it("renders the home grid with a card for every UI component", () => {
+    renderAt("?showcase");
+    expect(
+      screen.getByRole("heading", { name: "Component Showcase" }),
+    ).toBeInTheDocument();
     for (const title of [
       "AppShell",
       "TimelineView",
@@ -30,10 +44,12 @@ describe("ShowcasePage", () => {
     }
   });
 
-  it("renders the populated Timeline rows from injected fake services", async () => {
-    render(<ShowcasePage />);
-    // The populated Timeline is shown in several gallery sections (AppShell,
-    // TimelineView, CalendarView), so we assert at least one instance appears.
+  it("opens a component canvas from its deep link", async () => {
+    renderAt("?showcase&file=TimelineView");
+    expect(
+      screen.getByRole("heading", { name: "TimelineView" }),
+    ).toBeInTheDocument();
+    // The populated Timeline rows from injected fake services.
     await waitFor(() =>
       expect(screen.getAllByText("HRA quarterly check-up").length).toBeGreaterThan(0),
     );
@@ -41,21 +57,48 @@ describe("ShowcasePage", () => {
   });
 
   it("renders the summary bar with the populated monthly total", async () => {
-    render(<ShowcasePage />);
+    renderAt("?showcase&file=SummaryBar");
     await waitFor(() =>
       expect(screen.getAllByText("3 events this month").length).toBeGreaterThan(0),
     );
   });
 
-  it("renders the populated event drawer", () => {
-    render(<ShowcasePage />);
+  it("renders the populated event drawer in isolation", () => {
+    renderAt("?showcase&file=EventDrawer");
     expect(screen.getByLabelText("Event: HRA quarterly check-up")).toBeInTheDocument();
   });
 
   it("renders the event wizard step previews", () => {
-    render(<ShowcasePage />);
+    renderAt("?showcase&file=EventWizard");
     // The wizard shows the step titles for all three steps.
     expect(screen.getAllByText("What/When").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Recurrence").length).toBeGreaterThan(0);
+  });
+
+  it("navigates from the sidebar and updates the URL", async () => {
+    renderAt("?showcase");
+    const nav = screen.getByRole("navigation", { name: "Storybook files" });
+    fireEvent.click(within(nav).getByRole("button", { name: "Button" }));
+    await waitFor(() =>
+      expect(window.location.search).toContain("file=Button"),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Button" }),
+    ).toBeInTheDocument();
+    // The Button stories render on the canvas.
+    expect(screen.getByRole("heading", { name: "Variants × sizes" })).toBeInTheDocument();
+  });
+
+  it("filters the sidebar with the search box", () => {
+    renderAt("?showcase");
+    const nav = screen.getByRole("navigation", { name: "Storybook files" });
+    const filter = screen.getByLabelText("Filter components");
+    fireEvent.change(filter, { target: { value: "calendar" } });
+    expect(
+      within(nav).getByRole("button", { name: "CalendarView" }),
+    ).toBeInTheDocument();
+    expect(
+      within(nav).queryByRole("button", { name: "Button" }),
+    ).not.toBeInTheDocument();
   });
 });

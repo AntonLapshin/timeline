@@ -54,7 +54,7 @@ export function Modal({
           aria-labelledby={labelledBy}
           aria-describedby={describedBy}
           tabIndex={-1}
-          className={`card pointer-events-auto max-h-[92dvh] w-full animate-sheet-up overflow-y-auto rounded-t-3xl p-5 shadow-popover sm:animate-pop sm:rounded-3xl sm:p-6 ${
+          className={`card pointer-events-auto max-h-[92dvh] w-full animate-sheet-up overflow-y-auto rounded-t-xl p-5 shadow-popover sm:animate-pop sm:rounded-xl sm:p-6 ${
             wide ? "sm:max-w-2xl" : "sm:max-w-lg"
           }`}
         >

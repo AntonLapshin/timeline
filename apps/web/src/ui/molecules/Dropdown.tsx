@@ -31,7 +31,7 @@ export interface DropdownProps {
  *
  * The trigger is `.field-input`-styled with the chevron clear of the right
  * border (`pr-9` + an absolutely positioned icon at `right-3`); the open
- * panel is a styled popover (`animate-pop`, `shadow-popover`, rounded-2xl)
+ * panel is a styled popover (`animate-pop`, `shadow-popover`, rounded-xl)
  * with tall 44px options and brand-tinted hover/selected states.
  *
  * Keyboard: ArrowUp/Down move through the rows (including the clear/
@@ -150,7 +150,7 @@ export function Dropdown({
   };
 
   const optionRowClass = (isSelected: boolean, isActive: boolean) =>
-    `dropdown-option flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+    `dropdown-option flex min-h-10 w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors ${
       isSelected
         ? "bg-brand-50 font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-300"
         : isActive
@@ -171,7 +171,7 @@ export function Dropdown({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openWithSelection())}
         onKeyDown={onTriggerKeyDown}
-        className="field-input relative h-auto min-h-11 cursor-pointer pr-9 text-left sm:w-auto sm:min-w-28"
+        className="field-input relative h-8 cursor-pointer pr-9 text-left sm:w-auto sm:min-w-28"
       >
         <span className={`block truncate ${selected ? "" : "text-slate-400 dark:text-slate-500"}`}>
           {selected ? selected.label : placeholder}
@@ -188,7 +188,7 @@ export function Dropdown({
           role="listbox"
           aria-label={label}
           onKeyDown={onListKeyDown}
-          className="animate-pop absolute z-30 mt-1.5 max-h-64 w-full min-w-36 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-popover dark:border-slate-700/50 dark:bg-ink-800 sm:w-auto sm:min-w-full"
+          className="animate-pop absolute z-30 mt-1.5 max-h-64 w-full min-w-36 overflow-y-auto rounded-xl border border-slate-200/80 bg-white p-1.5 shadow-popover dark:border-slate-700/50 dark:bg-ink-800 sm:w-auto sm:min-w-full"
         >
           <li
             role="option"

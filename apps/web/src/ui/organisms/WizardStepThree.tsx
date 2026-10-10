@@ -55,7 +55,7 @@ export function WizardStepThree({
                     {PRIORITY_LABELS[priority]}
                   </span>
                 }
-                className={`items-center rounded-2xl border px-3 py-2.5 transition-[background-color,border-color,box-shadow,color] ${
+                className={`items-center rounded-xl border px-3 py-2.5 transition-[background-color,border-color,box-shadow,color] ${
                   selected
                     ? "border-brand-500/70 bg-brand-50/70 shadow-glow dark:border-brand-400/50 dark:bg-brand-500/10"
                     : "border-slate-300/80 bg-white shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600/60 dark:bg-ink-800 dark:hover:border-slate-500 dark:hover:bg-white/5"
@@ -91,7 +91,7 @@ export function WizardStepThree({
             return (
               <label
                 key={offset}
-                className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm leading-none transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-500 dark:has-[:focus-visible]:outline-brand-400 ${
+                className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm leading-none transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-500 dark:has-[:focus-visible]:outline-brand-400 ${
                   selected
                     ? "border-brand-500/70 bg-brand-50/70 text-brand-700 shadow-sm dark:border-brand-400/50 dark:bg-brand-500/10 dark:text-brand-300"
                     : "border-slate-300/80 bg-white text-slate-600 shadow-sm hover:border-slate-400 dark:border-slate-600/60 dark:bg-ink-800 dark:text-slate-300 dark:hover:border-slate-500"

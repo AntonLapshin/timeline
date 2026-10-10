@@ -58,7 +58,7 @@ export function Alert({ tone, title, children, className = "" }: AlertProps) {
   return (
     <div
       role={tone === "error" ? "alert" : "status"}
-      className={`flex items-start gap-3 rounded-2xl border p-4 text-sm ${config.container} ${className}`.trim()}
+      className={`flex items-start gap-3 rounded-xl border p-4 text-sm ${config.container} ${className}`.trim()}
     >
       <Icon aria-hidden="true" className={`h-5 w-5 shrink-0 ${config.iconColor}`} />
       <div className="min-w-0">

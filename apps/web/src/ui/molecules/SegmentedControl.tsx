@@ -111,13 +111,13 @@ export function SegmentedControl<T extends string>({
       ref={trackRef}
       role="group"
       aria-label={label}
-      className={`relative flex gap-1 rounded-2xl border border-slate-200/70 bg-slate-100/70 p-1 dark:border-slate-700/50 dark:bg-ink-800/70 ${className}`}
+      className={`relative flex h-8 gap-1 rounded-lg border border-slate-200/70 bg-slate-100/70 p-0.5 dark:border-slate-700/50 dark:bg-ink-800/70 ${className}`}
     >
       {indicator.visible && (
         <span
           aria-hidden
           style={{ left: indicator.left, width: indicator.width }}
-          className="pointer-events-none absolute bottom-1 top-1 rounded-xl bg-gradient-to-b from-brand-500 to-brand-700 shadow-md shadow-brand-600/25 transition-[left,width] duration-200 ease-out dark:from-brand-400 dark:to-brand-600"
+          className="pointer-events-none absolute bottom-0.5 top-0.5 rounded-md bg-gradient-to-b from-brand-500 to-brand-700 shadow-md shadow-brand-600/25 transition-[left,width] duration-200 ease-out dark:from-brand-400 dark:to-brand-600"
         />
       )}
       {options.map((opt, index) => {
@@ -138,7 +138,7 @@ export function SegmentedControl<T extends string>({
             tabIndex={active ? 0 : -1}
             onClick={() => select(opt.id)}
             onKeyDown={(e) => onSegmentKeyDown(e, index)}
-            className={`relative z-10 flex h-auto min-h-8 flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium leading-none transition-colors duration-200 ${
+            className={`relative z-10 flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium leading-none transition-colors duration-200 ${
               active
                 ? "text-white"
                 : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"

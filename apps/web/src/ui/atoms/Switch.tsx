@@ -32,7 +32,7 @@ export function Switch({
 }: SwitchProps) {
   return (
     <label
-      className={`inline-flex cursor-pointer items-center gap-2.5 rounded-xl p-1 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-500 dark:has-[:focus-visible]:outline-brand-400 ${
+      className={`inline-flex cursor-pointer items-center gap-2.5 rounded-lg p-1 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-brand-500 dark:has-[:focus-visible]:outline-brand-400 ${
         disabled ? "cursor-not-allowed opacity-50" : ""
       } ${className}`}
     >

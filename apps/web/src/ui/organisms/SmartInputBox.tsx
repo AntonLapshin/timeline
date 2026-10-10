@@ -32,7 +32,7 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
   return (
     <div className="w-full" data-testid="smart-input">
       <form onSubmit={onSubmit} className="flex w-full items-center gap-2">
-        <div className="min-w-0 flex-1 rounded-xl transition-shadow focus-within:shadow-glow">
+        <div className="min-w-0 flex-1 rounded-lg transition-shadow focus-within:shadow-glow">
           <input
             ref={inputRef}
             type="text"

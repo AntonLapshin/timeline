@@ -60,7 +60,7 @@ export function AppShell({
           <div className="flex items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 shadow-md shadow-brand-600/25"
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 shadow-md shadow-brand-600/25"
             >
               <svg
                 viewBox="0 0 24 24"

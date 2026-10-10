@@ -58,7 +58,7 @@ export function WizardStepTwo({
                   onChange({ recurrence: value as RecurrenceChoice })
                 }
                 label={RECURRENCE_LABELS[choice]}
-                className={`items-center rounded-2xl border px-3 py-2.5 transition-[background-color,border-color,box-shadow,color] ${
+                className={`items-center rounded-xl border px-3 py-2.5 transition-[background-color,border-color,box-shadow,color] ${
                   selected
                     ? "border-brand-500/70 bg-brand-50/70 shadow-glow dark:border-brand-400/50 dark:bg-brand-500/10"
                     : "border-slate-300/80 bg-white shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600/60 dark:bg-ink-800 dark:hover:border-slate-500 dark:hover:bg-white/5"

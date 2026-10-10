@@ -107,7 +107,17 @@
    * :focus-visible rule — no per-field rings.
    */
   .field-input {
-    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-150 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600/80 dark:bg-ink-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-500 dark:disabled:bg-slate-800/60 dark:disabled:text-slate-500;
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-150 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600/80 dark:bg-ink-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-500 dark:disabled:bg-slate-800/60 dark:disabled:text-slate-500;
+    /* One standard inline-control height shared with buttons (32px). */
+    height: 2rem;
+  }
+
+  /* Multi-line fields keep a natural auto height. */
+  textarea.field-input {
+    height: auto;
+    min-height: 5rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
   }
 
   .field-input[aria-invalid="true"] {
@@ -127,40 +137,42 @@
   }
 
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-xl text-sm font-semibold leading-none disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 text-sm font-semibold leading-none disabled:cursor-not-allowed disabled:opacity-40;
+    /* One standard inline-control height (32px), shared with inputs. */
+    height: 2rem;
   }
 
   .btn-primary {
-    @apply btn bg-gradient-to-b from-brand-500 to-brand-700 px-4 py-2.5 text-white shadow-md shadow-brand-600/30 hover:from-brand-400 hover:to-brand-600 hover:shadow-lg hover:shadow-brand-600/30 dark:from-brand-400 dark:to-brand-600 dark:text-white dark:shadow-brand-950/60;
+    @apply btn bg-gradient-to-b from-brand-500 to-brand-700 text-white shadow-md shadow-brand-600/30 hover:from-brand-400 hover:to-brand-600 hover:shadow-lg hover:shadow-brand-600/30 dark:from-brand-400 dark:to-brand-600 dark:text-white dark:shadow-brand-950/60;
   }
 
   .btn-accent {
-    @apply btn bg-gradient-to-b from-violet-500 to-violet-700 px-3.5 py-2 text-white shadow-md shadow-violet-600/25 hover:shadow-lg hover:shadow-violet-600/30 dark:shadow-violet-950/60;
+    @apply btn bg-gradient-to-b from-violet-500 to-violet-700 text-white shadow-md shadow-violet-600/25 hover:shadow-lg hover:shadow-violet-600/30 dark:shadow-violet-950/60;
   }
 
   .btn-ghost {
-    @apply btn border border-slate-300/90 bg-white/80 px-3.5 py-2 text-slate-700 shadow-sm backdrop-blur hover:border-slate-400 hover:bg-white dark:border-slate-600/80 dark:bg-ink-800/80 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-ink-800;
+    @apply btn border border-slate-300/90 bg-white/80 text-slate-700 shadow-sm backdrop-blur hover:border-slate-400 hover:bg-white dark:border-slate-600/80 dark:bg-ink-800/80 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-ink-800;
   }
 
   .btn-danger {
-    @apply btn border border-red-200 bg-white px-4 py-2 text-red-700 shadow-sm hover:bg-red-50 dark:border-red-500/30 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40;
+    @apply btn border border-red-200 bg-white text-red-700 shadow-sm hover:bg-red-50 dark:border-red-500/30 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40;
   }
 
   .btn-danger-solid {
-    @apply btn bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-white shadow-md shadow-red-600/25 hover:shadow-lg;
+    @apply btn bg-gradient-to-b from-red-500 to-red-700 text-white shadow-md shadow-red-600/25 hover:shadow-lg;
   }
 
   /*
    * Square icon buttons (arrows, Close, theme toggle, …): a perfect
-   * 40×40 footprint shared by every single-icon button — comfortably above
-   * the 24px WCAG minimum and a reliable touch target.
+   * 32×32 footprint shared by every single-icon button — the standard
+   * inline-control height, comfortably above the 24px WCAG minimum.
    */
   .btn-square {
-    height: 40px;
-    width: 40px;
+    height: 32px;
+    width: 32px;
     padding-left: 0;
     padding-right: 0;
-    border-radius: 12px;
+    border-radius: 8px;
   }
 
   /*
@@ -177,7 +189,7 @@
    * hover lift reserved for interactive cards (`.card-interactive`).
    */
   .card {
-    @apply rounded-2xl border border-slate-200/80 bg-white shadow-card dark:border-slate-700/50 dark:bg-ink-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_16px_40px_-16px_rgb(0_0_0/0.7)];
+    @apply rounded-xl border border-slate-200/80 bg-white shadow-card dark:border-slate-700/50 dark:bg-ink-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_16px_40px_-16px_rgb(0_0_0/0.7)];
   }
 
   .card-interactive {
@@ -185,7 +197,7 @@
   }
 
   .chip {
-    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-5;
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-semibold leading-5;
   }
 
   /*
@@ -242,7 +254,7 @@
    * top-left above everything.
    */
   .skip-link {
-    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-xl bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white shadow-popover transition-transform duration-150 dark:bg-white dark:text-ink-950;
+    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg bg-ink-950 px-4 py-2 text-sm font-semibold text-white shadow-popover transition-transform duration-150 dark:bg-white dark:text-ink-950;
   }
 
   .skip-link:focus-visible {
@@ -258,7 +270,7 @@
 
   /* Skeleton shimmer surface. */
   .skeleton {
-    @apply rounded-xl bg-slate-200 dark:bg-slate-700/70;
+    @apply rounded-lg bg-slate-200 dark:bg-slate-700/70;
     background-image: linear-gradient(
       100deg,
       transparent 20%,

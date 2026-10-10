@@ -82,7 +82,7 @@ export function DayCell({
       data-day-index={dayIndex}
       aria-current={isToday ? "date" : undefined}
       aria-label={`${day.isoDate}, ${day.count} event${day.count === 1 ? "" : "s"}`}
-      className={`print-month-cell flex min-h-16 flex-col items-center justify-start rounded-2xl border p-1.5 text-sm leading-none transition-[transform,box-shadow,background-color,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-card ${
+      className={`print-month-cell flex min-h-16 flex-col items-center justify-start rounded-xl border p-1.5 text-sm leading-none transition-[transform,box-shadow,background-color,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-card ${
         isSelected
           ? "border-transparent bg-gradient-to-b from-brand-500 to-brand-700 text-white shadow-glow-sm"
           : day.inMonth

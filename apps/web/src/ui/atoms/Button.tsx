@@ -12,13 +12,13 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   "danger-solid": "btn-danger-solid",
 };
 
-/** Button sizes. Padding/text utilities beat the `.btn-*` component-layer paddings. */
+/** Button sizes. Fixed heights keep every inline control on one 32px rhythm. */
 export type ButtonSize = "sm" | "md" | "lg";
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-xs min-h-8",
-  md: "px-4 py-2.5 text-sm",
-  lg: "px-6 py-3 text-base",
+  sm: "h-7 px-2.5 text-xs",
+  md: "h-8 px-3 text-sm",
+  lg: "h-10 px-4 text-sm",
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -29,7 +29,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /**
    * Square mode for single-icon buttons (arrows, Close, theme toggle, …).
    *
-   * Applies the shared `.btn-square` footprint (40×40).
+   * Applies the shared `.btn-square` footprint (32×32).
    */
   square?: boolean;
   /**
@@ -43,7 +43,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 /**
  * Shared button. Compositional: `variant` picks the color treatment,
- * `size` the footprint, `square` a 40×40 icon footprint, `loading` a
+ * `size` the footprint, `square` a 32×32 icon footprint, `loading` a
  * spinner + disabled state, `fullWidth` a block layout.
  *
  * All other props (including `onClick`, `disabled`, `aria-*`) pass through

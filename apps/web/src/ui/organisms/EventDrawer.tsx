@@ -132,7 +132,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           </p>
         )}
 
-        <section className="mb-4 rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/50 dark:bg-white/5">
+        <section className="mb-4 rounded-xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/50 dark:bg-white/5">
           <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
             Reminders
           </h3>
@@ -168,7 +168,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           )}
         </section>
 
-        <section className="mb-4 rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/50 dark:bg-white/5">
+        <section className="mb-4 rounded-xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/50 dark:bg-white/5">
           <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
             Next occurrences
           </h3>
@@ -187,7 +187,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
               {occurrences.map(({ occurrence, row }) => (
                 <li
                   key={`${occurrence.event_id}-${occurrence.start_at}`}
-                  className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-3 shadow-sm dark:border-slate-700/70 dark:bg-ink-800"
+                  className="flex items-start gap-3 rounded-lg border border-slate-200/70 bg-white p-3 shadow-sm dark:border-slate-700/70 dark:bg-ink-800"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -205,7 +205,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
           )}
         </section>
 
-        <section className="rounded-2xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/50 dark:bg-white/5">
+        <section className="rounded-xl border border-slate-200/70 bg-slate-50/80 p-4 dark:border-slate-700/50 dark:bg-white/5">
           <h3 className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">
             Delivery log
           </h3>
@@ -226,7 +226,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
               {deliveries.map((row) => (
                 <li
                   key={row.log.id}
-                  className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-3 shadow-sm dark:border-slate-700/70 dark:bg-ink-800"
+                  className="flex items-start gap-3 rounded-lg border border-slate-200/70 bg-white p-3 shadow-sm dark:border-slate-700/70 dark:bg-ink-800"
                 >
                   <span
                     aria-hidden
@@ -276,7 +276,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
             Delete event
           </Button>
         ) : (
-          <div className="mt-2 rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-500/30 dark:bg-red-950/40">
+          <div className="mt-2 rounded-xl border border-red-200 bg-red-50/80 p-4 dark:border-red-500/30 dark:bg-red-950/40">
             <p className="text-sm font-medium text-red-700 dark:text-red-300">
               Delete this event? This cannot be undone.
             </p>
