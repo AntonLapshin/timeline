@@ -9,15 +9,13 @@ pattern) and 404 handling.
 from __future__ import annotations
 
 import contextlib
-import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import Settings, get_settings
+from app.config import Settings
 from app.main import create_app
 from app.models import DeliveryLog
 from app.scheduler import build_scheduler, event_job_keys
@@ -251,70 +249,67 @@ def test_get_event_deliveries_scoped_to_event(client: TestClient) -> None:
     assert body[0]["status"] == "sent"
 
 
-# --- LLM parse endpoint (issue #70) -----------------------------------------
+# --- deterministic quick-parse endpoint ---------------------------------------
 
 
-def test_parse_endpoint_unavailable_without_key(client: TestClient) -> None:
-    """Without an LLM key, POST /api/events/parse returns 503 (unavailable)."""
-    client.app.dependency_overrides[get_settings] = lambda: Settings(llm_api_key=None)
-    try:
-        resp = client.post(
-            "/api/events/parse",
-            json={"text": "dentist tomorrow 9am"},
-        )
-    finally:
-        client.app.dependency_overrides.clear()
-    assert resp.status_code == 503
-    body = resp.json()
-    assert "detail" in body
-
-
-def test_parse_endpoint_llm_failure_returns_502_and_logs(
+def test_quick_parse_endpoint_returns_draft_and_flags(
     client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A real LLM failure surfaces as 502 with the cause logged (issue #113).
-
-    The LLM HTTP client is faked (no network): the gate returns 502, the API
-    responds 502 with the underlying error in ``detail`` and logs it
-    server-side — without the API key or the raw user text.
-    """
-    settings = Settings(llm_api_key="test-key", llm_model="test-model")
-    client.app.dependency_overrides[get_settings] = lambda: settings
-
-    class _FakeLlmResponse:
-        status_code = 502
-
-        def json(self) -> dict[str, object]:
-            return {"error": "invalid api key"}
-
-    class _FakeLlmClient:
-        def post(
-            self, url: str, *, headers: dict[str, str], json: dict[str, object]
-        ) -> _FakeLlmResponse:
-            return _FakeLlmResponse()
-
-    monkeypatch.setattr(httpx, "Client", lambda *a, **k: _FakeLlmClient())
-    try:
-        with caplog.at_level(logging.ERROR, logger="app.llm_parse"):
-            resp = client.post("/api/events/parse", json={"text": "dentist tomorrow"})
-    finally:
-        client.app.dependency_overrides.clear()
-    assert resp.status_code == 502
-    assert "LLM request failed (HTTP 502)" in resp.json()["detail"]
-    # The underlying failure is in the server logs — but no secrets/text.
-    messages = "\n".join(r.getMessage() for r in caplog.records)
-    assert "LLM parse failed" in messages
-    assert "HTTP 502" in messages
-    assert "test-key" not in messages
-    assert "dentist tomorrow" not in messages
+    """POST /api/events/quick-parse returns the draft + explicit flags."""
+    resp = client.post(
+        "/api/events/quick-parse",
+        json={
+            "text": "dentist tomorrow at 9am 15m",
+            "now": "2026-01-01T08:30:00+00:00",
+            "tz": "UTC",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    draft = body["draft"]
+    assert draft["title"] == "dentist"
+    assert draft["start_at"] == "2026-01-02T09:00:00+00:00"
+    assert draft["all_day"] is False
+    assert draft["reminder_offsets"] == ["15m"]
+    assert body["has_explicit_date"] is True
+    assert body["has_explicit_time"] is True
 
 
-def test_parse_endpoint_requires_text(client: TestClient) -> None:
+def test_quick_parse_endpoint_vague_text_defaults_to_today_all_day(
+    client: TestClient,
+) -> None:
+    """Vague text yields a today/all-day draft — never a 4xx/5xx."""
+    resp = client.post("/api/events/quick-parse", json={"text": "buy milk"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["draft"]["title"] == "buy milk"
+    assert body["draft"]["all_day"] is True
+    assert body["has_explicit_date"] is False
+    assert body["has_explicit_time"] is False
+
+
+def test_quick_parse_endpoint_requires_text(client: TestClient) -> None:
     """An empty text payload is rejected with 422."""
-    resp = client.post("/api/events/parse", json={"text": ""})
+    resp = client.post("/api/events/quick-parse", json={"text": ""})
     assert resp.status_code == 422
+
+
+def test_quick_parse_endpoint_honors_tz_and_now(client: TestClient) -> None:
+    """Explicit ``tz``/``now`` anchor relative dates in the requested zone."""
+    resp = client.post(
+        "/api/events/quick-parse",
+        json={
+            "text": "standup tomorrow at 9am",
+            "now": "2026-01-01T12:00:00+00:00",
+            "tz": "America/New_York",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["draft"]["start_at"] == "2026-01-02T09:00:00-05:00"
+    assert body["draft"]["tz"] == "America/New_York"
+    assert body["has_explicit_date"] is True
+    assert body["has_explicit_time"] is True
 
 
 # --- runtime scheduling wiring (issue #134, M10-T1) ----------------------------

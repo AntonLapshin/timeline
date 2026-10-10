@@ -14,7 +14,7 @@ describe("useSmartInput", () => {
     vi.clearAllMocks();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: {
+      quickParser: {
         parse: vi.fn(),
       },
     });
@@ -24,7 +24,6 @@ describe("useSmartInput", () => {
     const { result } = renderHook(() => useSmartInput(() => {}));
     expect(result.current.text).toBe("");
     expect(result.current.error).toBeNull();
-    expect(result.current.unavailable).toBe(false);
     expect(result.current.parsing).toBe(false);
   });
 
@@ -38,7 +37,7 @@ describe("useSmartInput", () => {
     const onParsed = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: {
+      quickParser: {
         parse: vi.fn().mockResolvedValue({
           ok: true,
           draft: { title: "Dentist", start_at: "2026-09-22T15:00:00", tz: "UTC" },
@@ -65,7 +64,7 @@ describe("useSmartInput", () => {
     const onParsed = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: {
+      quickParser: {
         parse: vi.fn().mockResolvedValue({
           ok: false,
           error: "could not parse",
@@ -79,36 +78,13 @@ describe("useSmartInput", () => {
     });
     expect(onParsed).not.toHaveBeenCalled();
     expect(result.current.error).toBe("could not parse");
-    expect(result.current.unavailable).toBe(false);
-  });
-
-  it("submit flags unavailable when the parse reports the LLM key is absent", async () => {
-    const onParsed = vi.fn();
-    useServicesMock.mockReturnValue({
-      apiClient: {},
-      llmParser: {
-        parse: vi.fn().mockResolvedValue({
-          ok: false,
-          unavailable: true,
-          error: "Parsing is unavailable (LLM key not configured).",
-        }),
-      },
-    });
-    const { result } = renderHook(() => useSmartInput(onParsed));
-    act(() => result.current.setText("dentist"));
-    await act(async () => {
-      await result.current.submit();
-    });
-    expect(onParsed).not.toHaveBeenCalled();
-    expect(result.current.unavailable).toBe(true);
-    expect(result.current.error).toContain("unavailable");
   });
 
   it("submit shows an inline error when the draft cannot be converted", async () => {
     const onParsed = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: {
+      quickParser: {
         parse: vi.fn().mockResolvedValue({
           ok: true,
           draft: { title: "" },
@@ -124,35 +100,11 @@ describe("useSmartInput", () => {
     expect(result.current.error).toContain("manually");
   });
 
-  it("renders the distinct 502 LLM-failure message from core verbatim", async () => {
+  it("renders the cannot-reach-API message from core verbatim", async () => {
     const onParsed = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: {
-        parse: vi.fn().mockResolvedValue({
-          ok: false,
-          error:
-            "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs (server: LLM request failed (HTTP 401))",
-        }),
-      },
-    });
-    const { result } = renderHook(() => useSmartInput(onParsed));
-    act(() => result.current.setText("dentist"));
-    await act(async () => {
-      await result.current.submit();
-    });
-    expect(onParsed).not.toHaveBeenCalled();
-    expect(result.current.error).toBe(
-      "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs (server: LLM request failed (HTTP 401))",
-    );
-    expect(result.current.unavailable).toBe(false);
-  });
-
-  it("renders the distinct cannot-reach-API message from core verbatim", async () => {
-    const onParsed = vi.fn();
-    useServicesMock.mockReturnValue({
-      apiClient: {},
-      llmParser: {
+      quickParser: {
         parse: vi.fn().mockResolvedValue({
           ok: false,
           error:
@@ -167,14 +119,13 @@ describe("useSmartInput", () => {
     });
     expect(onParsed).not.toHaveBeenCalled();
     expect(result.current.error).toContain("Cannot reach the API");
-    expect(result.current.unavailable).toBe(false);
   });
 
   it("falls back to the generic message only for truly unexpected throws", async () => {
     const onParsed = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: {
+      quickParser: {
         parse: vi.fn().mockRejectedValue(new Error("boom")),
       },
     });
@@ -184,9 +135,8 @@ describe("useSmartInput", () => {
       await result.current.submit();
     });
     expect(onParsed).not.toHaveBeenCalled();
-    expect(result.current.unavailable).toBe(true);
     expect(result.current.error).toBe(
-      "Parsing is unavailable right now. You can still add the event manually.",
+      "Something went wrong while parsing. You can still add the event manually.",
     );
   });
 
@@ -194,7 +144,7 @@ describe("useSmartInput", () => {
     const parse = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: {},
-      llmParser: { parse },
+      quickParser: { parse },
     });
     const { result } = renderHook(() => useSmartInput(() => {}));
     await act(async () => {
@@ -209,6 +159,5 @@ describe("useSmartInput", () => {
     act(() => result.current.clear());
     expect(result.current.text).toBe("");
     expect(result.current.error).toBeNull();
-    expect(result.current.unavailable).toBe(false);
   });
 });

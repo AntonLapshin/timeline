@@ -68,7 +68,6 @@ def test_event_defaults(session: Session) -> None:
     assert event.email_enabled is False
     assert event.email_to is None
     assert event.raw_input is None
-    assert event.ai_confidence is None
     assert event.created_at is not None
     assert event.updated_at is not None
 
@@ -157,7 +156,6 @@ def test_telegram_inbound_parsed_draft(session: Session) -> None:
         telegram_message_id="msg_42",
         chat_id="123456",
         message_type="voice",
-        voice_duration_sec=17,
         file_id="AwAC...",
         parsed_draft={"title": "Dentist", "start_at": "2026-02-01T09:00:00"},
     )
@@ -167,7 +165,6 @@ def test_telegram_inbound_parsed_draft(session: Session) -> None:
     assert inbound.id is not None
     assert inbound.telegram_message_id == "msg_42"
     assert inbound.message_type == "voice"
-    assert inbound.voice_duration_sec == 17
     assert inbound.status == "received"
     assert inbound.parsed_draft == {
         "title": "Dentist",

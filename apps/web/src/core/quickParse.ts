@@ -1,13 +1,16 @@
 /**
- * LLM smart-input parsing service for the timeline web UI (issue #20).
+ * Deterministic smart-input parsing service for the timeline web UI.
  *
  * Pure service: wraps `fetch` (injected as a dependency) into a typed call to
- * `POST /api/events/parse`, which returns a structured event draft to be
- * confirmed before saving. Every failure mode maps to a typed, actionable
- * `ParseResult` (issue #113) — this module never throws for HTTP/network
- * failures: 503 → unavailable (LLM key absent), 502 → LLM-failure guidance,
- * network error → cannot-reach-API, any other status → unexpected-API-error.
- * No React, no browser globals.
+ * `POST /api/events/quick-parse`, which runs the backend's deterministic
+ * natural-language parser and returns a structured event draft to be
+ * confirmed before saving. The endpoint never 503/502s — the parser is local
+ * to the backend, so the worst case for vague text is a today/all-day draft
+ * the user corrects on the wizard. Every failure mode maps to a typed,
+ * actionable `ParseResult` — this module never throws for HTTP/network
+ * failures: network error → cannot-reach-API, any other status →
+ * unexpected-API-error, non-object body → unexpected-response. No React, no
+ * browser globals.
  */
 
 import { safePriority, validateDraft, type ParsedDraft } from "./parseGuards";
@@ -28,89 +31,40 @@ import type { FetchLike } from "./apiClient";
 /** Result of a parse call: either a draft or an error message. */
 export type ParseResult =
   | { ok: true; draft: ParsedDraft }
-  | {
-      ok: false;
-      error: string;
-      /** True when the LLM key is absent / parsing is unavailable. */
-      unavailable?: boolean;
-    };
+  | { ok: false; error: string };
 
-/** Wire shape of `POST /api/events/parse` (see `EventParseResponse`). */
-interface ParseApiResponse {
-  events?: ParsedDraft[] | null;
-  needs_clarification?: boolean | null;
-  message?: string | null;
-  /** Legacy/bare-draft shape: the body itself is the draft. */
-  title?: string;
+/** Wire shape of `POST /api/events/quick-parse` (see `QuickParseResponse`). */
+interface QuickParseApiResponse {
+  draft?: ParsedDraft | null;
+  has_explicit_date?: boolean | null;
+  has_explicit_time?: boolean | null;
 }
 
-/** Fallback when the model needs more detail but gives no message. */
-export const NEEDS_CLARIFICATION_MESSAGE =
-  "Couldn't turn that into an event. Try being more specific, or add it manually.";
+/** Fallback when the API returns a body that is not a parse envelope. */
+export const UNEXPECTED_BODY_MESSAGE =
+  "The API returned an unexpected response. You can still add the event manually.";
 
 /**
- * Normalize a successful `/api/events/parse` body into a `ParseResult`.
+ * Normalize a successful `/api/events/quick-parse` body into a `ParseResult`.
  *
- * The API returns an envelope — `{ events: [...] }` or
- * `{ needs_clarification: true, message }` — never a bare draft. A bare
- * `{ title, ... }` body is still accepted for backward compatibility.
- * Pure; never throws.
+ * The API returns an envelope — `{ draft, has_explicit_date, has_explicit_time }`.
+ * The explicitness flags stay on the wire: the wizard confirmation is the
+ * correction step for vague text. Pure; never throws.
  */
 export function parseApiBody(body: unknown): ParseResult {
   if (!body || typeof body !== "object") {
-    return { ok: false, error: NEEDS_CLARIFICATION_MESSAGE };
+    return { ok: false, error: UNEXPECTED_BODY_MESSAGE };
   }
-  const envelope = body as ParseApiResponse;
-  if (envelope.needs_clarification) {
-    const message =
-      typeof envelope.message === "string" && envelope.message.trim()
-        ? envelope.message.trim()
-        : NEEDS_CLARIFICATION_MESSAGE;
-    return { ok: false, error: message };
+  const { draft } = body as QuickParseApiResponse;
+  if (!draft || typeof draft !== "object") {
+    return { ok: false, error: UNEXPECTED_BODY_MESSAGE };
   }
-  if (Array.isArray(envelope.events)) {
-    if (envelope.events.length === 0) {
-      const message =
-        typeof envelope.message === "string" && envelope.message.trim()
-          ? envelope.message.trim()
-          : NEEDS_CLARIFICATION_MESSAGE;
-      return { ok: false, error: message };
-    }
-    return { ok: true, draft: envelope.events[0] };
-  }
-  if (typeof envelope.title === "string") {
-    // Backward-compatible bare draft (older API / existing tests).
-    return { ok: true, draft: envelope as ParsedDraft };
-  }
-  return { ok: false, error: NEEDS_CLARIFICATION_MESSAGE };
+  return { ok: true, draft };
 }
-
-/** Message for a failed LLM call behind the API (HTTP 502, issue #113). */
-export const LLM_FAILED_MESSAGE =
-  "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs";
 
 /** Message when the API itself cannot be reached (network failure). */
 export const NETWORK_ERROR_MESSAGE =
   "Cannot reach the API — check that the backend is running and the address is correct.";
-
-/**
- * Build the 502 error message, appending the server's `detail` when present
- * (it names the underlying cause, e.g. an LLM-gate 401). Never throws.
- */
-async function llmFailedMessage(res: {
-  json(): Promise<unknown>;
-}): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: unknown } | null;
-    const detail =
-      typeof body?.detail === "string" ? body.detail.trim() : "";
-    return detail
-      ? `${LLM_FAILED_MESSAGE} (server: ${detail})`
-      : LLM_FAILED_MESSAGE;
-  } catch {
-    return LLM_FAILED_MESSAGE;
-  }
-}
 
 /**
  * Result of converting a parsed draft into a wizard pre-fill.
@@ -123,51 +77,39 @@ export type ParsedToDraftResult =
   | { ok: false; errors: string[] };
 
 /** The parse service bound to a base URL and a fetch implementation. */
-export interface LlmParser {
+export interface QuickParser {
   parse(text: string): Promise<ParseResult>;
 }
 
 /**
- * Build an LlmParser.
+ * Build a QuickParser.
  *
  * @param baseUrl  The API base URL, e.g. `http://127.0.0.1:8123`.
  * @param fetchImpl  The fetch implementation to use (defaults to globalThis.fetch).
  */
-export function createLlmParser(
+export function createQuickParser(
   baseUrl: string,
   fetchImpl: FetchLike = globalThis.fetch as unknown as FetchLike,
-): LlmParser {
+): QuickParser {
   const base = baseUrl.replace(/\/+$/, "");
 
   return {
     async parse(text: string): Promise<ParseResult> {
       let res: Awaited<ReturnType<FetchLike>>;
       try {
-        res = await fetchImpl(`${base}/api/events/parse`, {
+        res = await fetchImpl(`${base}/api/events/quick-parse`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text }),
         });
       } catch {
-        // Distinct from a server-side LLM failure: the API itself is unreachable.
+        // The API itself is unreachable.
         return { ok: false, error: NETWORK_ERROR_MESSAGE };
       }
-      if (res.status === 503) {
-        // The LLM key is absent — parsing is unavailable, not a hard failure.
-        return {
-          ok: false,
-          unavailable: true,
-          error:
-            "Parsing is unavailable (LLM key not configured). You can still add the event manually.",
-        };
-      }
-      if (res.status === 502) {
-        // The LLM call failed server-side (bad key/model, gate error, network).
-        return { ok: false, error: await llmFailedMessage(res) };
-      }
       if (!res.ok) {
-        // Any other HTTP error is unexpected but must not throw (issue #113):
-        // return a typed result so the UI can render it inline.
+        // The deterministic endpoint never 503/502s: any HTTP error is
+        // unexpected but must not throw — return a typed result so the UI
+        // can render it inline.
         return {
           ok: false,
           error: `Unexpected API error (HTTP ${res.status}). You can still add the event manually.`,
@@ -209,7 +151,7 @@ export function draftFromParsed(
   // naive start_at IS that wall clock (render verbatim); an aware one is
   // converted into the zone. Browser-local fallback keeps the old behavior
   // when the parse carries no (valid) zone — showing browser-local time while
-  // labeling the draft with the event's zone shifted AI-parsed pre-fills by
+  // labeling the draft with the event's zone shifted parsed pre-fills by
   // the zone difference, the same mismatch the drawer/timeline had.
   const wallClock =
     parsed.tz && parsed.start_at ? parseNaiveWallClock(parsed.start_at) : null;

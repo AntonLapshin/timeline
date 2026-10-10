@@ -18,11 +18,7 @@ export const EVENT_SCHEMA_VERSION = "v1";
 export type EventStatus = "draft" | "active" | "archived";
 
 /** How an event was captured. */
-export type EventSource =
-  | "web"
-  | "telegram_text"
-  | "telegram_voice"
-  | "ai";
+export type EventSource = "web" | "telegram_text";
 
 /** Whether the event recurs. */
 export type EventType = "one_time" | "recurrent";
@@ -41,12 +37,7 @@ export const EVENT_STATUSES: readonly EventStatus[] = [
 ];
 
 /** All allowed event sources. */
-export const EVENT_SOURCES: readonly EventSource[] = [
-  "web",
-  "telegram_text",
-  "telegram_voice",
-  "ai",
-];
+export const EVENT_SOURCES: readonly EventSource[] = ["web", "telegram_text"];
 
 /** All allowed event types. */
 export const EVENT_TYPES: readonly EventType[] = ["one_time", "recurrent"];

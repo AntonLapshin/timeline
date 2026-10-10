@@ -149,33 +149,6 @@ class Settings:
     smtp_from: str | None = field(default_factory=lambda: _optional_env("SMTP_FROM"))
     #: Default "To" address for reminder emails.
     smtp_to: str | None = field(default_factory=lambda: _optional_env("SMTP_TO"))
-    #: JoinGonka / OpenAI-compatible base URL for LLM parsing (issue #70).
-    llm_base_url: str = field(
-        default_factory=lambda: os.getenv(
-            "LLM_BASE_URL", "https://gate.joingonka.ai/v1"
-        )
-    )
-    #: LLM model name for parsing (local .env only).
-    llm_model: str = field(default_factory=lambda: os.getenv("LLM_MODEL", ""))
-    #: LLM API key (local .env only, never committed). Absent ⇒ parse unavailable.
-    llm_api_key: str | None = field(
-        default_factory=lambda: _optional_env("LLM_API_KEY")
-    )
-    #: Path to the local voxtype binary used for whisper.cpp transcription
-    #: (issue #71). Defaults to ``voxtype`` on PATH; points at the local install
-    #: when it lives elsewhere (e.g. the natalies-corner voxtype install).
-    stt_voxtype_path: str = field(
-        default_factory=lambda: os.getenv("STT_VOXTYPE_PATH", "voxtype")
-    )
-    #: Local whisper model path for STT. Empty ⇒ let voxtype use its installed
-    #: default model (issue #71).
-    stt_model_path: str | None = field(
-        default_factory=lambda: _optional_env("STT_MODEL_PATH")
-    )
-    #: Maximum voice-message duration in seconds (2-minute cap, issue #71).
-    stt_max_seconds: float = field(
-        default_factory=lambda: float(os.getenv("STT_MAX_SECONDS", "120"))
-    )
     #: Retrospective catch-up window in days: on startup, reminders due in
     #: ``[now - lookback, now]`` that were never delivered (service was down)
     #: are re-sent with a "missed" card. Bounded so startup stays fast.

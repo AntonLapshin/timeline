@@ -31,7 +31,7 @@ export type EventStatus = "draft" | "active" | "archived";
 export type EventType = "one_time" | "recurrent";
 
 /** How an event was captured. */
-export type EventSource = "web" | "telegram_text" | "telegram_voice" | "ai";
+export type EventSource = "web" | "telegram_text";
 
 /** A persisted event as returned by `GET /api/events`. */
 export interface EventRead {
@@ -56,7 +56,6 @@ export interface EventRead {
   email_to: string | null;
   source: EventSource;
   raw_input: string | null;
-  ai_confidence: number | null;
   status: EventStatus;
   created_at: string;
   updated_at: string;
@@ -84,7 +83,6 @@ export interface EventCreate {
   email_to?: string | null;
   source?: EventSource;
   raw_input?: string | null;
-  ai_confidence?: number | null;
   status?: EventStatus;
 }
 

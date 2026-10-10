@@ -45,7 +45,7 @@ describe("useCalendar adjacent-month fetch", () => {
     const getOccurrences = vi.fn().mockResolvedValue([]);
     const services = {
       apiClient: { getOccurrences },
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderHook(() => useCalendar(), { wrapper: wrapper(services) });
@@ -89,7 +89,7 @@ describe("useCalendar adjacent-month fetch", () => {
     });
     const services = {
       apiClient: { getOccurrences },
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     const { result } = renderHook(() => useCalendar(), {
@@ -107,7 +107,7 @@ describe("useCalendar adjacent-month fetch", () => {
     const getOccurrences = vi.fn().mockRejectedValue(new Error("boom"));
     const services = {
       apiClient: { getOccurrences },
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     const { result } = renderHook(() => useCalendar(), {

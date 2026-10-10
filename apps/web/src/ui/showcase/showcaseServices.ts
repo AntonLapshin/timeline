@@ -2,14 +2,14 @@
  * Fake services for the component Showcase gallery (issue #56).
  *
  * Pure, React-free setup: builds a fake `Services` object (apiClient +
- * llmParser) whose methods resolve sample data per a scenario, so the real,
+ * quickParser) whose methods resolve sample data per a scenario, so the real,
  * dumb components render their various states with no backend. No business
  * logic — just presentational fixtures wired through the same context-injection
  * pattern the real app uses.
  */
 
 import type { ApiClient } from "../../core/apiClient";
-import type { LlmParser } from "../../core/llmParse";
+import type { QuickParser } from "../../core/quickParse";
 import type { Services } from "../services/context";
 import type {
   DeliveryLog,
@@ -93,8 +93,8 @@ function createShowcaseApiClient(
   };
 }
 
-/** A fake `LlmParser` — the showcase never actually calls the LLM. */
-const SHOWCASE_LLM_PARSER: LlmParser = {
+/** A fake `QuickParser` — the showcase never actually calls the parser. */
+const SHOWCASE_QUICK_PARSER: QuickParser = {
   parse: () => Promise.resolve({ ok: false, error: "demo only" }),
 };
 
@@ -104,6 +104,6 @@ export function createShowcaseServices(
 ): Services {
   return {
     apiClient: createShowcaseApiClient(scenario),
-    llmParser: SHOWCASE_LLM_PARSER,
+    quickParser: SHOWCASE_QUICK_PARSER,
   };
 }

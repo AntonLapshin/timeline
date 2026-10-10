@@ -117,18 +117,13 @@
     },
     "source": {
       "type": "string",
-      "enum": ["web", "telegram_text", "telegram_voice", "ai"],
+      "enum": ["web", "telegram_text"],
       "description": "How the event was captured."
     },
     "raw_input": {
       "type": ["string", "null"],
       "default": null,
       "description": "Original natural-language input, if any."
-    },
-    "ai_confidence": {
-      "type": ["number", "null"],
-      "default": null,
-      "description": "Confidence score from AI extraction, if any."
     },
     "status": {
       "type": "string",

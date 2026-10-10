@@ -19,17 +19,17 @@ from sqlalchemy.orm import Session
 from . import crud, occurrences, summary
 from .config import Settings, get_settings
 from .enums import EventStatus
-from .llm_parse import parse_events
 from .models import DeliveryLog, Event
+from .quick_parse import parse_quick_add
 from .runtime import RuntimeComponents
 from .schemas import (
     DeliveryLogRead,
     EventCreate,
     EventOccurrenceRead,
-    EventParseResponse,
     EventRead,
     EventUpdate,
-    ParseRequestPayload,
+    QuickParseRequestPayload,
+    QuickParseResponse,
     SummaryResponse,
 )
 
@@ -206,41 +206,25 @@ def get_summary(
     )
 
 
-@router.post("/events/parse", response_model=EventParseResponse)
-def parse_event_text(
-    payload: ParseRequestPayload,
+@router.post("/events/quick-parse", response_model=QuickParseResponse)
+def quick_parse_event_text(
+    payload: QuickParseRequestPayload,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> EventParseResponse:
-    """Parse free text into event draft(s) via the LLM (issue #70).
+) -> QuickParseResponse:
+    """Parse free text into an event draft, deterministically (offline).
 
-    Thin layer: delegates to the pure ``llm_parse.parse_events`` with a real
-    HTTP client. Returns HTTP 503 ``unavailable`` when the LLM key is absent
-    (matching the web ``LlmParser`` contract). No DB access — drafts are
-    confirmed before save.
+    Thin layer over the pure ``quick_parse.parse_quick_add``: no network, no
+    key, no 503/502 — the worst case is a today/all-day draft the owner
+    corrects on the draft card. ``now``/``tz`` default to the server's clock
+    and ``settings.tz``. No DB access — drafts are confirmed before save.
     """
-    import httpx
-
-    result = parse_events(
-        text=payload.text,
-        now=payload.now or datetime.now(UTC),
-        tz=payload.tz or settings.tz,
-        settings=settings,
-        http_client=httpx.Client(timeout=30.0),
+    result = parse_quick_add(
+        payload.text,
+        payload.now or datetime.now(UTC),
+        payload.tz or settings.tz,
     )
-    if result.unavailable:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=result.error or "LLM key not configured",
-        )
-    if not result.ok or result.outcome is None:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=result.error or "LLM parsing failed",
-        )
-    if result.outcome.needs_clarification:
-        return EventParseResponse(
-            needs_clarification=True, message=result.outcome.clarification
-        )
-    return EventParseResponse(
-        events=[d.model_dump(exclude_none=True) for d in result.outcome.drafts or []],
+    return QuickParseResponse(
+        draft=result.draft.model_dump(exclude_none=True),
+        has_explicit_date=result.has_explicit_date,
+        has_explicit_time=result.has_explicit_time,
     )

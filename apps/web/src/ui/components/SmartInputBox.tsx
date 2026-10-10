@@ -14,14 +14,13 @@ export interface SmartInputBoxProps {
  *
  * A thin, dumb component: it renders a free-text input and a submit button,
  * forwards the text to the view-model state, and shows an inline error when a
- * parse fails or is unavailable. While a parse is in flight the input is
- * disabled, the button shows a spinner, and a live status line sets
- * expectations (the API retries a flaky provider up to 10 times, so a slow
- * gateway can take a while). All parsing/guarding logic lives in
+ * parse fails. While a parse is in flight the input is disabled and the
+ * button shows a spinner (the parse is a local round-trip to the backend's
+ * deterministic parser). All parsing/guarding logic lives in
  * `src/core`; the view model performs the parse I/O and opens the wizard.
  */
 export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
-  const { text, parsing, error, unavailable, setText, submit } = smartInput;
+  const { text, parsing, error, setText, submit } = smartInput;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -72,7 +71,7 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
           )}
           {parsing ? "Parsing…" : "Add"}
         </button>
-        {(error || unavailable) && (
+        {error && (
           <p
             role="alert"
             className="w-full text-xs text-red-600 dark:text-red-400"
@@ -81,16 +80,6 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
           </p>
         )}
       </form>
-      {parsing && (
-        <p
-          role="status"
-          className="mt-1 text-xs text-slate-500 dark:text-slate-400"
-        >
-          Contacting the AI — this can take a while when the provider is slow.
-          Retrying automatically (up to 10 attempts); you can wait or add the
-          event manually.
-        </p>
-      )}
     </div>
   );
 }

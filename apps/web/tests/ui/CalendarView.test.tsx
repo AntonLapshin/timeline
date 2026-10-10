@@ -50,7 +50,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -79,7 +79,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -99,7 +99,7 @@ describe("CalendarView", () => {
     const getOccurrences = vi.fn().mockResolvedValue([]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -117,7 +117,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -136,7 +136,7 @@ describe("CalendarView", () => {
     const getOccurrences = vi.fn().mockResolvedValue([]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -158,7 +158,7 @@ describe("CalendarView", () => {
     const getOccurrences = vi.fn().mockRejectedValue(new Error("boom"));
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -174,7 +174,7 @@ describe("CalendarView", () => {
     const getOccurrences = vi.fn().mockRejectedValue(new Error("boom"));
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -202,7 +202,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     const { rerender } = renderWithServices(services, <CalendarView />);
@@ -233,7 +233,7 @@ describe("CalendarView", () => {
       }));
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -256,7 +256,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -282,7 +282,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -302,7 +302,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(services, <CalendarView />);
@@ -322,7 +322,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
 
     renderWithServices(
@@ -345,7 +345,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
     const onEventClick = vi.fn();
 
@@ -373,7 +373,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
     const onEventClick = vi.fn();
 
@@ -402,7 +402,7 @@ describe("CalendarView", () => {
     ]);
     const services = {
       apiClient: apiClientWith(getOccurrences),
-      llmParser: {},
+      quickParser: {},
     } as unknown as Services;
     const onEventClick = vi.fn();
 

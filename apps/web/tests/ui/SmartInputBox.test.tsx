@@ -8,7 +8,6 @@ function state(overrides: Partial<SmartInputState> = {}): SmartInputState {
     text: "",
     parsing: false,
     error: null,
-    unavailable: false,
     setText: vi.fn(),
     submit: vi.fn(),
     clear: vi.fn(),
@@ -48,11 +47,7 @@ describe("SmartInputBox", () => {
   });
 
   it("shows the inline error message with an alert role", () => {
-    render(
-      <SmartInputBox
-        smartInput={state({ error: "could not parse", unavailable: true })}
-      />,
-    );
+    render(<SmartInputBox smartInput={state({ error: "could not parse" })} />);
     const alert = screen.getByRole("alert");
     expect(alert).toHaveTextContent("could not parse");
   });
@@ -62,11 +57,12 @@ describe("SmartInputBox", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("shows a live status and disables the input while parsing", () => {
+  it("disables the input while parsing and shows no status line", () => {
+    // The parse is a fast local round-trip — the button spinner is the only
+    // in-flight indicator; there is no "contacting the AI" status line.
     render(<SmartInputBox smartInput={state({ parsing: true, text: "x" })} />);
     expect(screen.getByLabelText("Add event")).toBeDisabled();
-    const status = screen.getByRole("status");
-    expect(status).toHaveTextContent(/Retrying automatically \(up to 10 attempts\)/);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("shows no status when idle", () => {

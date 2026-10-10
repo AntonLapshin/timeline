@@ -1,11 +1,11 @@
 import { createContext, type Context } from "react";
 import { createApiClient, type ApiClient } from "../../core/apiClient";
-import { createLlmParser, type LlmParser } from "../../core/llmParse";
+import { createQuickParser, type QuickParser } from "../../core/quickParse";
 
 /** The set of injected services available to the UI via context. */
 export interface Services {
   apiClient: ApiClient;
-  llmParser: LlmParser;
+  quickParser: QuickParser;
 }
 
 /** Default API base URL: same-origin (relative) so the UI works on both
@@ -22,6 +22,6 @@ export const ServicesContext: Context<Services | null> =
 export function createServices(baseUrl: string = DEFAULT_API_BASE_URL): Services {
   return {
     apiClient: createApiClient(baseUrl),
-    llmParser: createLlmParser(baseUrl),
+    quickParser: createQuickParser(baseUrl),
   };
 }

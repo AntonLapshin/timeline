@@ -1,12 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  createLlmParser,
+  createQuickParser,
   draftFromParsed,
   parseApiBody,
   parsedToWizardDraft,
-  NEEDS_CLARIFICATION_MESSAGE,
+  NETWORK_ERROR_MESSAGE,
+  UNEXPECTED_BODY_MESSAGE,
   type ParseResult,
-} from "../../src/core/llmParse";
+} from "../../src/core/quickParse";
 import { parseIso, toLocalDate } from "../../src/core/dateFmt";
 import type { FetchLike } from "../../src/core/apiClient";
 import type { ParsedDraft } from "../../src/core/parseGuards";
@@ -29,16 +30,28 @@ function mockFetch(
   ) as unknown as FetchLike;
 }
 
-describe("llmParse core module", () => {
-  it("parses text via POST /api/events/parse and returns a draft", async () => {
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("quickParse core module", () => {
+  it("parses text via POST /api/events/quick-parse and returns a draft", async () => {
     const draft = { title: "Pay rent", priority: "critical" };
     const fetchImpl = mockFetch((url, init) => {
-      expect(url).toBe("http://127.0.0.1:8123/api/events/parse");
+      expect(url).toBe("http://127.0.0.1:8123/api/events/quick-parse");
       expect(init?.method).toBe("POST");
       expect(init?.body).toBe(JSON.stringify({ text: "Pay rent on the 1st" }));
-      return { ok: true, status: 200, json: async () => draft };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          draft,
+          has_explicit_date: true,
+          has_explicit_time: false,
+        }),
+      };
     });
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const parser = createQuickParser("http://127.0.0.1:8123", fetchImpl);
     const result = (await parser.parse("Pay rent on the 1st")) as Extract<
       ParseResult,
       { ok: true }
@@ -47,83 +60,77 @@ describe("llmParse core module", () => {
     expect(result.draft).toEqual(draft);
   });
 
-  it("unwraps the { events: [...] } envelope and returns the first draft", async () => {
-    const draft = {
-      title: "Dentist",
-      start_at: "2026-09-16T09:00:00+02:00",
-      priority: "medium",
-    };
+  it("strips a trailing slash from the base URL", async () => {
+    const fetchImpl = mockFetch((url) => {
+      expect(url).toBe("http://127.0.0.1:8123/api/events/quick-parse");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ draft: { title: "X" } }),
+      };
+    });
+    const parser = createQuickParser("http://127.0.0.1:8123/", fetchImpl);
+    const result = await parser.parse("hello");
+    expect(result).toEqual({ ok: true, draft: { title: "X" } });
+  });
+
+  it("defaults to globalThis.fetch when no fetch implementation is passed", async () => {
     const fetchImpl = mockFetch(() => ({
       ok: true,
       status: 200,
-      json: async () => ({ events: [draft] }),
+      json: async () => ({ draft: { title: "X" } }),
     }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    const result = await parser.parse("dentist tomorrow 9am");
-    expect(result).toEqual({ ok: true, draft });
-  });
-
-  it("surfaces needs_clarification with the server message", async () => {
-    const fetchImpl = mockFetch(() => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        needs_clarification: true,
-        message: "Which day?",
-      }),
-    }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    const result = await parser.parse("sometime soon");
-    expect(result).toEqual({ ok: false, error: "Which day?" });
-  });
-
-  it("parseApiBody falls back for empty events or unknown bodies", () => {
-    const empty = parseApiBody({ events: [] });
-    expect(empty.ok).toBe(false);
-    if (!empty.ok) {
-      expect(empty.error).toContain("more specific");
-    }
-    const unknown = parseApiBody({ foo: 1 });
-    expect(unknown.ok).toBe(false);
+    vi.stubGlobal("fetch", fetchImpl);
+    const parser = createQuickParser("http://127.0.0.1:8123");
+    const result = await parser.parse("hello");
+    expect(result).toEqual({ ok: true, draft: { title: "X" } });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("parseApiBody rejects non-object bodies with the default message", () => {
-    for (const body of [null, "a bare string", 42]) {
+    for (const body of [null, undefined, "a bare string", 42]) {
       const result = parseApiBody(body);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toBe(NEEDS_CLARIFICATION_MESSAGE);
+        expect(result.error).toBe(UNEXPECTED_BODY_MESSAGE);
       }
     }
   });
 
-  it("parseApiBody uses the default message when clarification carries no usable message", () => {
+  it("parseApiBody rejects envelopes without a usable draft", () => {
     for (const body of [
-      { needs_clarification: true },
-      { needs_clarification: true, message: "   " },
-      { needs_clarification: true, message: 42 },
+      {},
+      { draft: null },
+      { draft: "not a draft" },
+      { has_explicit_date: true, has_explicit_time: false },
     ]) {
       const result = parseApiBody(body);
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error).toBe(NEEDS_CLARIFICATION_MESSAGE);
+        expect(result.error).toBe(UNEXPECTED_BODY_MESSAGE);
       }
     }
   });
 
-  it("parseApiBody surfaces the server message for an empty events array", () => {
-    const withMessage = parseApiBody({ events: [], message: "Pick a day" });
-    expect(withMessage.ok).toBe(false);
-    if (!withMessage.ok) {
-      expect(withMessage.error).toBe("Pick a day");
-    }
-    for (const message of ["   ", null]) {
-      const result = parseApiBody({ events: [], message });
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.error).toBe(NEEDS_CLARIFICATION_MESSAGE);
-      }
-    }
+  it("parseApiBody accepts the envelope and returns the draft", () => {
+    const draft = { title: "Dentist", start_at: "2026-09-16T09:00:00" };
+    const result = parseApiBody({
+      draft,
+      has_explicit_date: true,
+      has_explicit_time: true,
+    });
+    expect(result).toEqual({ ok: true, draft });
+  });
+
+  it("returns a typed error for a 200 body without a draft envelope", async () => {
+    const fetchImpl = mockFetch(() => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ unexpected: "shape" }),
+    }));
+    const parser = createQuickParser("http://127.0.0.1:8123", fetchImpl);
+    const result = await parser.parse("hello");
+    expect(result).toEqual({ ok: false, error: UNEXPECTED_BODY_MESSAGE });
   });
 
   it("propagates the rejection when a 200 body is not JSON (view-model fallback)", async () => {
@@ -132,105 +139,35 @@ describe("llmParse core module", () => {
       status: 200,
       json: () => Promise.reject(new Error("not json")),
     }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    // Documented behavior (issue #118): only HTTP/network failures are mapped
-    // to typed results — a non-JSON body on the success path rejects, and
-    // `useSmartInput`'s catch renders the generic fallback.
+    const parser = createQuickParser("http://127.0.0.1:8123", fetchImpl);
+    // Only HTTP/network failures are mapped to typed results — a non-JSON
+    // body on the success path rejects, and `useSmartInput`'s catch renders
+    // the generic fallback.
     await expect(parser.parse("hello")).rejects.toThrow("not json");
   });
 
-  it("returns a distinct cannot-reach-API result when fetch rejects", async () => {
+  it("returns the distinct cannot-reach-API result when fetch rejects", async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error("offline");
     }) as unknown as FetchLike;
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const parser = createQuickParser("http://127.0.0.1:8123", fetchImpl);
     const result = await parser.parse("hello");
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      // Not the 503 "unavailable" path — the API was simply unreachable.
-      expect(result.unavailable).toBeUndefined();
-      expect(result.error).toContain("Cannot reach the API");
-    }
+    expect(result).toEqual({ ok: false, error: NETWORK_ERROR_MESSAGE });
   });
 
-  it("maps HTTP 502 to an actionable LLM-failure result (no throw)", async () => {
-    const fetchImpl = mockFetch(() => ({
-      ok: false,
-      status: 502,
-      json: async () => ({ detail: "LLM request failed (HTTP 401)" }),
-    }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    const result = await parser.parse("hello");
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      // Not the 503 "unavailable" path — the LLM call itself failed.
-      expect(result.unavailable).toBeUndefined();
-      expect(result.error).toContain(
-        "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs",
-      );
-      // The server detail is appended so the owner sees the underlying cause.
-      expect(result.error).toContain("(server: LLM request failed (HTTP 401))");
-    }
-  });
-
-  it("returns the plain LLM-failure message when the 502 body has no detail", async () => {
-    const fetchImpl = mockFetch(() => ({
-      ok: false,
-      status: 502,
-      json: async () => ({}),
-    }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    const result = await parser.parse("hello");
-    expect(result).toEqual({
-      ok: false,
-      error:
-        "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs",
-    });
-  });
-
-  it("returns the plain LLM-failure message when the 502 body is not JSON", async () => {
-    const fetchImpl = mockFetch(() => ({
-      ok: false,
-      status: 502,
-      json: () => Promise.reject(new Error("not json")),
-    }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    const result = await parser.parse("hello");
-    expect(result).toEqual({
-      ok: false,
-      error:
-        "LLM parsing failed — check LLM_API_KEY / LLM_MODEL in .env and the API logs",
-    });
-  });
-
-  it("maps any other HTTP error status to a typed result instead of throwing", async () => {
+  it("maps any HTTP error status to a typed result instead of throwing", async () => {
     const fetchImpl = mockFetch(() => ({
       ok: false,
       status: 500,
       json: async () => ({}),
     }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
+    const parser = createQuickParser("http://127.0.0.1:8123", fetchImpl);
     const result = await parser.parse("hello");
     expect(result).toEqual({
       ok: false,
       error:
         "Unexpected API error (HTTP 500). You can still add the event manually.",
     });
-  });
-
-  it("returns a graceful unavailable result on HTTP 503 (LLM key absent)", async () => {
-    const fetchImpl = mockFetch(() => ({
-      ok: false,
-      status: 503,
-      json: async () => ({}),
-    }));
-    const parser = createLlmParser("http://127.0.0.1:8123", fetchImpl);
-    const result = await parser.parse("dentist tuesday");
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.unavailable).toBe(true);
-      expect(result.error).toContain("unavailable");
-    }
   });
 });
 
@@ -274,15 +211,26 @@ describe("draftFromParsed", () => {
     const draft = draftFromParsed({ title: "Standup" });
     expect(draft.title).toBe("Standup");
     expect(draft.date).toBe("");
+    expect(draft.time).toBe("");
     expect(draft.priority).toBe("medium");
     expect(draft.channels).toEqual(["telegram"]);
     expect(draft.tz).toBe("UTC");
+  });
+
+  it("uses the parsed priority as the default when present", () => {
+    const draft = draftFromParsed({ title: "Standup", priority: "low" });
+    expect(draft.priority).toBe("low");
   });
 
   it("defaults a missing title to an empty string", () => {
     const draft = draftFromParsed({} as ParsedDraft);
     expect(draft.title).toBe("");
     expect(draft.tz).toBe("UTC");
+  });
+
+  it("defaults empty channels to telegram", () => {
+    const draft = draftFromParsed({ title: "X", channels: [] });
+    expect(draft.channels).toEqual(["telegram"]);
   });
 
   it("converts an aware start into the parsed event's own zone", () => {
@@ -378,8 +326,13 @@ describe("draftFromParsed reminder offsets", () => {
   it("drops invalid offsets instead of pre-filling them", () => {
     const draft = draftFromParsed({
       title: "Interview",
-      reminder_offsets: ["soon", "15m"],
+      reminder_offsets: ["soon", "15m", 42 as unknown as string],
     });
     expect(draft.reminderOffsets).toEqual(["15m"]);
+  });
+
+  it("defaults to no offsets when reminder_offsets is absent", () => {
+    const draft = draftFromParsed({ title: "Interview" });
+    expect(draft.reminderOffsets).toEqual([]);
   });
 });

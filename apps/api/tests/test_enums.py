@@ -18,7 +18,7 @@ from app.enums import (
 
 # Values mirrored from packages/shared/src/eventSchema.ts (EVENT_*_CONSTANTS).
 SHARED_STATUSES = ["draft", "active", "archived"]
-SHARED_SOURCES = ["web", "telegram_text", "telegram_voice", "ai"]
+SHARED_SOURCES = ["web", "telegram_text"]
 SHARED_TYPES = ["one_time", "recurrent"]
 SHARED_PRIORITIES = ["critical", "medium", "low"]
 SHARED_CHANNELS = ["telegram", "email"]
@@ -54,5 +54,4 @@ def test_enums_are_str_subclasses() -> None:
     assert EventStatus.ACTIVE.value == "active"
     assert EventPriority.CRITICAL.value == "critical"
     assert EventType.RECURRENT.value == "recurrent"
-    assert EventSource.TELEGRAM_VOICE.value == "telegram_voice"
     assert EventChannel.EMAIL.value == "email"

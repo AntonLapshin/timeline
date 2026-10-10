@@ -3,7 +3,7 @@ import { useServices } from "../services/useServices";
 import {
   parsedToWizardDraft,
   type ParseResult,
-} from "../../core/llmParse";
+} from "../../core/quickParse";
 import type { EventDraft } from "../../core/eventWizard";
 
 /** State shape produced by the smart-input view model. */
@@ -14,8 +14,6 @@ export interface SmartInputState {
   parsing: boolean;
   /** A human error message, or null when there is none. */
   error: string | null;
-  /** Whether parsing is unavailable (e.g. LLM key absent). */
-  unavailable: boolean;
   /** Update the free-text value. */
   setText: (text: string) => void;
   /** Parse the current text and, on success, hand the draft to `onParsed`. */
@@ -28,8 +26,9 @@ export interface SmartInputState {
  * Thin view model for the smart-input "Add event…" box (issue #47).
  *
  * Holds the free-text value, parse-in-flight flag and inline error state, and
- * delegates the parse I/O to the injected `llmParser`. All parsing/guarding and
- * draft conversion logic lives in `src/core` (`llmParse`/`parseGuards`); this
+ * delegates the parse I/O to the injected `quickParser` (the deterministic
+ * `POST /api/events/quick-parse` client). All parsing/guarding and draft
+ * conversion logic lives in `src/core` (`quickParse`/`parseGuards`); this
  * view model only wires the result to the `onParsed` callback (which opens the
  * wizard pre-filled). No business logic here.
  *
@@ -38,11 +37,10 @@ export interface SmartInputState {
 export function useSmartInput(
   onParsed: (draft: EventDraft) => void,
 ): SmartInputState {
-  const { llmParser } = useServices();
+  const { quickParser } = useServices();
   const [text, setText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
   const onParsedRef = useRef(onParsed);
   onParsedRef.current = onParsed;
 
@@ -51,14 +49,12 @@ export function useSmartInput(
     if (value.trim()) {
       // A new edit clears the previous result/error state.
       setError(null);
-      setUnavailable(false);
     }
   }, []);
 
   const clear = useCallback(() => {
     setText("");
     setError(null);
-    setUnavailable(false);
   }, []);
 
   const submit = useCallback(async () => {
@@ -68,12 +64,10 @@ export function useSmartInput(
     }
     setParsing(true);
     setError(null);
-    setUnavailable(false);
     try {
-      const result: ParseResult = await llmParser.parse(trimmed);
+      const result: ParseResult = await quickParser.parse(trimmed);
       if (!result.ok) {
         setError(result.error);
-        setUnavailable(result.unavailable ?? false);
         return;
       }
       const converted = parsedToWizardDraft(result.draft);
@@ -86,23 +80,21 @@ export function useSmartInput(
       setText("");
       onParsedRef.current(converted.draft);
     } catch {
-      // Only truly unexpected errors land here: `llmParse` maps every
-      // HTTP/network failure to a typed result (issue #113), so a throw means
-      // a bug or an exotic failure — fall back to the generic message.
+      // Only truly unexpected errors land here: `quickParse` maps every
+      // HTTP/network failure to a typed result, so a throw means a bug or an
+      // exotic failure — fall back to the generic message.
       setError(
-        "Parsing is unavailable right now. You can still add the event manually.",
+        "Something went wrong while parsing. You can still add the event manually.",
       );
-      setUnavailable(true);
     } finally {
       setParsing(false);
     }
-  }, [llmParser, text, parsing]);
+  }, [quickParser, text, parsing]);
 
   return {
     text,
     parsing,
     error,
-    unavailable,
     setText: setTextValue,
     submit,
     clear,

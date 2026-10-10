@@ -107,7 +107,6 @@ function smartInputState(overrides: Partial<SmartInputState> = {}): SmartInputSt
     text: "dentist next Tuesday 3pm",
     parsing: false,
     error: null,
-    unavailable: false,
     setText: noop,
     submit: async () => {},
     clear: noop,

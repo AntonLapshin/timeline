@@ -1,7 +1,7 @@
 """Tests for log redaction helpers (issue #76, M5-T4B).
 
 Verifies that sensitive content — user message text, parsed event content,
-LLM prompt bodies, and audio/voice file paths — is never written to logs.
+prompt bodies, and file paths — is never written to logs.
 The helpers return content-free references (length + short hash, or a file
 basename) so operators can correlate log lines without leaking private data.
 """

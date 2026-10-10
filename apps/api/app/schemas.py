@@ -55,7 +55,6 @@ class EventBase(BaseModel):
     email_to: str | None = None
     source: EventSource = EventSource.WEB
     raw_input: str | None = None
-    ai_confidence: float | None = None
     status: EventStatus = EventStatus.ACTIVE
 
     @field_validator("reminder_offsets")
@@ -104,7 +103,6 @@ class EventUpdate(BaseModel):
     email_to: str | None = None
     source: EventSource | None = None
     raw_input: str | None = None
-    ai_confidence: float | None = None
     status: EventStatus | None = None
 
     @field_validator("reminder_offsets")
@@ -181,14 +179,14 @@ class EventOccurrenceRead(BaseModel):
     next_occurrence: datetime | None = None
 
 
-# --- LLM parse (issue #70) ----------------------------------------------------
+# --- Deterministic quick parse -------------------------------------------------
 
 
-class ParseRequestPayload(BaseModel):
-    """Payload for ``POST /api/events/parse``.
+class QuickParseRequestPayload(BaseModel):
+    """Payload for ``POST /api/events/quick-parse``.
 
-    ``now`` (defaults to the server's current time) and ``tz`` are injected into
-    the LLM prompt so relative dates resolve correctly.
+    ``now`` (defaults to the server's current time) and ``tz`` anchor relative
+    dates ("tomorrow", "Friday", "in 3 days").
     """
 
     text: str = Field(min_length=1, max_length=5000)
@@ -196,17 +194,15 @@ class ParseRequestPayload(BaseModel):
     tz: str | None = None
 
 
-class EventParseResponse(BaseModel):
-    """Response for ``POST /api/events/parse``.
+class QuickParseResponse(BaseModel):
+    """Response for ``POST /api/events/quick-parse``.
 
-    Either ``events`` (validated drafts, multi-event) or
-    ``needs_clarification`` (the model couldn't determine the event) is
-    populated on success. ``unavailable``/``error`` describe failure cases.
-    Mirrors the web ``LlmParser`` contract (issue #70).
+    A single deterministic draft plus the explicit date/time flags, so the
+    caller can tell how confident the parse is. Never 503/502s — the
+    deterministic parser always produces a draft (worst case: today/all-day,
+    which the owner corrects on the draft card).
     """
 
-    events: list[dict[str, object]] | None = None
-    needs_clarification: bool | None = None
-    message: str | None = None
-    unavailable: bool = False
-    error: str | None = None
+    draft: dict[str, object]
+    has_explicit_date: bool
+    has_explicit_time: bool

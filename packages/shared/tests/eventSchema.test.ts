@@ -46,12 +46,7 @@ describe("shared event schema v1", () => {
 
   it("enumerates statuses, sources, types, priorities and channels", () => {
     expect(EVENT_STATUSES).toEqual(["draft", "active", "archived"]);
-    expect(EVENT_SOURCES).toEqual([
-      "web",
-      "telegram_text",
-      "telegram_voice",
-      "ai",
-    ]);
+    expect(EVENT_SOURCES).toEqual(["web", "telegram_text"]);
     expect(EVENT_TYPES).toEqual(["one_time", "recurrent"]);
     expect(EVENT_PRIORITIES).toEqual(["critical", "medium", "low"]);
     expect(EVENT_CHANNELS).toEqual(["telegram", "email"]);
@@ -60,7 +55,8 @@ describe("shared event schema v1", () => {
   it("validates membership for each enum", () => {
     expect(isEventStatus("active")).toBe(true);
     expect(isEventStatus("bogus")).toBe(false);
-    expect(isEventSource("ai")).toBe(true);
+    expect(isEventSource("telegram_text")).toBe(true);
+    expect(isEventSource("ai")).toBe(false);
     expect(isEventSource("phone")).toBe(false);
     expect(isEventType("recurrent")).toBe(true);
     expect(isEventType("daily")).toBe(false);

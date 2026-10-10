@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Deterministic-only engine: all AI/LLM and voice/STT code removed:**
+  `apps/api/app/llm_parse.py` (OpenAI-compatible parse client) and
+  `apps/api/app/stt.py` (local voxtype/whisper.cpp transcription) are gone;
+  `POST /api/events/parse` and the `/ask` stub are removed; Telegram voice
+  messages now get a static "not supported" reply instead of transcription,
+  and `/add` parses text with the deterministic engine only. A new
+  `POST /api/events/quick-parse` endpoint replaces the LLM parse endpoint
+  (returns `{draft, has_explicit_date, has_explicit_time}`; never 503/502s),
+  and the web smart-input box is rewired onto it — web and Telegram now share
+  one LLM-free parser. Environment variables `LLM_BASE_URL`, `LLM_API_KEY`,
+  `LLM_MODEL`, `STT_VOXTYPE_PATH`, `STT_MODEL_PATH`, `STT_MAX_SECONDS` no
+  longer exist; `llm_configured`/`llm_model` are gone from `/healthz`; the
+  `"ai"` and `"telegram_voice"` event sources are removed from the shared
+  contract, and the unused `ai_confidence` field is dropped from the event
+  model, schemas, shared contract and web types (migrations `0003` and
+  `0004` drop `telegram_inbound.voice_duration_sec` and
+  `events.ai_confidence`). No new behavior beyond the removal itself.
+
 ### Test
 
 - **Hermetic API test suite: leaked machine env vars no longer reach

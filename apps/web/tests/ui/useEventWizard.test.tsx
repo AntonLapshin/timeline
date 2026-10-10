@@ -34,7 +34,6 @@ function sampleEvent(overrides: Partial<EventRead> = {}): EventRead {
     email_to: null,
     source: "web",
     raw_input: null,
-    ai_confidence: null,
     status: "active",
     created_at: "2026-01-01T00:00:00",
     updated_at: "2026-01-01T00:00:00",
@@ -55,7 +54,7 @@ describe("useEventWizard", () => {
         getOccurrences: vi.fn(),
         getEventDeliveries: vi.fn(),
       },
-      llmParser: {},
+      quickParser: {},
     });
   });
 
@@ -160,7 +159,7 @@ describe("useEventWizard", () => {
         getOccurrences: vi.fn(),
         getEventDeliveries: vi.fn(),
       },
-      llmParser: {},
+      quickParser: {},
     });
     const { result } = renderHook(() => useEventWizard({ onSaved }));
     act(() => result.current.openCreate());
@@ -188,7 +187,7 @@ describe("useEventWizard", () => {
         getOccurrences: vi.fn(),
         getEventDeliveries: vi.fn(),
       },
-      llmParser: {},
+      quickParser: {},
     });
     const { result } = renderHook(() => useEventWizard({ onSaved }));
     act(() => result.current.openEdit(sampleEvent()));
@@ -212,7 +211,7 @@ describe("useEventWizard", () => {
         getOccurrences: vi.fn(),
         getEventDeliveries: vi.fn(),
       },
-      llmParser: {},
+      quickParser: {},
     });
     const { result } = renderHook(() => useEventWizard());
     act(() => result.current.openCreate());
@@ -237,7 +236,7 @@ describe("useEventWizard", () => {
         getOccurrences: vi.fn(),
         getEventDeliveries: vi.fn(),
       },
-      llmParser: {},
+      quickParser: {},
     });
     const { result } = renderHook(() => useEventWizard({ onSaved }));
     act(() => result.current.openCreate());

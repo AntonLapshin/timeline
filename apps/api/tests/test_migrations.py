@@ -74,12 +74,20 @@ def test_full_upgrade_creates_domain_tables(tmp_path: Path, monkeypatch) -> None
     ]:
         assert table in tables
 
-    # The alembic version is stamped to the head revision (0002).
+    # The alembic version is stamped to the head revision (0004).
     with engine.connect() as conn:
         version = conn.execute(
             sa.text("SELECT version_num FROM alembic_version")
         ).scalar()
-    assert version == "0002"
+    assert version == "0004"
+
+    # Migration 0003 dropped the voice column from telegram_inbound.
+    inbound_columns = {
+        c["name"] for c in inspect(engine).get_columns("telegram_inbound")
+    }
+    assert "voice_duration_sec" not in inbound_columns
+
+    # Migration 0004 dropped the AI confidence column from events.
 
     # Spot-check the events table has the schema-aligned columns.
     event_columns = {c["name"] for c in inspect(engine).get_columns("events")}
@@ -95,3 +103,48 @@ def test_full_upgrade_creates_domain_tables(tmp_path: Path, monkeypatch) -> None
         "source",
         "status",
     } <= event_columns
+    assert "ai_confidence" not in event_columns
+
+
+def test_migration_0003_drops_and_restores_voice_column(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """Upgrading 0002 -> head drops voice_duration_sec; downgrade restores it."""
+    monkeypatch.setenv("TIMELINE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("TIMELINE_DB_NAME", "voice_col.db")
+
+    cfg = _alembic_config(tmp_path, "voice_col.db")
+    command.upgrade(cfg, "0002")
+    engine = create_engine(f"sqlite:///{tmp_path / 'voice_col.db'}")
+    before = {c["name"] for c in inspect(engine).get_columns("telegram_inbound")}
+    assert "voice_duration_sec" in before
+
+    command.upgrade(cfg, "head")
+    after = {c["name"] for c in inspect(engine).get_columns("telegram_inbound")}
+    assert "voice_duration_sec" not in after
+
+    command.downgrade(cfg, "0002")
+    restored = {c["name"] for c in inspect(engine).get_columns("telegram_inbound")}
+    assert "voice_duration_sec" in restored
+
+
+def test_migration_0004_drops_and_restores_ai_confidence(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """Upgrading 0003 -> head drops ai_confidence; downgrade restores it."""
+    monkeypatch.setenv("TIMELINE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("TIMELINE_DB_NAME", "ai_conf.db")
+
+    cfg = _alembic_config(tmp_path, "ai_conf.db")
+    command.upgrade(cfg, "0003")
+    engine = create_engine(f"sqlite:///{tmp_path / 'ai_conf.db'}")
+    before = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert "ai_confidence" in before
+
+    command.upgrade(cfg, "head")
+    after = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert "ai_confidence" not in after
+
+    command.downgrade(cfg, "0003")
+    restored = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert "ai_confidence" in restored

@@ -52,7 +52,6 @@ describe("timezone-aware event display", () => {
         email_to: null,
         source: "web",
         raw_input: null,
-        ai_confidence: null,
         status: "active",
         created_at: "",
         updated_at: "",

@@ -1,8 +1,6 @@
 # Timeline — systemd --user unit for the host-run API (managed by `make start`).
 #
-# Runs the FastAPI backend natively on the host (port 8124) so local-only
-# dependencies work — notably voxtype + ffmpeg voice transcription (issue #71),
-# which the docker-compose stack cannot use (see README). Installed by
+# Runs the FastAPI backend natively on the host (port 8124). Installed by
 # `make start`, which substitutes @REPO_DIR@ below; removed by `make stop`.
 #
 #   make start    -> build web + install + enable + start (boot autostart)
@@ -19,13 +17,13 @@
 #   sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp
 
 [Unit]
-Description=Timeline API on host (voxtype-capable, boot autostart)
+Description=Timeline API on host (boot autostart)
 After=network.target
 
 [Service]
 Type=simple
 WorkingDirectory=@REPO_DIR@/apps/api
-# Repo .env provides secrets (BOT_TOKEN, LLM_API_KEY, ...); `-` tolerates a
+# Repo .env provides secrets (BOT_TOKEN, ...); `-` tolerates a
 # missing file on first install (make start creates it via the env target).
 EnvironmentFile=-@REPO_DIR@/.env
 # Stack ports mirror the compose stack; these must win over the .env defaults.

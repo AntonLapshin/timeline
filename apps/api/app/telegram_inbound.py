@@ -6,31 +6,22 @@ A python-telegram-bot v21 polling updater (consistent with
 - ``/today`` — list today's events.
 - ``/upcoming [7d|30d]`` — list upcoming events (default 7 days).
 - ``/low`` — list low-priority events on demand.
-- ``/add <text>`` — smart parse → draft flow: first try the deterministic
-  offline parser (``app.quick_parse`` — dates, times, reminders like ``1h``,
-  priorities, recurrence words); when the text names an explicit date or time
-  the draft card is instant (no network, no LLM key needed). Vague text
-  without any date/time falls back to the AI parse → draft flow (issue #75,
-  M5-T4A): parse via ``llm_parse.parse_events`` (the same pure module the
-  ``POST /api/events/parse`` endpoint reuses). Either way each parsed draft
-  is presented as a Telegram card with inline **Save / Edit / Discard**
-  buttons, and only persisted (via the CRUD layer) when the owner taps
-  **Save**.
-- ``/quick <text>`` — always parse deterministically offline
-  (``app.quick_parse``; today is the default date) and present the same
-  Save / Edit / Discard draft card. Never touches the network.
-  Plain (non-command) text is treated as an implicit ``/add`` so a natural
-  message is parsed instead of being silently dropped; the bot first replies
-  with a pending ack (``pending_add_reply``) because the LLM fallback can take
-  seconds, then sends the draft card, and replies with a ``✅ Saved``
-  confirmation (``saved_confirmation_reply``) when the draft is saved.
-- **voice messages** — transcribed locally (``app.stt``: ffmpeg → voxtype,
-  issue #71) and routed through the same parse → draft flow as ``/add``
-  (issue #111). When local STT is unavailable (e.g. the Docker image ships no
-  voxtype/whisper) the sender gets a clear "voice transcription unavailable"
-  reply instead of silence.
-- ``/ask <question>`` — LLM query over history. The query endpoint is not
-  merged yet, so this is a **stub**, wired when available.
+- ``/add <text>`` — deterministic offline parse (``app.quick_parse`` —
+dates, times, reminders like ``1h``, priorities, recurrence words) and
+present the draft as a Telegram card with inline **Save / Edit / Discard**
+buttons, persisted (via the CRUD layer) only when the owner taps **Save**.
+Vague text (no explicit date/time) yields a today/all-day draft the owner
+corrects on the draft card — the card was already the confirmation step.
+- ``/quick <text>`` — same deterministic offline parse as ``/add``
+(today is the default date) with the same Save / Edit / Discard draft
+card. Never touches the network.
+Plain (non-command) text is treated as an implicit ``/add`` so a natural
+message is parsed instead of being silently dropped; the bot sends the
+draft card and replies with a ``✅ Saved`` confirmation
+(``saved_confirmation_reply``) when the draft is saved.
+- **voice messages** — not supported: the sender gets a short static reply
+("Voice messages aren't supported — send text or use /add") instead of
+silence.
 
 Only private chats from allowlisted users (``TELEGRAM_USER_IDS`` combined
 with the legacy ``TELEGRAM_USER_ID``, issue #112) are answered; messages from
@@ -44,17 +35,14 @@ The pure business logic lives here and is fully unit-tested: the DM-only gate
 parser (``parse_upcoming_days``), the event-listing helpers
 (``events_today`` / ``events_upcoming`` / ``events_low``), the line formatter
 (``format_event_line``), the command dispatcher (``handle_command``), the
-pending-ack helpers (``pending_add_reply`` / ``voice_pending_reply`` /
-``saved_confirmation_reply`` / ``is_add_flow_text``), the inbound-record
+confirmation helper (``saved_confirmation_reply``), the inbound-record
 builder (``build_inbound_record``) and the draft-flow helpers
 (``format_draft_card`` / ``format_draft_when`` / ``build_draft_keyboard`` /
 ``parse_draft_callback`` / ``draft_to_event_create`` / ``DraftStore``) and
-the voice replies
-(``voice_unavailable_reply`` / ``voice_error_reply``). The impure Telegram
-wiring (``_handle_update`` / ``_handle_voice_update`` /
-``_handle_callback_query`` / ``build_telegram_inbound_application`` /
-``record_inbound``) is a thin adapter over python-telegram-bot v21 (polling)
-and is kept to a minimum.
+the voice reply (``voice_not_supported``). The impure Telegram
+wiring (``_handle_update`` / ``_handle_callback_query`` /
+``build_telegram_inbound_application`` / ``record_inbound``) is a thin
+adapter over python-telegram-bot v21 (polling) and is kept to a minimum.
 """
 
 from __future__ import annotations
@@ -62,8 +50,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-import os
-import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -75,36 +61,18 @@ from sqlalchemy.orm import Session, sessionmaker
 from . import crud, quick_parse
 from .config import Settings
 from .enums import EventChannel, EventPriority, EventSource, EventStatus, EventType
-from .llm_parse import (
+from .models import Event, TelegramInbound
+from .quick_parse import (
     ParsedDraft,
     extract_reminder_offsets_from_text,
     normalize_reminder_offset,
-    parse_events,
 )
-from .models import Event, TelegramInbound
 from .recurrence import Occurrence, next_occurrences
 from .redaction import redact_text
 from .schemas import EventCreate
-from .stt import SttResult, run_command, transcribe_voice
 from .telegram_outbound import priority_emoji, telegram_reminder_job
 
 logger = logging.getLogger(__name__)
-
-
-class VoiceTranscriber(Protocol):
-    """The local transcription callable the voice handler uses (``app.stt``).
-
-    A *blocking* callable (``subprocess.run`` for ffmpeg/voxtype, up to 300s);
-    the voice handler must dispatch it off the asyncio event loop
-    (``asyncio.to_thread``) so the shared API process stays responsive
-    (issue #132).
-    """
-
-    def __call__(
-        self, ogg_path: str, duration_seconds: float | None, settings: Settings
-    ) -> SttResult:
-        """Transcribe a downloaded voice file locally (no network)."""
-        ...
 
 
 #: How many occurrences to expand per event when scanning for today/upcoming.
@@ -368,10 +336,9 @@ def handle_command(
     """Dispatch a parsed command to its handler and return the reply.
 
     ``/today``, ``/upcoming`` and ``/low`` list events from the provided
-    (active) ``events``; ``/add`` runs the smart (deterministic-first) parse
-    flow and ``/quick`` the deterministic-only flow (the thin adapter performs
-    the parse and presents the draft card); ``/ask`` is a stub until the
-    query endpoint (issue #70) is merged. Unknown commands get a usage hint.
+    (active) ``events``; ``/add`` and ``/quick`` run the deterministic
+    offline parse flow (the thin adapter performs the parse and presents the
+    draft card). Unknown commands get a usage hint.
     """
     now = _as_utc(now or datetime.now(UTC))
     if command.name == "today":
@@ -384,12 +351,10 @@ def handle_command(
         return _reply_add(command.args)
     if command.name == "quick":
         return _reply_quick(command.args)
-    if command.name == "ask":
-        return _reply_ask(command.args)
     return CommandResult(
         reply=(
             "Unknown command. Try /today, /upcoming [7d|30d], /low, "
-            "/add <text>, /quick <text> or /ask <question>."
+            "/add <text> or /quick <text>."
         )
     )
 
@@ -435,40 +400,14 @@ def _reply_low(events: Sequence[_InboundEvent], now: datetime) -> CommandResult:
     return CommandResult(reply="\n".join(lines), message_type="text")
 
 
-def voice_unavailable_reply() -> str:
-    """Clear reply when local STT is unavailable (pure).
+def voice_not_supported() -> str:
+    """Static reply for voice messages: voice input is not supported (pure).
 
-    The Docker image ships no voxtype/whisper (or ffmpeg), so a voice message
-    can never be transcribed there. The reply says so explicitly instead of
-    failing silently (issue #111) and points at the text path and the
-    native-run voice path documented in the README.
+    There is no transcription pipeline (deterministic-only engine); the reply
+    is intentionally static so a voice message never fails silently and the
+    sender knows to use text instead.
     """
-    return (
-        "🎙 Voice transcription isn't available in this deployment "
-        "(no local voxtype/whisper installed). Send the event as text with "
-        "/add <text> instead — for voice, run the API natively (see README)."
-    )
-
-
-def voice_error_reply(error: str | None) -> str:
-    """Reply for a voice message that failed to download/transcribe (pure)."""
-    detail = (error or "unknown error").strip()
-    return f"🎙 Couldn't transcribe the voice message: {detail}"
-
-
-def pending_add_reply() -> str:
-    """Immediate ack sent before the (slow) LLM parse runs (pure).
-
-    Parsing can take many seconds (gateway retries with backoff), so the bot
-    sends this first — the caller then sends the draft card (or the parse
-    error) as a second message once parsing finishes.
-    """
-    return "⏳ Got it — parsing your event, one moment… I'll send the draft card next."
-
-
-def voice_pending_reply() -> str:
-    """Immediate ack sent before a voice message is downloaded/transcribed."""
-    return "🎙 Got your voice message — transcribing now, one moment…"
+    return "Voice messages aren't supported — send text or use /add"
 
 
 def saved_confirmation_reply(title: str) -> str:
@@ -476,76 +415,13 @@ def saved_confirmation_reply(title: str) -> str:
     return f"✅ Saved: {title}"
 
 
-def is_add_flow_text(text: str | None) -> bool:
-    """Whether a text message will run the add parse flow (pure).
-
-    True for ``/add <non-empty text>``, ``/quick <non-empty text>`` and for
-    plain (non-command) text — plain DMs are treated as implicit ``/add`` so
-    sending e.g. ``"Hanging on the bar for 2 minutes each day"`` just works
-    instead of being silently ignored. Fast commands (``/today`` …) return
-    False.
-    """
-    if not text or not text.strip():
-        return False
-    command = parse_command(text.strip())
-    if command is None:
-        return True
-    return command.name in ("add", "quick") and bool(command.args.strip())
-
-
-def wants_pending_for_text_update(update: Any, settings: Settings) -> bool:
-    """Peek whether the text handler should send a pending ack first (pure).
-
-    Mirrors the DM-only + allowlist gates of :func:`_handle_update` without
-    any I/O: only an allowlisted private-chat message that will run the
-    (possibly slow, LLM-backed) ``/add`` flow gets a pending message.
-    ``/quick`` is always instant (deterministic offline parse) so it never
-    gets one, and fast commands and ignored updates never get one.
-    """
-    message = getattr(update, "effective_message", None) or getattr(
-        update, "message", None
-    )
-    if message is None:
-        return False
-    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
-        return False
-    user = getattr(message, "from_user", None)
-    user_id = getattr(user, "id", None) if user is not None else None
-    if not settings.telegram_allowlist.allows(user_id):
-        return False
-    text = getattr(message, "text", None)
-    if not is_add_flow_text(text):
-        return False
-    command = parse_command((text or "").strip())
-    return command is None or command.name != "quick"
-
-
-def wants_pending_for_voice_update(update: Any, settings: Settings) -> bool:
-    """Peek whether the voice handler should send a pending ack first (pure)."""
-    message = getattr(update, "effective_message", None) or getattr(
-        update, "message", None
-    )
-    if message is None:
-        return False
-    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
-        return False
-    user = getattr(message, "from_user", None)
-    user_id = getattr(user, "id", None) if user is not None else None
-    if not settings.telegram_allowlist.allows(user_id):
-        return False
-    voice = getattr(message, "voice", None)
-    if voice is None:
-        return False
-    return getattr(voice, "file_id", None) is not None
-
-
 def _reply_add(args: str) -> CommandResult:
     """Handle /add: empty text gets a usage hint; otherwise mark for parsing.
 
-    The actual parse is impure (deterministic first, LLM fallback over HTTP),
-    so the command dispatcher returns the stripped text with
-    ``message_type="add_parse"`` and the thin adapter (``_handle_update``)
-    performs the parse and presents the draft card.
+    The actual parse is impure (draft-store state), so the command dispatcher
+    returns the stripped text with ``message_type="add_parse"`` and the thin
+    adapter (``_handle_update``) performs the deterministic offline parse and
+    presents the draft card.
     """
     text = args.strip()
     if not text:
@@ -556,8 +432,7 @@ def _reply_add(args: str) -> CommandResult:
                 "dates, times, reminders (15m/1h/2d), priority "
                 "(low/medium/critical) and recurrence "
                 "(daily/weekly/monthly/quarterly/yearly) are parsed "
-                "instantly offline; vague text falls back to AI. "
-                "/quick <text> always parses offline (today by default)."
+                "instantly offline (today is the default date)."
             ),
             message_type="text",
         )
@@ -567,8 +442,8 @@ def _reply_add(args: str) -> CommandResult:
 def _reply_quick(args: str) -> CommandResult:
     """Handle /quick: empty text gets a usage hint; otherwise mark for parsing.
 
-    Like :func:`_reply_add` but the adapter always parses deterministically
-    offline (``message_type="quick_parse"``) — never the LLM.
+    Like :func:`_reply_add` (``message_type="quick_parse"``) — the adapter
+    always parses deterministically offline with today as the default date.
     """
     text = args.strip()
     if not text:
@@ -616,7 +491,7 @@ def format_draft_when(draft: ParsedDraft) -> str | None:
 def format_draft_card(draft: ParsedDraft) -> str:
     """Render a parsed draft as a readable Telegram draft card (pure).
 
-    Shows the title plus any fields the model was confident about (start time,
+    Shows the title plus any fields the parser was confident about (start time,
     all-day, recurrence, priority, channels, reminder offsets, tags). The start
     time renders via ``format_draft_when`` (wall clock in the draft's own zone
     with an explicit zone label) so a UTC-stamped draft never masquerades as
@@ -680,11 +555,11 @@ def parse_draft_callback(callback_data: str | None) -> DraftAction | None:
 def draft_reminder_offsets(draft: ParsedDraft, raw_input: str) -> list[str]:
     """Resolve the reminder offsets for a confirmed draft (pure).
 
-    Prefers the model's normalized ``reminder_offsets``; when the model gave
+    Prefers the draft's normalized ``reminder_offsets``; when the draft gave
     none (or only invalid ones), falls back to explicit lead-time phrases in
-    the raw text (*"15 minutes in advance"* → ``["15m"]``) so a spoken reminder
-    request is never silently dropped. Returns ``[]`` when neither source names
-    a lead time.
+    the raw text (*"15 minutes in advance"* → ``["15m"]``) so an explicit
+    reminder request is never silently dropped. Returns ``[]`` when neither
+    source names a lead time.
     """
     usable = [
         n
@@ -732,23 +607,6 @@ def draft_to_event_create(
         source=EventSource.TELEGRAM_TEXT,
         status=EventStatus.ACTIVE,
         raw_input=raw_input,
-    )
-
-
-def _reply_ask(args: str) -> CommandResult:
-    """Stub for /ask: LLM query over history wires in when merged (#70)."""
-    text = args.strip()
-    if not text:
-        return CommandResult(
-            reply="Usage: /ask <question>, e.g. /ask when is my next dentist.",
-            message_type="text",
-        )
-    return CommandResult(
-        reply=(
-            f'🤖 Ask: "{text}". The LLM query over history isn\'t available '
-            "yet — it will be wired when the query endpoint lands."
-        ),
-        message_type="text",
     )
 
 
@@ -801,7 +659,6 @@ def _handle_update(
     session_factory: sessionmaker[Session] | None = None,
     *,
     now: datetime | None = None,
-    http_client: Any | None = None,
     draft_store: DraftStore | None = None,
 ) -> BotReply | None:
     """Process one inbound update and return the reply to send (or None).
@@ -811,9 +668,9 @@ def _handle_update(
     to the pure handler and persists the inbound message. Plain (non-command)
     text is treated as an implicit ``/add`` so a natural message like
     ``"Hanging on the bar for 2 minutes each day"`` is parsed instead of
-    being silently dropped. For ``/add`` (explicit or implicit) the reply is
-    a draft card with inline buttons (the LLM parse is impure, so it happens
-    here via ``http_client``). Returns ``None`` when the update is ignored
+    being silently dropped. For ``/add`` (explicit or implicit) and ``/quick``
+    the reply is a draft card with inline buttons (the deterministic offline
+    parse happens here). Returns ``None`` when the update is ignored
     (no message, not a private chat, not the allowed user, or empty text).
 
     Every path is logged (content-free redacted refs only, never raw text)
@@ -909,7 +766,6 @@ def _handle_update(
                 result.reply,
                 settings,
                 now=now,
-                http_client=http_client,
                 draft_store=draft_store,
                 chat_id=chat_id,
             )
@@ -924,40 +780,6 @@ def _handle_update(
     return BotReply(result.reply)
 
 
-def _quick_card_reply(
-    text: str,
-    settings: Settings,
-    *,
-    now: datetime | None,
-    draft_store: DraftStore | None,
-    chat_id: Any,
-) -> BotReply | None:
-    """Try the deterministic offline parse; store + render the card on success.
-
-    Returns the card reply when the text names an explicit date or time, else
-    ``None`` so the caller can fall back to the LLM. Needs only the draft
-    store (no network, no LLM key). Shared by ``/add`` (explicit dates only)
-    and ``/quick`` (forced by the caller via ``force=True``).
-    """
-    if draft_store is None or chat_id is None:
-        return None
-    quick = quick_parse.parse_quick_add(
-        text, _as_utc(now or datetime.now(UTC)), settings.tz
-    )
-    if not quick.has_explicit_date and not quick.has_explicit_time:
-        return None
-    draft_store.set(chat_id, PendingDraft(drafts=[quick.draft], raw_input=text))
-    logger.info(
-        "Quick parse produced 1 draft chat=%s ref=%s",
-        chat_id,
-        redact_text(text),
-    )
-    return BotReply(
-        format_draft_card(quick.draft),
-        reply_markup=[build_draft_keyboard(0)],
-    )
-
-
 def _handle_quick_flow(
     text: str,
     settings: Settings,
@@ -968,14 +790,34 @@ def _handle_quick_flow(
 ) -> BotReply:
     """Run the /quick parse flow: deterministic offline parse, always.
 
-    Never touches the network: the text is parsed with ``app.quick_parse``
-    (today is the default date), stored as the chat's pending draft and
-    returned as a Save / Edit / Discard card. Every outcome is logged with a
-    content-free redacted ref (never raw text).
+    Identical to the /add flow (both use ``app.quick_parse``); kept as a
+    separate entry point so the dispatcher intent stays explicit.
+    """
+    return _handle_add_flow(
+        text, settings, now=now, draft_store=draft_store, chat_id=chat_id
+    )
+
+
+def _handle_add_flow(
+    text: str,
+    settings: Settings,
+    *,
+    now: datetime | None,
+    draft_store: DraftStore | None,
+    chat_id: Any,
+) -> BotReply:
+    """Run the /add parse flow: deterministic offline parse, always.
+
+    The text is parsed with ``app.quick_parse`` (no network, no key — the
+    parse is instant, so no pending ack is needed). Vague text yields a
+    today/all-day draft the owner corrects on the draft card (the card was
+    already the confirmation step). The draft is stored in ``draft_store``
+    for this chat and returned as a card with Save / Edit / Discard buttons.
+    Every outcome is logged with a content-free redacted ref (never raw text).
     """
     if draft_store is None or chat_id is None:
         logger.warning(
-            "Quick flow with no pending state chat=%s ref=%s.",
+            "Add flow with no pending state chat=%s ref=%s.",
             chat_id,
             redact_text(text),
         )
@@ -985,7 +827,7 @@ def _handle_quick_flow(
     )
     draft_store.set(chat_id, PendingDraft(drafts=[quick.draft], raw_input=text))
     logger.info(
-        "Quick flow parsed 1 draft chat=%s ref=%s",
+        "Add flow parsed 1 draft chat=%s ref=%s",
         chat_id,
         redact_text(text),
     )
@@ -993,86 +835,6 @@ def _handle_quick_flow(
         format_draft_card(quick.draft),
         reply_markup=[build_draft_keyboard(0)],
     )
-
-
-def _handle_add_flow(
-    text: str,
-    settings: Settings,
-    *,
-    now: datetime | None,
-    http_client: Any | None,
-    draft_store: DraftStore | None,
-    chat_id: Any,
-) -> BotReply:
-    """Run the /add parse flow: quick offline parse first, LLM fallback.
-
-    When the text names an explicit date or time the deterministic offline
-    parser (``app.quick_parse``) produces the draft card instantly (no
-    network, no LLM key). Otherwise falls back to ``parse_events`` via
-    ``http_client``. On success the parsed draft(s) are stored in
-    ``draft_store`` for this chat and returned as a card with Save / Edit /
-    Discard buttons. Failures (no LLM key, transport error, clarification
-    needed) return a plain text reply and store nothing. Every outcome is
-    logged with a content-free redacted ref (never raw text).
-    """
-    quick_reply = _quick_card_reply(
-        text, settings, now=now, draft_store=draft_store, chat_id=chat_id
-    )
-    if quick_reply is not None:
-        return quick_reply
-
-    if http_client is None or draft_store is None or chat_id is None:
-        logger.warning(
-            "Add flow unavailable chat=%s ref=%s (missing client/store/chat).",
-            chat_id,
-            redact_text(text),
-        )
-        return BotReply("AI parsing isn't available right now.")
-
-    logger.info("Add flow parsing started chat=%s ref=%s", chat_id, redact_text(text))
-    result = parse_events(
-        text=text,
-        now=_as_utc(now or datetime.now(UTC)),
-        tz=settings.tz,
-        settings=settings,
-        http_client=http_client,
-    )
-    if result.unavailable:
-        logger.warning(
-            "Add flow unavailable (no LLM key) chat=%s ref=%s",
-            chat_id,
-            redact_text(text),
-        )
-        return BotReply(
-            "AI parsing isn't configured (no LLM key). "
-            "Add the event manually in the web app for now."
-        )
-    if not result.ok or result.outcome is None:
-        logger.warning(
-            "Add flow parse failed chat=%s ref=%s error=%s",
-            chat_id,
-            redact_text(text),
-            result.error or "unknown error",
-        )
-        return BotReply(f"Couldn't parse that: {result.error or 'unknown error'}")
-    if result.outcome.needs_clarification:
-        logger.info(
-            "Add flow needs clarification chat=%s ref=%s", chat_id, redact_text(text)
-        )
-        return BotReply(result.outcome.clarification or "Need more details.")
-
-    drafts = result.outcome.drafts or []
-
-    draft_store.set(chat_id, PendingDraft(drafts=drafts, raw_input=text))
-    logger.info(
-        "Add flow parsed %d draft(s) chat=%s ref=%s",
-        len(drafts),
-        chat_id,
-        redact_text(text),
-    )
-    card_text = "\n\n".join(format_draft_card(d) for d in drafts)
-    keyboard_rows = [build_draft_keyboard(i) for i in range(len(drafts))]
-    return BotReply(card_text, reply_markup=keyboard_rows)
 
 
 def _handle_callback_query(
@@ -1186,193 +948,12 @@ def _save_draft(
     return BotReply(saved_confirmation_reply(event.title))
 
 
-async def _download_voice_file(bot: Any, file_id: str) -> str:
-    """Download a Telegram voice file to a temp path (thin adapter).
-
-    The file is fetched through the bot's API into a temporary ``.ogg`` path
-    that the local STT pipeline (ffmpeg → voxtype) can read. The caller owns
-    deleting the file.
-    """
-    telegram_file = await bot.get_file(file_id)
-    fd, path = tempfile.mkstemp(prefix="timeline-voice-", suffix=".ogg")
-    os.close(fd)
-    try:
-        await telegram_file.download_to_drive(path)
-    except Exception:
-        with contextlib.suppress(OSError):
-            os.unlink(path)
-        raise
-    return path
-
-
-def _run_local_transcription(
-    ogg_path: str, duration_seconds: float | None, settings: Settings
-) -> SttResult:
-    """Run the real local transcription pipeline (ffmpeg + voxtype subprocesses)."""
-    return transcribe_voice(ogg_path, duration_seconds, settings, run_command)
-
-
-async def _transcribe_voice_message(
-    bot: Any,
-    file_id: str,
-    duration: float | None,
-    settings: Settings,
-    *,
-    transcribe: VoiceTranscriber | None = None,
-) -> SttResult:
-    """Download a voice file and transcribe it locally (thin adapter).
-
-    Downloads the file via ``bot`` and runs the local transcription pipeline
-    (``app.stt.transcribe_voice`` with the real subprocess runner) — ffmpeg +
-    voxtype only, never a network command. ``transcribe`` is injectable so
-    tests can fake transcription without any subprocess. The temp file is
-    always removed afterwards.
-
-    The transcription is a *blocking* call (``subprocess.run`` inside
-    ``app.stt.run_command``, up to the 300s timeout), so it is dispatched off
-    the asyncio event loop via ``asyncio.to_thread`` (issue #132): the same
-    loop serves the FastAPI web endpoints, and running the local STT pipeline
-    inline used to freeze the whole API for the duration of the transcription.
-    """
-    runner: VoiceTranscriber = (
-        transcribe if transcribe is not None else _run_local_transcription
-    )
-    ogg_path = await _download_voice_file(bot, file_id)
-    try:
-        # Off the event loop: ffmpeg/whisper block for seconds (up to the 300s
-        # subprocess timeout) and this loop also serves the web API (#132).
-        return await asyncio.to_thread(runner, ogg_path, duration, settings)
-    finally:
-        with contextlib.suppress(OSError):
-            os.unlink(ogg_path)
-
-
-async def _handle_voice_update(
-    update: Any,
-    settings: Settings,
-    session_factory: sessionmaker[Session] | None = None,
-    *,
-    bot: Any | None = None,
-    now: datetime | None = None,
-    http_client: Any | None = None,
-    draft_store: DraftStore | None = None,
-    transcribe: VoiceTranscriber | None = None,
-) -> BotReply | None:
-    """Process one inbound voice update: transcribe locally, then parse (issue #111).
-
-    Applies the same DM-only + allowlist gates as text commands, downloads the
-    voice file via ``bot`` and transcribes it locally (``app.stt``). When local
-    STT is unavailable (e.g. the Docker image ships no voxtype/whisper) the
-    sender gets a clear "voice transcription unavailable" reply instead of
-    silence. A successful transcription is routed through the same /add parse →
-    draft-card flow as text. Returns ``None`` when the update is ignored.
-    """
-    message = getattr(update, "effective_message", None) or getattr(
-        update, "message", None
-    )
-    if message is None:
-        logger.info("Ignoring Telegram voice update with no message.")
-        return None
-    if not is_private_chat(getattr(getattr(message, "chat", None), "type", None)):
-        logger.info(
-            "Ignoring Telegram voice message from non-private chat type=%s msg_id=%s.",
-            getattr(getattr(message, "chat", None), "type", None),
-            getattr(message, "message_id", None),
-        )
-        return None
-    user = getattr(message, "from_user", None)
-    user_id = getattr(user, "id", None) if user is not None else None
-    if not _gate_user(user_id, settings, kind="voice message"):
-        return None
-
-    voice = getattr(message, "voice", None)
-    if voice is None:
-        logger.info(
-            "Ignoring non-voice update in voice handler user=%s chat=%s msg_id=%s.",
-            user_id,
-            getattr(getattr(message, "chat", None), "id", None),
-            getattr(message, "message_id", None),
-        )
-        return None
-    file_id = getattr(voice, "file_id", None)
-    if file_id is None or bot is None:
-        logger.warning(
-            "Voice message with unavailable file user=%s chat=%s msg_id=%s.",
-            user_id,
-            getattr(getattr(message, "chat", None), "id", None),
-            getattr(message, "message_id", None),
-        )
-        return BotReply(voice_error_reply("voice file is unavailable"))
-
-    logger.info(
-        "Received Telegram voice message user=%s chat=%s msg_id=%s duration=%s.",
-        user_id,
-        getattr(getattr(message, "chat", None), "id", None),
-        getattr(message, "message_id", None),
-        getattr(voice, "duration", None),
-    )
-    try:
-        result = await _transcribe_voice_message(
-            bot,
-            file_id,
-            getattr(voice, "duration", None),
-            settings,
-            transcribe=transcribe,
-        )
-    except Exception as exc:  # noqa: BLE001 — reply instead of silence (issue #111)
-        logger.warning("Voice message transcription failed: %s", exc)
-        return BotReply(voice_error_reply(str(exc) or type(exc).__name__))
-    if result.unavailable:
-        chat_id = getattr(getattr(message, "chat", None), "id", None)
-        logger.warning(
-            "Voice transcription unavailable user=%s chat=%s.",
-            user_id,
-            chat_id,
-        )
-        return BotReply(voice_unavailable_reply())
-    if not result.ok or not result.text:
-        logger.warning(
-            "Voice transcription failed user=%s chat=%s error=%s.",
-            user_id,
-            getattr(getattr(message, "chat", None), "id", None),
-            result.error,
-        )
-        return BotReply(voice_error_reply(result.error))
-
-    logger.info(
-        "Voice transcribed user=%s chat=%s ref=%s",
-        user_id,
-        getattr(getattr(message, "chat", None), "id", None),
-        redact_text(result.text),
-    )
-    chat = getattr(message, "chat", None)
-    chat_id = getattr(chat, "id", None)
-    # Off the event loop: the LLM parse is blocking (sync httpx + retry
-    # sleeps) and this loop also serves the web API — parsing inline froze
-    # the whole API for the duration of the parse.
-    reply = await asyncio.to_thread(
-        _handle_add_flow,
-        result.text,
-        settings,
-        now=now,
-        http_client=http_client,
-        draft_store=draft_store,
-        chat_id=chat_id,
-    )
-    if session_factory is not None:
-        with session_factory() as session:
-            record_inbound(session, message, "draft")
-    return reply
-
-
 def build_telegram_inbound_application(
     settings: Settings,
     session_factory: sessionmaker[Session] | None = None,
     *,
     now: datetime | None = None,
-    http_client: Any | None = None,
     draft_store: DraftStore | None = None,
-    transcribe: VoiceTranscriber | None = None,
     scheduler: Any | None = None,
     job_func: Callable[..., object] | None = None,
 ) -> Any:
@@ -1380,9 +961,10 @@ def build_telegram_inbound_application(
 
     Returns ``None`` when no bot token is configured so the app can start
     without Telegram (same guard as the outbound sender). Registers a text
-    handler for commands, a voice handler (local transcription → parse flow,
-    issue #111) and a ``CallbackQueryHandler`` for the draft buttons. The
-    caller is responsible for ``run_polling()`` (the API lifespan does this).
+    handler for commands, a voice handler that sends the static
+    not-supported reply (there is no transcription pipeline) and a
+    ``CallbackQueryHandler`` for the draft buttons. The caller is responsible
+    for ``run_polling()`` (the API lifespan does this).
 
     When a running reminder scheduler is supplied (issue #134), saved drafts
     also schedule their reminder jobs immediately instead of waiting for the
@@ -1403,10 +985,6 @@ def build_telegram_inbound_application(
         # module registers its live dispatcher in the job-func registry.
         job_func = telegram_reminder_job
     app = Application.builder().token(settings.telegram_bot_token).build()
-    if http_client is None:
-        import httpx
-
-        http_client = httpx.Client(timeout=30.0)
     if draft_store is None:
         draft_store = DraftStore()
 
@@ -1414,22 +992,14 @@ def build_telegram_inbound_application(
         message = getattr(update, "effective_message", None) or getattr(
             update, "message", None
         )
-        if message is not None and wants_pending_for_text_update(update, settings):
-            sender = getattr(message, "reply_text", None)
-            if sender is not None:
-                with contextlib.suppress(Exception):
-                    await sender(pending_add_reply())
-        # Off the event loop: _handle_update runs the blocking LLM parse
-        # (sync httpx + retry sleeps) and blocking DB I/O; this loop also
-        # serves the FastAPI web endpoints, and parsing inline froze the
-        # whole API (no data fetching) until the parse finished.
+        # Off the event loop: _handle_update does blocking DB I/O; this loop
+        # also serves the FastAPI web endpoints, so it must not block.
         reply = await asyncio.to_thread(
             _handle_update,
             update,
             settings,
             session_factory,
             now=now,
-            http_client=http_client,
             draft_store=draft_store,
         )
         if reply is None:
@@ -1437,29 +1007,29 @@ def build_telegram_inbound_application(
         if message is not None:
             await _send_reply(message.reply_text, reply)
 
-    async def voice_handler(update: Any, context: Any) -> None:
+    async def voice_not_supported_handler(update: Any, _context: Any) -> None:
+        # Voice messages are not supported (no transcription pipeline): send
+        # the static reply. Same DM-only + allowlist gates as text commands.
         message = getattr(update, "effective_message", None) or getattr(
             update, "message", None
         )
-        if message is not None and wants_pending_for_voice_update(update, settings):
-            sender = getattr(message, "reply_text", None)
-            if sender is not None:
-                with contextlib.suppress(Exception):
-                    await sender(voice_pending_reply())
-        reply = await _handle_voice_update(
-            update,
-            settings,
-            session_factory,
-            bot=getattr(context, "bot", None),
-            now=now,
-            http_client=http_client,
-            draft_store=draft_store,
-            transcribe=transcribe,
-        )
-        if reply is None:
+        if message is None:
             return
-        if message is not None:
-            await _send_reply(message.reply_text, reply)
+        chat = getattr(message, "chat", None)
+        if not is_private_chat(getattr(chat, "type", None)):
+            logger.info(
+                "Ignoring Telegram voice message from non-private chat type=%s.",
+                getattr(chat, "type", None),
+            )
+            return
+        user = getattr(message, "from_user", None)
+        user_id = getattr(user, "id", None) if user is not None else None
+        if not _gate_user(user_id, settings, kind="voice message"):
+            return
+        sender = getattr(message, "reply_text", None)
+        if sender is not None:
+            with contextlib.suppress(Exception):
+                await sender(voice_not_supported())
 
     async def callback_handler(update: Any, _context: Any) -> None:
         query = getattr(update, "callback_query", None)
@@ -1487,7 +1057,7 @@ def build_telegram_inbound_application(
             await _send_reply(message.reply_text, reply)
 
     app.add_handler(MessageHandler(filters.TEXT, handler))
-    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
+    app.add_handler(MessageHandler(filters.VOICE, voice_not_supported_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
     return app
 

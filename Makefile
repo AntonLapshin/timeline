@@ -1,6 +1,6 @@
 # Timeline — one-command lifecycle.
 #
-# Host run (native, voxtype-capable) — default targets:
+# Host run (native) — default targets:
 #
 #   make start   prod run on the host (api :8124 + web :8123) + boot autostart
 #   make stop    stop the host run and remove boot autostart
@@ -8,7 +8,7 @@
 #   make status  unit state + API health
 #   make logs    follow host-run logs (journald, api + web)
 #
-# Docker run (compose stack, web + api; no voice transcription):
+# Docker run (compose stack, web + api):
 #
 #   make docker-dev     dev stack: build + up, wait for API health, print URLs
 #   make docker-restart dev stack: down + docker-dev (rebuild + up, wait, print URLs)
@@ -63,7 +63,7 @@ VITE_BIN ?= $(CURDIR)/node_modules/.bin/vite
 	install-docker-unit remove-docker-unit install-host-units remove-host-units
 
 help:
-	@echo "Timeline — host run (native, voxtype-capable) + docker-compose stack"
+	@echo "Timeline — host run (native) + docker-compose stack"
 	@echo
 	@echo "  Host (default; autostarted on boot once started):"
 	@echo "    make start   Run on the host (api :8124 + web :8123) + boot autostart"
@@ -72,7 +72,7 @@ help:
 	@echo "    make status  Show unit state + API health"
 	@echo "    make logs    Follow host-run logs (journald, api + web)"
 	@echo
-	@echo "  Docker (compose stack; no voice transcription):"
+	@echo "  Docker (compose stack):"
 	@echo "    make docker-dev     Start the dev stack (build + up -d), wait, print URLs"
 	@echo "    make docker-restart Restart the dev stack (compose down + docker-dev)"
 	@echo "    make docker-start   Prod: stack up (built images, migrations via API CMD) + boot autostart"
@@ -85,10 +85,9 @@ help:
 
 # --- host run (native) -------------------------------------------------------
 #
-# API runs natively (uvicorn :8124) so local-only deps work (voxtype + ffmpeg
-# voice transcription); web serves the production build (`vite preview` :8123,
-# proxying /api + /healthz to the API). `make start` enables boot autostart
-# (systemd --user units, linger required); `make stop` removes it.
+# API runs natively (uvicorn :8124); web serves the production build (`vite
+# preview` :8123, proxying /api + /healthz to the API). `make start` enables
+# boot autostart (systemd --user units, linger required); `make stop` removes it.
 
 # Prod: build web + install/enable/start the host units + health wait + URLs.
 start: env check-host-deps build-web
@@ -99,7 +98,6 @@ start: env check-host-deps build-web
 	@$(MAKE) --no-print-directory wait-health
 	@$(MAKE) --no-print-directory print-urls
 	@echo 'Boot autostart: $(HOST_API_DST) + $(HOST_WEB_DST) enabled (linger required; see README).'
-	@echo 'Voice transcription runs locally via voxtype (host-only; the docker stack cannot do this).'
 	@echo 'Reminder: LAN access is unauthenticated (trusted LAN only); firewall: sudo ufw allow 8123/tcp && sudo ufw allow 8124/tcp'
 
 # Stop: stop + disable/remove the host units. Idempotent.

@@ -1,10 +1,11 @@
-"""Deterministic offline event parsing for Telegram ``/add`` / ``/quick``.
+"""Deterministic offline event parsing for Telegram ``/add`` / ``/quick``
+and the web smart input (``POST /api/events/quick-parse``).
 
-A robust, LLM-free alternative to :mod:`app.llm_parse` for the common case:
-the owner types a short event line and the bot must produce a draft card
-instantly (no network, no key, no waiting). The same
-Save / Edit / Discard confirmation flow applies — the draft card is the
-owner's chance to catch a mis-parse before tapping **Save**.
+This module *is* the event parser: pure, offline, LLM-free. The owner types a
+short event line and the caller must produce a draft instantly (no network, no
+key, no waiting). The same Save / Edit / Discard confirmation flow applies —
+the draft card is the owner's chance to catch a mis-parse before tapping
+**Save**.
 
 Syntax (case-insensitive, tokens may appear in any order)::
 
@@ -35,9 +36,9 @@ Everything left after the extracted tokens is stripped is the **title**.
 The main entry point is :func:`parse_quick_add` (pure: no I/O). It returns
 a :class:`QuickParseResult` wrapping a validated ``ParsedDraft`` plus
 ``has_explicit_date`` / ``has_explicit_time`` flags so the caller can decide
-whether the deterministic result is confident enough (``/add`` uses it when
-an explicit date or time was found and falls back to the LLM otherwise;
-``/quick`` always uses it).
+whether the deterministic result is confident enough (Telegram ``/add``
+always uses it; vague text yields a today/all-day draft the owner corrects
+on the draft card — the card was already the confirmation step).
 """
 
 from __future__ import annotations
@@ -47,7 +48,99 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .llm_parse import ParsedDraft
+from pydantic import BaseModel, Field
+
+# ---------------------------------------------------------------------------
+# ParsedDraft + reminder helpers (moved here from the deleted ``llm_parse``:
+# they are deterministic and this module is the parser now)
+# ---------------------------------------------------------------------------
+
+
+class ParsedDraft(BaseModel):
+    """A validated event draft, mirroring the web ``ParsedDraft`` contract."""
+
+    title: str
+    priority: str | None = Field(default=None, pattern="^(critical|medium|low)$")
+    type: str | None = Field(default=None, pattern="^(one_time|recurrent)$")
+    start_at: str | None = None
+    all_day: bool | None = None
+    tz: str | None = None
+    rrule: str | None = None
+    channels: list[str] | None = None
+    reminder_offsets: list[str] | None = None
+    tags: list[str] | None = None
+
+
+#: Matches an explicit lead-time phrase like "15 minutes before", "1 hour in
+#: advance", "notify me 2h before", "remind me 1 day ahead" (pure fallback so a
+#: "notify me 15 minutes in advance" request keeps its reminder even when the
+#: draft carries none).
+_REMINDER_PHRASE_RE = re.compile(
+    r"(\d+)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)"
+    r"\s*(?:in\s+advance|before|ahead|early|prior)",
+    re.IGNORECASE,
+)
+
+#: Normalizes a time-unit word to the shared-schema offset suffix.
+_REMINDER_UNIT_SUFFIX = {
+    "m": "m",
+    "min": "m",
+    "mins": "m",
+    "minute": "m",
+    "minutes": "m",
+    "h": "h",
+    "hr": "h",
+    "hrs": "h",
+    "hour": "h",
+    "hours": "h",
+    "d": "d",
+    "day": "d",
+    "days": "d",
+    "w": "w",
+    "week": "w",
+    "weeks": "w",
+}
+
+
+def normalize_reminder_offset(value: str) -> str | None:
+    """Normalize a raw offset to shared-schema form (``"15m"``, ``"1h"`` …).
+
+    Returns ``None`` when the value is not a valid ``<amount><d|h|m|w>``
+    offset (amount must be positive). Accepts verbose forms (``"15 min"``,
+    ``"15 minutes"``, ``"1 hour"``) as well as the compact form.
+    """
+    match = re.fullmatch(
+        r"\s*(\d+)\s*(minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)\s*",
+        value.strip(),
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    amount = int(match.group(1))
+    if amount <= 0:
+        return None
+    suffix = _REMINDER_UNIT_SUFFIX.get(match.group(2).lower())
+    if suffix is None:  # pragma: no cover — regex constrains the group
+        return None
+    return f"{amount}{suffix}"
+
+
+def extract_reminder_offsets_from_text(text: str) -> list[str]:
+    """Extract reminder offsets from explicit lead-time phrases (pure).
+
+    Scans free text for ``"<N> <unit> (in advance|before|ahead|early|prior)"``
+    phrases (e.g. *"notify me via telegram 15 minutes in advance"*) and returns
+    the normalized offsets (``["15m"]``), deduplicated in first-seen order.
+    Returns ``[]`` when the text names no lead time — the caller keeps whatever
+    the draft already carries (possibly no reminder at all).
+    """
+    seen: list[str] = []
+    for match in _REMINDER_PHRASE_RE.finditer(text or ""):
+        normalized = normalize_reminder_offset(f"{match.group(1)} {match.group(2)}")
+        if normalized is not None and normalized not in seen:
+            seen.append(normalized)
+    return seen
+
 
 #: Default reminder when the text names none (1 day before, via Telegram).
 DEFAULT_REMINDER_OFFSETS: list[str] = ["1d"]

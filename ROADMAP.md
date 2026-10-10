@@ -33,16 +33,21 @@
   which contradicts the v1 LAN-only, no-auth posture (public-internet
   exposure stays out of scope).
 
-### 2. `/ask` over history (conversational querying of past events)
+### 2. `/ask` over history — dropped (out of scope)
 
-- **Priority:** P1
+- **Status:** dropped — a conversational query interface presupposes an LLM
+  query layer, which timeline no longer ships (deterministic-only engine,
+  2026-10-10). The item is kept here only so the underlying problem is not
+  forgotten.
+- **Priority:** was P1
 - **Problem it solves:** today the app captures and reminds about **future**
   events; it does not let you ask questions about what happened or what is
   scheduled ("what did I do last March?", "when is the next HRA quarterly?").
-  A conversational `/ask` over the event history turns the captured data into
-  a queryable memory.
+  A conversational `/ask` over the event history would have turned the
+  captured data into a queryable memory.
 - **Out-of-scope for v1:** yes — v1 only stores and reminds about future
-  events; history querying is a v2 capability.
+  events; history querying is a v2 capability. It is additionally out of
+  scope for any LLM-free future of the project.
 
 ### 3. PWA (installable / offline)
 

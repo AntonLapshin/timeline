@@ -26,8 +26,6 @@ class EventSource(StrEnum):
 
     WEB = "web"
     TELEGRAM_TEXT = "telegram_text"
-    TELEGRAM_VOICE = "telegram_voice"
-    AI = "ai"
 
 
 class EventType(StrEnum):

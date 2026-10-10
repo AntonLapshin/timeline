@@ -28,7 +28,7 @@ describe("useSummary", () => {
     const getSummary = vi.fn().mockResolvedValue(summaryResponse());
     useServicesMock.mockReturnValue({
       apiClient: { getSummary },
-      llmParser: {},
+      quickParser: {},
     });
 
     const { result } = renderHook(() => useSummary());
@@ -46,7 +46,7 @@ describe("useSummary", () => {
     const getSummary = vi.fn().mockResolvedValue(summaryResponse());
     useServicesMock.mockReturnValue({
       apiClient: { getSummary },
-      llmParser: {},
+      quickParser: {},
     });
 
     const { rerender } = renderHook(({ refreshKey }) => useSummary(refreshKey), {
@@ -65,7 +65,7 @@ describe("useSummary", () => {
     const getSummary = vi.fn().mockRejectedValue(new Error("boom"));
     useServicesMock.mockReturnValue({
       apiClient: { getSummary },
-      llmParser: {},
+      quickParser: {},
     });
 
     const { result } = renderHook(() => useSummary());
@@ -91,7 +91,7 @@ describe("useSummary", () => {
       .mockResolvedValue(fresh);
     useServicesMock.mockReturnValue({
       apiClient: { getSummary },
-      llmParser: {},
+      quickParser: {},
     });
 
     const { result, rerender } = renderHook(

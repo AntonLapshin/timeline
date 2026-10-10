@@ -107,7 +107,6 @@ function smartInputState(
     text: "",
     parsing: false,
     error: null,
-    unavailable: false,
     setText: vi.fn(),
     submit: vi.fn(),
     clear: vi.fn(),
@@ -160,7 +159,7 @@ describe("App", () => {
     useSmartInputMock.mockReturnValue(smartInputState());
     useServicesMock.mockReturnValue({
       apiClient: { listEvents: vi.fn().mockResolvedValue([]) },
-      llmParser: {},
+      quickParser: {},
     });
   });
 
@@ -286,7 +285,7 @@ describe("App", () => {
     const drawerClose = vi.fn();
     useServicesMock.mockReturnValue({
       apiClient: { listEvents },
-      llmParser: {},
+      quickParser: {},
     });
     useEventDrawerMock.mockReturnValue(drawerState({ close: drawerClose }));
     const onSaved = captureWizardOnSaved();
@@ -307,7 +306,7 @@ describe("App", () => {
     // resolving promise would update state outside act() after the test.
     useServicesMock.mockReturnValue({
       apiClient: { listEvents: vi.fn().mockReturnValue(new Promise(() => {})) },
-      llmParser: {},
+      quickParser: {},
     });
     const onSaved = captureWizardOnSaved();
     render(<App />);

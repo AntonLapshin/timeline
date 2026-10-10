@@ -1,7 +1,7 @@
 """Log redaction helpers (issue #76, M5-T4B).
 
-Sensitive content — user message text, parsed event content, LLM prompt
-bodies, and audio/voice file paths — must never be written to logs. These
+Sensitive content — user message text, parsed event content, prompt
+bodies, and file paths — must never be written to logs. These
 pure helpers produce safe, content-free references (a length + short hash, or
 a file basename) so operators can correlate log lines without leaking private
 data. No secret or raw text is ever recoverable from the output.
@@ -24,7 +24,7 @@ def redact_text(text: str) -> str:
 
 
 def redact_path(path: str) -> str:
-    """Return a safe reference for a file path (e.g. an audio/voice file).
+    """Return a safe reference for a file path (e.g. an attachment file).
 
     Only the basename is kept; directory components (which may contain
     usernames, temp dirs, or machine paths) are dropped so the path never
@@ -35,7 +35,7 @@ def redact_path(path: str) -> str:
 
 
 def redact_prompt(system: str, user: str) -> str:
-    """Return a content-free reference for an LLM prompt body.
+    """Return a content-free reference for a prompt body.
 
     Prompt bodies embed the user's raw text; never log them. This returns a
     single placeholder describing the prompt without any content.

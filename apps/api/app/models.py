@@ -18,9 +18,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
-    Float,
     ForeignKey,
-    Integer,
     String,
     Text,
     func,
@@ -114,7 +112,6 @@ class Event(Base):
         default=EventSource.WEB,
     )
     raw_input: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ai_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[EventStatus] = mapped_column(
         Enum(
             EventStatus,
@@ -203,7 +200,7 @@ class DeliveryLog(Base):
 
 
 class TelegramInbound(Base):
-    """Inbound Telegram message (text/voice) and its parsed draft (M5)."""
+    """Inbound Telegram message (text) and its parsed draft (M5)."""
 
     __tablename__ = "telegram_inbound"
 
@@ -214,7 +211,6 @@ class TelegramInbound(Base):
     chat_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     message_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
     text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    voice_duration_sec: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     parsed_draft: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="received")

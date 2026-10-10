@@ -91,9 +91,7 @@ def create_app(
 
         ``components`` lets the owner self-diagnose from the browser: the
         reminder scheduler (``running``/``disabled``) and the Telegram bot
-        (``configured``/``not_configured``/``error``). ``llm_configured`` and
-        ``llm_model`` (issue #113) expose whether smart-input parsing has an
-        LLM key/model — the model name only, never the API key.
+        (``configured``/``not_configured``/``error``).
         """
         db.execute(text("SELECT 1"))
         return {
@@ -102,8 +100,6 @@ def create_app(
             "components": components_status(
                 getattr(request.app.state, "runtime", None)
             ),
-            "llm_configured": bool(settings.llm_api_key),
-            "llm_model": settings.llm_model or None,
         }
 
     app.include_router(router)

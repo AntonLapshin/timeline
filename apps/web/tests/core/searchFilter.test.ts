@@ -37,7 +37,6 @@ function makeEvent(overrides: Partial<EventRead>): EventRead {
     email_to: null,
     source: "web",
     raw_input: null,
-    ai_confidence: null,
     status: "active",
     created_at: "2026-09-01T00:00:00",
     updated_at: "2026-09-01T00:00:00",

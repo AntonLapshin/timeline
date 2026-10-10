@@ -1,7 +1,7 @@
 """Shared pytest configuration for the API test suite.
 
 Hermeticity against the host machine (issue #140): the owner machine exports
-production env vars (``TELEGRAM_*``, ``LLM_*``, ``TIMELINE_*``, ``STT_*``)
+production env vars (``TELEGRAM_*``, ``TIMELINE_*``)
 and :class:`app.config.Settings` reads env vars at instantiation, so leaked
 values make "defaults" tests fail and outbound tests target the real
 allowlisted chat id. An autouse fixture deletes those variables before every
@@ -16,11 +16,11 @@ import pytest
 
 #: Env var prefixes that carry machine/production configuration into
 #: ``Settings`` and must not leak into tests (issue #140).
-HERMETIC_ENV_PREFIXES: tuple[str, ...] = ("TELEGRAM_", "LLM_", "TIMELINE_", "STT_")
+HERMETIC_ENV_PREFIXES: tuple[str, ...] = ("TELEGRAM_", "TIMELINE_")
 
 
 def purge_machine_env(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Delete every ``TELEGRAM_*``/``LLM_*``/``TIMELINE_*``/``STT_*`` env var.
+    """Delete every ``TELEGRAM_*``/``TIMELINE_*`` env var.
 
     Uses ``monkeypatch.delenv`` so the values are restored at teardown.
     Returns the sorted names removed so tests can assert on the mechanism;
@@ -41,7 +41,7 @@ def hermetic_env(
 ) -> None:
     """Delete machine env vars before each test (issue #140).
 
-    ``Settings`` reads ``TELEGRAM_*``/``LLM_*``/``TIMELINE_*``/``STT_*`` from
+    ``Settings`` reads ``TELEGRAM_*``/``TIMELINE_*`` from
     the environment at instantiation, so a machine that exports production
     values would otherwise leak them into every test. A test that
     intentionally wants the ambient env opts out by marking itself
