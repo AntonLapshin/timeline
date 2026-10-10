@@ -4,7 +4,7 @@ Provides a bootable app with a `/healthz` endpoint, SQLite (WAL) wiring, the
 event CRUD + summary routes (issue #15), and first-run seeding. The app factory
 keeps construction testable: tests build an isolated app with their own
 database. On startup the lifespan creates any missing tables and seeds the
-initial events when the database is empty, then starts the runtime components
+initial events once per database, then starts the runtime components
 (issue #111): with ``BOT_TOKEN`` set the Telegram inbound bot polls and the
 APScheduler reminder engine delivers due reminders as Telegram cards — all in
 this process; without it the app starts exactly as before.
@@ -59,11 +59,17 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
-        """Create tables, seed, then start the runtime components (issue #111)."""
+        """Create tables, seed once, then start runtime components (issue #111).
+
+        Seeding is first-run-only (``seed.ensure_seeded_once``): once the
+        seeding decision is recorded, an empty events table means the user
+        deleted everything, and restarts keep it empty instead of restoring
+        the sample events.
+        """
         Base.metadata.create_all(engine)
         if settings.seed_on_start:
             with session_factory() as session:
-                seed.seed_if_empty(session)
+                seed.ensure_seeded_once(session, settings)
         components = await starter(settings, session_factory)
         app.state.runtime = components
         try:

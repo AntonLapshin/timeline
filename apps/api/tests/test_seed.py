@@ -120,3 +120,47 @@ def test_lifespan_does_not_seed_when_disabled(tmp_path: Path) -> None:
     with TestClient(create_app(settings)) as client:
         resp = client.get("/api/events")
         assert resp.json() == []
+
+
+def test_lifespan_does_not_reseed_after_delete_all(tmp_path: Path) -> None:
+    """Deleting every event then restarting keeps the database empty.
+
+    Regression: seeding used to trigger whenever the events table was empty,
+    so ``make restart`` resurrected the sample events after the user deleted
+    them. Seeding is first-run-only — an empty table after the first boot
+    means the user deleted everything.
+    """
+    settings = Settings(data_dir=tmp_path, db_name="restart.db")
+    with TestClient(create_app(settings)) as client:
+        resp = client.get("/api/events")
+        assert len(resp.json()) == 3
+        for event in resp.json():
+            assert client.delete(f"/api/events/{event['id']}").status_code == 204
+        assert client.get("/api/events").json() == []
+    # "Restart": same database files, new app instance (sentinel persists).
+    with TestClient(create_app(settings)) as restarted:
+        assert restarted.get("/api/events").json() == []
+
+
+def test_restart_preserves_user_data(tmp_path: Path) -> None:
+    """Events created by the user survive a restart (DB is persistent)."""
+    settings = Settings(data_dir=tmp_path, db_name="persist.db")
+    with TestClient(create_app(settings)) as client:
+        created = client.post(
+            "/api/events",
+            json={
+                "title": "Keep me",
+                "type": "one_time",
+                "start_at": "2026-01-01T10:00:00+00:00",
+                "tz": "UTC",
+                "priority": "medium",
+                "source": "web",
+                "status": "active",
+            },
+        )
+        assert created.status_code == 201
+        event_id = created.json()["id"]
+    with TestClient(create_app(settings)) as restarted:
+        resp = restarted.get(f"/api/events/{event_id}")
+        assert resp.status_code == 200
+        assert resp.json()["title"] == "Keep me"
