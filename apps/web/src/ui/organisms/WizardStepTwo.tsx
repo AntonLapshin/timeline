@@ -3,7 +3,9 @@ import {
   RECURRENCE_CHOICES,
   type RecurrenceChoice,
 } from "../../core/eventWizard";
-import { SEGMENT_ACTIVE_CLASSES } from "./SegmentedControl";
+import { FormField } from "../atoms/FormField";
+import { TextInput } from "../atoms/TextInput";
+import { Radio } from "../atoms/Radio";
 
 /** Props for the Recurrence step. */
 export interface WizardStepTwoProps {
@@ -42,52 +44,45 @@ export function WizardStepTwo({
   return (
     <div className="space-y-4">
       <fieldset>
-        <legend className="field-label">
-          Recurrence
-        </legend>
+        <legend className="field-label">Recurrence</legend>
         <div className="mt-2 grid grid-cols-2 gap-2">
           {RECURRENCE_CHOICES.map((choice) => {
             const selected = draft.recurrence === choice;
             return (
-              <label
+              <Radio
                 key={choice}
-                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm leading-none transition-colors ${
+                name="wizard-recurrence"
+                value={choice}
+                checked={selected}
+                onChange={(value) =>
+                  onChange({ recurrence: value as RecurrenceChoice })
+                }
+                label={RECURRENCE_LABELS[choice]}
+                className={`items-center rounded-2xl border px-3 py-2.5 transition-[background-color,border-color,box-shadow,color] ${
                   selected
-                    ? `${SEGMENT_ACTIVE_CLASSES} shadow-md shadow-indigo-600/25`
-                    : "border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-slate-800"
+                    ? "border-brand-500/70 bg-brand-50/70 shadow-glow dark:border-brand-400/50 dark:bg-brand-500/10"
+                    : "border-slate-300/80 bg-white shadow-sm hover:border-slate-400 hover:bg-slate-50 dark:border-slate-600/60 dark:bg-ink-800 dark:hover:border-slate-500 dark:hover:bg-white/5"
                 }`}
-              >
-                <input
-                  type="radio"
-                  name="wizard-recurrence"
-                  value={choice}
-                  checked={selected}
-                  onChange={() => onChange({ recurrence: choice })}
-                  className="h-4 w-4 accent-indigo-600 dark:accent-indigo-400"
-                />
-                {RECURRENCE_LABELS[choice]}
-              </label>
+              />
             );
           })}
         </div>
       </fieldset>
 
       {draft.recurrence === "custom" && (
-        <div>
-          <label className="field-label">
-            Custom rule (RFC 5545)
-          </label>
-          <input
-            type="text"
+        <FormField
+          label="Custom rule (RFC 5545)"
+          htmlFor="wizard-custom-rrule"
+          error={errors.customRrule}
+        >
+          <TextInput
+            id="wizard-custom-rrule"
             value={draft.customRrule}
             onChange={(e) => onChange({ customRrule: e.target.value })}
             placeholder="e.g. FREQ=WEEKLY;BYDAY=MO,WE"
-            className="field-input mt-1"
+            error={errors.customRrule}
           />
-          {errors.customRrule && (
-            <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.customRrule}</p>
-          )}
-        </div>
+        </FormField>
       )}
     </div>
   );

@@ -11,9 +11,19 @@ vi.mock("../../src/ui/services/useServices", () => ({
   useServices: useServicesMock,
 }));
 
+/**
+ * The current month as `YYYY-MM` — the view model always requests the
+ * current month, so the assertion must not hardcode one (the old suite
+ * hardcoded "2026-09" and broke on Oct 1).
+ */
+function currentMonthIso(): string {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function summaryResponse(): SummaryResponse {
   return {
-    month: "2026-09",
+    month: currentMonthIso(),
     total: 3,
     by_priority: { critical: 1, medium: 1, low: 1 },
   };
@@ -58,7 +68,7 @@ describe("useSummary", () => {
     // the fetch without a reload.
     rerender({ refreshKey: 1 });
     await waitFor(() => expect(getSummary).toHaveBeenCalledTimes(2));
-    expect(getSummary).toHaveBeenCalledWith("2026-09");
+    expect(getSummary).toHaveBeenCalledWith(currentMonthIso());
   });
 
   it("shows an error when the fetch fails", async () => {

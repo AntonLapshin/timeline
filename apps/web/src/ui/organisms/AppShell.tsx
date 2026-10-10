@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { SegmentedControl } from "./SegmentedControl";
+import { SegmentedControl } from "../molecules/SegmentedControl";
+import { Kbd } from "../atoms/Kbd";
 
 /** The available top-level views. */
 export type AppView = "timeline" | "calendar";
@@ -27,12 +28,14 @@ export interface AppShellProps {
 /**
  * The top-level app shell (issue #21; viewport-height layout issue #123).
  *
- * Provides the no-login localhost layout: a header that hosts the summary-bar
- * slot (wired in a later issue), a view switcher (Timeline / Calendar), and the
- * active view's content. The shell is exactly the viewport height (`h-dvh` flex
- * column): the header stays visible and the content area (`<main>`) is the
- * single internal scroll container, so the timeline/calendar scroll inside it
- * instead of the whole document — no page-level vertical scrollbar.
+ * Provides the no-login localhost layout: a brand header (skip link, logo
+ * mark + wordmark, view switcher, theme toggle, actions, and the
+ * search/smart-input/summary slots), and the active view's content. The shell
+ * is exactly the viewport height (`h-dvh` flex column) over the ambient
+ * `.bg-scene` backdrop: the header stays visible and the content area
+ * (`<main id="main-content">`) is the single internal scroll container, so
+ * the timeline/calendar scroll inside it instead of the whole document — no
+ * page-level vertical scrollbar.
  *
  * Dumb component — it renders props and calls the `onViewChange` callback; no
  * business logic.
@@ -48,10 +51,28 @@ export function AppShell({
   themeToggleSlot,
 }: AppShellProps) {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-gradient-to-b from-slate-100 to-slate-200/60 dark:from-slate-950 dark:to-slate-900">
-      <header className="shrink-0 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-slate-700/60 dark:bg-slate-900/80">
+    <div className="bg-scene flex h-dvh flex-col overflow-hidden bg-slate-100 dark:bg-ink-950">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+      <header className="shrink-0 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-ink-950/80">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <h1 className="bg-gradient-to-r from-slate-900 via-slate-700 to-indigo-600 bg-clip-text text-lg font-bold tracking-tight text-transparent dark:from-slate-100 dark:via-slate-300 dark:to-indigo-400">Timeline</h1>
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-violet-600 shadow-md shadow-brand-600/25"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+                className="h-4 w-4 text-white"
+              >
+                <path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" />
+              </svg>
+            </span>
+            <h1 className="brand-text">Timeline</h1>
+          </div>
           <div className="flex items-center gap-2">
             {themeToggleSlot}
             <nav className="flex items-center gap-2" aria-label="Views">
@@ -65,7 +86,7 @@ export function AppShell({
                 ]}
               />
               {actions && (
-                <div className="border-l border-slate-200 pl-2 dark:border-slate-600">
+                <div className="border-l border-slate-200 pl-2 dark:border-white/10">
                   {actions}
                 </div>
               )}
@@ -81,9 +102,12 @@ export function AppShell({
         {summarySlot && (
           <div className="mx-auto max-w-3xl px-4 pb-3">{summarySlot}</div>
         )}
+        <p className="mx-auto max-w-3xl px-4 pb-2 text-[11px] text-slate-400 dark:text-slate-500">
+          Press <Kbd>/</Kbd> to search · <Kbd>C</Kbd> to create an event
+        </p>
       </header>
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-3xl px-4 py-6">{children}</div>
+      <main id="main-content" className="min-h-0 flex-1 overflow-y-auto" tabIndex={-1}>
+        <div className="mx-auto max-w-3xl px-4 py-6 sm:py-8">{children}</div>
       </main>
     </div>
   );

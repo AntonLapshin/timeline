@@ -1,7 +1,9 @@
-import type { RefObject } from "react";
+import type { KeyboardEvent, RefObject } from "react";
 import type { EventFilter } from "../../core/searchFilter";
 import type { EventPriority } from "../../core/eventTypes";
-import { Dropdown } from "./Dropdown";
+import { Dropdown } from "../molecules/Dropdown";
+import { SearchField } from "../molecules/SearchField";
+import { Button } from "../atoms/Button";
 
 /** The filterable priority options in display order. */
 const PRIORITY_OPTIONS: Array<{ value: EventPriority; label: string }> = [
@@ -53,23 +55,28 @@ export function SearchFilterBar({
 }: SearchFilterBarProps) {
   const hasOptions = tags.length > 0 || months.length > 0;
 
+  // `SearchField` owns Escape for its own clear-text behavior, so the
+  // bar-wide "Esc clears all filters and blurs" contract lives on this
+  // wrapper (bubbled from the input), keeping the shortcut working even
+  // when no `inputRef` was provided.
+  const handleSearchKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      onClear();
+      e.currentTarget.querySelector("input")?.blur();
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <input
-        ref={inputRef}
-        type="search"
-        value={filter.text}
-        onChange={(e) => onTextChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            onClear();
-            e.currentTarget.blur();
-          }
-        }}
-        placeholder="Search events…"
-        aria-label="Search events"
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 sm:w-56"
-      />
+      <div className="min-w-48 flex-1" onKeyDown={handleSearchKeyDown}>
+        <SearchField
+          inputRef={inputRef}
+          value={filter.text}
+          onChange={onTextChange}
+          placeholder="Search events…"
+          label="Search events"
+        />
+      </div>
       <Dropdown
         label="Filter by priority"
         placeholder="Priority"
@@ -92,13 +99,9 @@ export function SearchFilterBar({
         onChange={onMonthChange}
       />
       {hasOptions && (
-        <button
-          type="button"
-          onClick={onClear}
-          className="btn-ghost min-h-8 px-2 py-1.5"
-        >
+        <Button type="button" variant="ghost" size="sm" onClick={onClear}>
           Clear
-        </button>
+        </Button>
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { SummaryBar } from "../../src/ui/components/SummaryBar";
+import { SummaryBar } from "../../src/ui/organisms/SummaryBar";
 import type { SummaryState } from "../../src/ui/viewModels/useSummary";
 
 // Mock the view model so the component's rendering branches can be exercised

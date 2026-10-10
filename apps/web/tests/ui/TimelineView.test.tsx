@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { TimelineView } from "../../src/ui/components/TimelineView";
+import { TimelineView } from "../../src/ui/organisms/TimelineView";
 import { ServicesContext, type Services } from "../../src/ui/services/context";
 import type { EventRead } from "../../src/core/eventTypes";
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ThemeProvider } from "../../src/ui/theme/ThemeProvider";
 import { createMemoryThemeStorage } from "../../src/adapters/themeStorage";
-import { ThemeToggle } from "../../src/ui/components/ThemeToggle";
+import { ThemeToggle } from "../../src/ui/molecules/ThemeToggle";
 
 function renderToggle(initial: "light" | "dark" = "light") {
   return render(

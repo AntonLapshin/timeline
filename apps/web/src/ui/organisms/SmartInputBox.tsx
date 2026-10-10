@@ -1,5 +1,7 @@
 import type { FormEvent, RefObject } from "react";
 import type { SmartInputState } from "../viewModels/useSmartInput";
+import { Button } from "../atoms/Button";
+import { Alert } from "../atoms/Alert";
 
 /** Props for the smart-input box. */
 export interface SmartInputBoxProps {
@@ -28,23 +30,27 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full" data-testid="smart-input">
       <form onSubmit={onSubmit} className="flex w-full items-center gap-2">
-        <input
-          ref={inputRef}
-          type="text"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder='Add event… e.g. "dentist next Tuesday 3pm"'
-          aria-label="Add event"
-          disabled={parsing}
-          aria-busy={parsing}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30"
-        />
-        <button
+        <div className="min-w-0 flex-1 rounded-xl transition-shadow focus-within:shadow-glow">
+          <input
+            ref={inputRef}
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder='Add event… e.g. "dentist next Tuesday 3pm"'
+            aria-label="Add event"
+            disabled={parsing}
+            aria-busy={parsing}
+            className="field-input"
+          />
+        </div>
+        <Button
           type="submit"
+          variant="accent"
           disabled={parsing || !text.trim()}
-          className="btn-accent shrink-0 px-3 py-1.5"
+          aria-busy={parsing || undefined}
+          className="shrink-0"
         >
           {parsing && (
             <svg
@@ -70,16 +76,13 @@ export function SmartInputBox({ smartInput, inputRef }: SmartInputBoxProps) {
             </svg>
           )}
           {parsing ? "Parsing…" : "Add"}
-        </button>
-        {error && (
-          <p
-            role="alert"
-            className="w-full text-xs text-red-600 dark:text-red-400"
-          >
-            {error}
-          </p>
-        )}
+        </Button>
       </form>
+      {error && (
+        <Alert tone="error" className="mt-2">
+          {error}
+        </Alert>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { AppShell } from "../../src/ui/components/AppShell";
+import { AppShell } from "../../src/ui/organisms/AppShell";
 
 describe("AppShell", () => {
   it("renders the active view content and header title", () => {

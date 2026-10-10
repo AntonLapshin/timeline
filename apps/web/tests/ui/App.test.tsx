@@ -33,31 +33,31 @@ vi.mock("../../src/ui/viewModels/useSmartInput", () => ({
 vi.mock("../../src/ui/services/useServices", () => ({
   useServices: useServicesMock,
 }));
-vi.mock("../../src/ui/components/SummaryBar", () => ({
+vi.mock("../../src/ui/organisms/SummaryBar", () => ({
   SummaryBar: (props: { refreshKey?: number }) => (
     <div data-testid="summary-bar" data-refresh-key={String(props.refreshKey)} />
   ),
 }));
-vi.mock("../../src/ui/components/TimelineView", () => ({
+vi.mock("../../src/ui/organisms/TimelineView", () => ({
   TimelineView: (props: { refreshKey?: number }) => (
     <div data-testid="timeline-view" data-refresh-key={String(props.refreshKey)} />
   ),
 }));
-vi.mock("../../src/ui/components/CalendarView", () => ({
+vi.mock("../../src/ui/organisms/CalendarView", () => ({
   CalendarView: (props: { refreshKey?: number }) => (
     <div data-testid="calendar-view" data-refresh-key={String(props.refreshKey)} />
   ),
 }));
-vi.mock("../../src/ui/components/EventWizard", () => ({
+vi.mock("../../src/ui/organisms/EventWizard", () => ({
   EventWizard: () => <div data-testid="event-wizard" />,
 }));
-vi.mock("../../src/ui/components/EventDrawer", () => ({
+vi.mock("../../src/ui/organisms/EventDrawer", () => ({
   EventDrawer: () => <div data-testid="event-drawer" />,
 }));
-vi.mock("../../src/ui/components/SmartInputBox", () => ({
+vi.mock("../../src/ui/organisms/SmartInputBox", () => ({
   SmartInputBox: () => <div data-testid="smart-input" />,
 }));
-vi.mock("../../src/ui/components/ThemeToggle", () => ({
+vi.mock("../../src/ui/molecules/ThemeToggle", () => ({
   ThemeToggle: () => <div data-testid="theme-toggle" />,
 }));
 vi.mock("../../src/ui/services/ServicesProvider", () => ({

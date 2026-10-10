@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SearchFilterBar } from "../../src/ui/components/SearchFilterBar";
+import { SearchFilterBar } from "../../src/ui/organisms/SearchFilterBar";
 import { EMPTY_FILTER } from "../../src/core/searchFilter";
 
 function renderBar(

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { EventDrawer } from "../../src/ui/components/EventDrawer";
+import { EventDrawer } from "../../src/ui/organisms/EventDrawer";
 import type { EventDrawerState } from "../../src/ui/viewModels/useEventDrawer";
 import type { EventRead } from "../../src/core/eventTypes";
 

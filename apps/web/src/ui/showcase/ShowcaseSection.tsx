@@ -1,10 +1,13 @@
 import type { ReactNode } from "react";
+import { SectionHeading } from "../molecules/SectionHeading";
 
 /**
  * A labeled gallery section in the Showcase page.
  *
- * Thin, presentational container: renders a section title + optional caption
- * and the gallery content inside a bordered card. No business logic.
+ * Thin, presentational container: renders the component name as a
+ * `SectionHeading` (h2, so the gallery's section titles stay real headings)
+ * with an optional caption, and the gallery content inside a bordered card.
+ * No business logic.
  */
 export function ShowcaseSection({
   title,
@@ -19,16 +22,9 @@ export function ShowcaseSection({
   children: ReactNode;
 }) {
   return (
-    <section className="card p-4">
-      <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-        {title}
-      </h2>
-      {caption && (
-        <p className="mt-0.5 text-xs leading-4 text-slate-500 dark:text-slate-400">
-          {caption}
-        </p>
-      )}
-      <div className="mt-3 space-y-3">{children}</div>
+    <section className="card scroll-mt-28 p-4 sm:p-5">
+      <SectionHeading title={title} description={caption} />
+      <div className="mt-4 space-y-4">{children}</div>
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { SmartInputBox } from "../../src/ui/components/SmartInputBox";
+import { SmartInputBox } from "../../src/ui/organisms/SmartInputBox";
 import type { SmartInputState } from "../../src/ui/viewModels/useSmartInput";
 
 function state(overrides: Partial<SmartInputState> = {}): SmartInputState {

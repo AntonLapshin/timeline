@@ -1,5 +1,7 @@
 import { useProjectInfo } from "../viewModels/useProjectInfo";
 import type { ProjectStatus } from "../../core/projectInfo";
+import { SectionHeading } from "../molecules/SectionHeading";
+import { Chip } from "../atoms/Chip";
 
 export interface DemoPanelProps {
   projectName: string;
@@ -27,27 +29,26 @@ export function DemoPanel({
 
   return (
     <section className="card mx-auto max-w-md p-6">
-      <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">{info.name}</h2>
-      {info.description && (
-        <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{info.description}</p>
-      )}
+      <SectionHeading
+        eyebrow="Project"
+        title={info.name}
+        description={info.description}
+      />
 
-      <dl className="mt-4 space-y-2 text-sm">
-        <div className="flex items-center justify-between">
+      <dl className="mt-5 space-y-3 text-sm">
+        <div className="flex items-center justify-between gap-3">
           <dt className="text-slate-500 dark:text-slate-400">Status</dt>
           <dd>
-            <span className="chip border-emerald-200 bg-emerald-50/80 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300">
-              {info.statusText}
-            </span>
+            <Chip tone="green">{info.statusText}</Chip>
           </dd>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <dt className="text-slate-500 dark:text-slate-400">Repo</dt>
           <dd className="font-mono text-slate-700 dark:text-slate-300">
             {info.owner}/{info.repo}
           </dd>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <dt className="text-slate-500 dark:text-slate-400">Demo</dt>
           <dd>
             {info.demoReady ? (
@@ -58,7 +59,9 @@ export function DemoPanel({
                 {info.demoUrl}
               </a>
             ) : (
-              <span className="text-slate-500 dark:text-slate-400">Not deployed yet</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Not deployed yet
+              </span>
             )}
           </dd>
         </div>

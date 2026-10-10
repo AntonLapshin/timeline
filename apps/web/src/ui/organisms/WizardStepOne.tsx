@@ -1,5 +1,8 @@
 import type { EventDraft, DraftErrors } from "../../core/eventWizard";
-import { Checkbox } from "./Checkbox";
+import { FormField } from "../atoms/FormField";
+import { TextInput } from "../atoms/TextInput";
+import { Textarea } from "../atoms/Textarea";
+import { Checkbox } from "../atoms/Checkbox";
 
 /** Props for the What/When step. */
 export interface WizardStepOneProps {
@@ -25,88 +28,71 @@ export function WizardStepOne({
 }: WizardStepOneProps) {
   return (
     <div className="space-y-4">
-      <div>
-        <label className="field-label">
-          Title
-        </label>
-        <input
-          type="text"
+      <FormField
+        label="Title"
+        htmlFor="wizard-title"
+        required
+        error={errors.title}
+      >
+        <TextInput
+          id="wizard-title"
           value={draft.title}
           onChange={(e) => onChange({ title: e.target.value })}
           placeholder="What's the event?"
-          className="field-input mt-1"
+          error={errors.title}
         />
-        {errors.title && (
-          <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.title}</p>
-        )}
-      </div>
+      </FormField>
 
-      <div>
-        <label className="field-label">
-          Notes
-        </label>
-        <textarea
+      <FormField label="Notes" htmlFor="wizard-notes">
+        <Textarea
+          id="wizard-notes"
           value={draft.notes}
           onChange={(e) => onChange({ notes: e.target.value })}
           placeholder="Optional details"
           rows={2}
-          className="field-input mt-1 resize-y"
+          className="resize-y"
         />
-      </div>
+      </FormField>
 
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id="wizard-all-day"
-          label="All day"
-          checked={draft.allDay}
-          onChange={(checked) => onChange({ allDay: checked })}
-        />
-      </div>
+      <Checkbox
+        id="wizard-all-day"
+        label="All day"
+        checked={draft.allDay}
+        onChange={(checked) => onChange({ allDay: checked })}
+      />
 
       <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="field-label">
-            Date
-          </label>
+        <FormField label="Date" htmlFor="wizard-date" error={errors.date}>
           <input
+            id="wizard-date"
             type="date"
             value={draft.date}
             onChange={(e) => onChange({ date: e.target.value })}
-            className="field-input mt-1"
+            aria-invalid={errors.date ? true : undefined}
+            className="field-input"
           />
-          {errors.date && (
-            <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.date}</p>
-          )}
-        </div>
-        <div>
-          <label className="field-label">
-            Time
-          </label>
+        </FormField>
+        <FormField label="Time" htmlFor="wizard-time" error={errors.time}>
           <input
+            id="wizard-time"
             type="time"
             value={draft.time}
             disabled={draft.allDay}
             onChange={(e) => onChange({ time: e.target.value })}
-            className="field-input mt-1"
+            aria-invalid={errors.time ? true : undefined}
+            className="field-input"
           />
-          {errors.time && (
-            <p className="mt-1 text-xs leading-4 text-red-600 dark:text-red-400">{errors.time}</p>
-          )}
-        </div>
+        </FormField>
       </div>
 
-      <div>
-        <label className="field-label">
-          Timezone
-        </label>
-        <input
-          type="text"
+      <FormField label="Timezone" htmlFor="wizard-tz">
+        <TextInput
+          id="wizard-tz"
           value={draft.tz}
           onChange={(e) => onChange({ tz: e.target.value })}
           placeholder="e.g. Europe/Berlin"
-          className="field-input mt-1"
         />
-      </div>
+      </FormField>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { EventWizard } from "../../src/ui/components/EventWizard";
+import { EventWizard } from "../../src/ui/organisms/EventWizard";
 import type { EventWizardState } from "../../src/ui/viewModels/useEventWizard";
 import type { EventDraft } from "../../src/core/eventWizard";
 

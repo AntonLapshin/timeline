@@ -44,7 +44,7 @@ export function Checkbox({
       />
       <span
         aria-hidden
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-500/50 peer-focus-visible:ring-offset-1 dark:peer-focus-visible:ring-offset-slate-900 ${
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-[background-color,border-color,box-shadow] peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500 dark:peer-focus-visible:outline-brand-400 ${
           checked
             ? "border-indigo-500 bg-gradient-to-b from-indigo-500 to-indigo-700 text-white dark:border-indigo-400 dark:from-indigo-500 dark:to-indigo-600"
             : "border-slate-300 bg-white text-transparent shadow-sm hover:border-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:hover:border-slate-500"

@@ -2,15 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --focus-color: #4f46e5;
+  color-scheme: light;
+}
+
+.dark {
+  --focus-color: #a5b4fc;
+  color-scheme: dark;
+}
+
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased dark:bg-ink-950 dark:text-slate-100;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+
   /*
-   * Single-line control text.
+   * The single, predictable keyboard-focus treatment for the whole app.
    *
-   * Buttons pin `line-height: 1` and center content with flex so glyphs sit
-   * optically centered with balanced top/bottom padding in both themes
-   * (the previous 1.25rem line-height added uneven descender space that made
-   * button text look shifted up).
+   * Every natively focusable element (and any [tabindex] host) gets a
+   * high-contrast 2px outline with a 2px offset when focused via keyboard.
+   * Components must NOT add their own focus:ring utilities — this rule is
+   * the one source of truth, so focus always looks the same and is never
+   * accidentally invisible. Mouse/touch focus keeps the clean look
+   * (`:focus:not(:focus-visible)` stays outline-free).
    */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus-color);
+    outline-offset: 2px;
+  }
+
   button {
     display: inline-flex;
     align-items: center;
@@ -19,12 +46,23 @@
     vertical-align: middle;
     text-wrap: balance;
     min-height: 32px;
+    /* Tactile micro-interaction shared by every button in the app. */
+    transition:
+      transform 120ms ease-out,
+      background-color 150ms ease-out,
+      border-color 150ms ease-out,
+      box-shadow 180ms ease-out,
+      color 150ms ease-out;
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.97);
   }
 
   input,
   select,
   textarea {
-    line-height: 1;
+    line-height: 1.4;
   }
 
   select {
@@ -37,7 +75,6 @@
     vertical-align: middle;
     margin: 0;
     flex-shrink: 0;
-    height: 32px;
   }
 
   /* Native date/time pickers render an unthemed white popup in dark mode
@@ -49,54 +86,81 @@
   }
 
   ::selection {
-    background: rgb(99 102 241 / 0.25);
+    background: rgb(99 102 241 / 0.28);
   }
 
   * {
     scrollbar-width: thin;
     scrollbar-color: rgb(148 163 184 / 0.5) transparent;
   }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
 }
 
 @layer components {
   /*
-   * Shared modern field + button treatments. Components compose these with
-   * their layout classes so focus rings, borders and dark surfaces stay
-   * consistent (and dark mode never falls back to a white box).
+   * Shared field treatment. Focus styling comes from the global
+   * :focus-visible rule — no per-field rings.
    */
   .field-input {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/30 disabled:cursor-not-allowed disabled:opacity-60 dark:disabled:bg-slate-800 dark:disabled:text-slate-500;
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 transition-[border-color,box-shadow,background-color] duration-150 hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600/80 dark:bg-ink-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:hover:border-slate-500 dark:disabled:bg-slate-800/60 dark:disabled:text-slate-500;
+  }
+
+  .field-input[aria-invalid="true"] {
+    @apply border-red-400 dark:border-red-500/60;
   }
 
   .field-label {
-    @apply block text-sm font-medium text-slate-700 dark:text-slate-300;
+    @apply mb-1.5 block text-sm font-semibold text-slate-700 dark:text-slate-200;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-xs text-slate-500 dark:text-slate-400;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-xs font-medium text-red-600 dark:text-red-400;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium leading-none transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-xl text-sm font-semibold leading-none disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .btn-primary {
-    @apply btn bg-gradient-to-b from-slate-800 to-slate-950 px-4 py-2 text-white shadow-md shadow-slate-900/20 dark:from-slate-100 dark:to-slate-300 dark:text-slate-900 dark:shadow-none;
+    @apply btn bg-gradient-to-b from-brand-500 to-brand-700 px-4 py-2.5 text-white shadow-md shadow-brand-600/30 hover:from-brand-400 hover:to-brand-600 hover:shadow-lg hover:shadow-brand-600/30 dark:from-brand-400 dark:to-brand-600 dark:text-white dark:shadow-brand-950/60;
   }
 
   .btn-accent {
-    @apply btn bg-gradient-to-b from-indigo-500 to-indigo-700 px-3 py-1.5 text-white shadow-md shadow-indigo-600/25 dark:shadow-indigo-950/50;
+    @apply btn bg-gradient-to-b from-violet-500 to-violet-700 px-3.5 py-2 text-white shadow-md shadow-violet-600/25 hover:shadow-lg hover:shadow-violet-600/30 dark:shadow-violet-950/60;
   }
 
   .btn-ghost {
-    @apply btn border border-slate-300 bg-white/80 px-3 py-1.5 text-slate-700 shadow-sm backdrop-blur hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700;
+    @apply btn border border-slate-300/90 bg-white/80 px-3.5 py-2 text-slate-700 shadow-sm backdrop-blur hover:border-slate-400 hover:bg-white dark:border-slate-600/80 dark:bg-ink-800/80 dark:text-slate-200 dark:hover:border-slate-500 dark:hover:bg-ink-800;
+  }
+
+  .btn-danger {
+    @apply btn border border-red-200 bg-white px-4 py-2 text-red-700 shadow-sm hover:bg-red-50 dark:border-red-500/30 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950/40;
+  }
+
+  .btn-danger-solid {
+    @apply btn bg-gradient-to-b from-red-500 to-red-700 px-4 py-2 text-white shadow-md shadow-red-600/25 hover:shadow-lg;
   }
 
   /*
    * Square icon buttons (arrows, Close, theme toggle, …): a perfect
-   * 32×32 footprint shared by every single-icon button.
+   * 40×40 footprint shared by every single-icon button — comfortably above
+   * the 24px WCAG minimum and a reliable touch target.
    */
   .btn-square {
-    height: 32px;
-    width: 32px;
+    height: 40px;
+    width: 40px;
     padding-left: 0;
     padding-right: 0;
+    border-radius: 12px;
   }
 
   /*
@@ -105,56 +169,128 @@
    */
   .dropdown-option {
     height: auto;
-    min-height: 40px;
+    min-height: 44px;
   }
 
+  /*
+   * Cards: the primary surface. Rounded-2xl, layered soft shadow, and a
+   * hover lift reserved for interactive cards (`.card-interactive`).
+   */
   .card {
-    @apply rounded-lg border border-slate-200/80 bg-white shadow-[0_1px_2px_rgb(15_23_42/0.05),0_8px_24px_-12px_rgb(15_23_42/0.15)] dark:border-slate-700/70 dark:bg-slate-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_12px_32px_-12px_rgb(0_0_0/0.6)];
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-card dark:border-slate-700/50 dark:bg-ink-800 dark:shadow-[0_1px_2px_rgb(0_0_0/0.4),0_16px_40px_-16px_rgb(0_0_0/0.7)];
+  }
+
+  .card-interactive {
+    @apply card transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand-300/70 hover:shadow-card-hover dark:hover:border-brand-400/30;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-0.5 text-xs font-medium leading-4;
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-5;
+  }
+
+  /*
+   * Staggered entrance: combine with `animate-enter` and set
+   * `--enter-delay` (e.g. `style={{ "--enter-delay": "120ms" }}`) or use
+   * the `[animation-delay:...]` arbitrary utility. Disabled entirely under
+   * `prefers-reduced-motion`.
+   */
+  .animate-enter {
+    animation-delay: var(--enter-delay, 0ms);
+  }
+
+  /*
+   * Ambient scene background: two slow-drifting radial orbs over the base
+   * surface. Pure decoration (`aria-hidden` in markup).
+   */
+  .bg-scene {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .bg-scene::before,
+  .bg-scene::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .bg-scene::before {
+    background:
+      radial-gradient(36rem 22rem at 12% -6%, rgb(99 102 241 / 0.14), transparent 60%),
+      radial-gradient(30rem 20rem at 88% 4%, rgb(168 85 247 / 0.1), transparent 60%);
+  }
+
+  .dark .bg-scene::before {
+    background:
+      radial-gradient(36rem 22rem at 12% -6%, rgb(99 102 241 / 0.16), transparent 60%),
+      radial-gradient(30rem 20rem at 88% 4%, rgb(168 85 247 / 0.12), transparent 60%);
+  }
+
+  .bg-scene::after {
+    background: radial-gradient(24rem 18rem at 78% 108%, rgb(56 189 248 / 0.08), transparent 60%);
+    animation: drift 16s ease-in-out infinite;
+  }
+
+  .dark .bg-scene::after {
+    background: radial-gradient(24rem 18rem at 78% 108%, rgb(56 189 248 / 0.1), transparent 60%);
+  }
+
+  /*
+   * Skip link: visually hidden until keyboard-focused, then pinned
+   * top-left above everything.
+   */
+  .skip-link {
+    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-xl bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white shadow-popover transition-transform duration-150 dark:bg-white dark:text-ink-950;
+  }
+
+  .skip-link:focus-visible {
+    transform: translateY(0);
+    outline: 2px solid var(--focus-color);
+    outline-offset: 2px;
+  }
+
+  /* Brand wordmark: gradient text with a subtle animated sheen. */
+  .brand-text {
+    @apply bg-gradient-to-r from-ink-950 via-brand-700 to-violet-600 bg-clip-text font-display text-xl font-extrabold tracking-tight text-transparent dark:from-white dark:via-brand-200 dark:to-violet-300;
+  }
+
+  /* Skeleton shimmer surface. */
+  .skeleton {
+    @apply rounded-xl bg-slate-200 dark:bg-slate-700/70;
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.55) 50%,
+      transparent 80%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+  }
+
+  .dark .skeleton {
+    background-image: linear-gradient(
+      100deg,
+      transparent 20%,
+      rgb(255 255 255 / 0.08) 50%,
+      transparent 80%
+    );
   }
 }
 
 /*
- * Slide-over panel animations (issue #122, M9-T5).
- *
- * The event drawer slides in from the right edge of the viewport over a
- * dimmed backdrop. The keyframes live here (outside Tailwind's config) so
- * both light and dark themes share one definition and no config change is
- * needed; the components reference them via arbitrary `animate-[...]`
- * utilities.
+ * Motion safety: when the user prefers reduced motion, every animation and
+ * transition collapses to (near-)instant so nothing moves, pulses or drifts.
  */
-@keyframes drawer-slide-in {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-@keyframes drawer-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/*
- * Custom dropdown panel pop-in: a subtle scale + fade from the trigger.
- */
-@keyframes dropdown-pop-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.99);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
