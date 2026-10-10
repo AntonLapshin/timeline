@@ -19,10 +19,10 @@ export const EVENT_PRIORITIES: readonly EventPriority[] = [
 ];
 
 /** Reminder delivery channels. */
-export type EventChannel = "telegram" | "email";
+export type EventChannel = "telegram";
 
 /** All channel values. */
-export const EVENT_CHANNELS: readonly EventChannel[] = ["telegram", "email"];
+export const EVENT_CHANNELS: readonly EventChannel[] = ["telegram"];
 
 /** Lifecycle status of an event. */
 export type EventStatus = "draft" | "active" | "archived";
@@ -52,8 +52,6 @@ export interface EventRead {
   remind_time_of_day: string | null;
   repeat_until_ack: boolean;
   snooze_allowed: boolean;
-  email_enabled: boolean;
-  email_to: string | null;
   source: EventSource;
   raw_input: string | null;
   status: EventStatus;
@@ -79,8 +77,6 @@ export interface EventCreate {
   remind_time_of_day?: string | null;
   repeat_until_ack?: boolean;
   snooze_allowed?: boolean;
-  email_enabled?: boolean;
-  email_to?: string | null;
   source?: EventSource;
   raw_input?: string | null;
   status?: EventStatus;

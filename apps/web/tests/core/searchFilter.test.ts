@@ -33,8 +33,6 @@ function makeEvent(overrides: Partial<EventRead>): EventRead {
     remind_time_of_day: null,
     repeat_until_ack: false,
     snooze_allowed: false,
-    email_enabled: false,
-    email_to: null,
     source: "web",
     raw_input: null,
     status: "active",

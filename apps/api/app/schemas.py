@@ -51,8 +51,6 @@ class EventBase(BaseModel):
     remind_time_of_day: str | None = None
     repeat_until_ack: bool = False
     snooze_allowed: bool = True
-    email_enabled: bool = False
-    email_to: str | None = None
     source: EventSource = EventSource.WEB
     raw_input: str | None = None
     status: EventStatus = EventStatus.ACTIVE
@@ -99,8 +97,6 @@ class EventUpdate(BaseModel):
     remind_time_of_day: str | None = None
     repeat_until_ack: bool | None = None
     snooze_allowed: bool | None = None
-    email_enabled: bool | None = None
-    email_to: str | None = None
     source: EventSource | None = None
     raw_input: str | None = None
     status: EventStatus | None = None

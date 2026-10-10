@@ -274,12 +274,7 @@ def test_quiet_hours_run_time_defers_inside() -> None:
 def test_channel_allows() -> None:
     """Delivery only happens on configured channels."""
     assert channel_allows([EventChannel.TELEGRAM], EventChannel.TELEGRAM) is True
-    assert channel_allows([EventChannel.EMAIL], EventChannel.TELEGRAM) is False
     assert channel_allows([], EventChannel.TELEGRAM) is False
-    assert (
-        channel_allows([EventChannel.TELEGRAM, EventChannel.EMAIL], EventChannel.EMAIL)
-        is True
-    )
 
 
 def test_should_repeat_until_ack() -> None:

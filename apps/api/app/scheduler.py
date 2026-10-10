@@ -38,6 +38,7 @@ from .db import create_engine_from_settings
 from .enums import EventChannel, EventPriority, EventStatus
 from .models import DeliveryLog, Event
 from .recurrence import next_occurrences
+from .utils import parse_hhmm as _parse_hhmm
 
 logger = logging.getLogger(__name__)
 
@@ -150,12 +151,6 @@ def parse_dedupe_key(key: str) -> tuple[int, str, str]:
     return int(event_id_s), occurrence_id, offset
 
 
-def _parse_hhmm(value: str) -> tuple[int, int]:
-    """Parse a ``"HH:MM"`` wall-clock string into ``(hour, minute)``."""
-    hour_s, _, minute_s = value.partition(":")
-    return int(hour_s), int(minute_s or "0")
-
-
 def in_quiet_hours(
     run_at: datetime,
     quiet_hours_start: str | None,
@@ -224,7 +219,7 @@ def channel_allows(channels: list[EventChannel], channel: EventChannel) -> bool:
     """Whether an event's configured channels include ``channel``.
 
     Outbound delivery only pushes to channels the event is configured for; a
-    channel that is absent (e.g. a Telegram-only event with email disabled) is
+    channel that is absent (e.g. a Telegram-only event) is
     never delivered on.
     """
     return channel in channels
@@ -295,10 +290,10 @@ def reminder_run_time(
     base = start - parse_offset(offset)
     if remind_time_of_day is None:
         return base
-    hour_s, _, minute_s = remind_time_of_day.partition(":")
+    hour, minute = _parse_hhmm(remind_time_of_day)
     local = base.astimezone(ZoneInfo(tz)).replace(
-        hour=int(hour_s),
-        minute=int(minute_s),
+        hour=hour,
+        minute=minute,
         second=0,
         microsecond=0,
     )

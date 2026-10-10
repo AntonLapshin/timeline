@@ -1,5 +1,4 @@
 import type { EventPriority } from "../../core/eventTypes";
-import { priorityStyle } from "../../core/timeline";
 
 /** Gradient stops per priority for the glossy dot. */
 const DOT_GRADIENTS: Record<EventPriority, string> = {
@@ -31,13 +30,10 @@ const SIZES: Record<NonNullable<PriorityDotProps["size"]>, string> = {
  * radial-looking gradient orb with a glossy top-left highlight, a soft
  * colored shadow and a translucent ring so it reads as a jewel-like status
  * light in both light and dark mode. Purely presentational — the gradient
- * is derived from the priority via `DOT_GRADIENTS` (kept in sync with
- * `priorityStyle` in `src/core/timeline`).
+ * is derived from the priority via `DOT_GRADIENTS`.
  */
 export function PriorityDot({ priority, size = "md", className = "" }: PriorityDotProps) {
   const gradient = DOT_GRADIENTS[priority] ?? DOT_GRADIENTS.medium;
-  // Touch the core mapping so the two stay in sync (unused at runtime).
-  void priorityStyle(priority);
   return (
     <span
       aria-hidden

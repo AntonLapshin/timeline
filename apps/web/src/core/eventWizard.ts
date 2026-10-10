@@ -15,6 +15,7 @@ import {
   parseNaiveWallClock,
   toLocalDate,
 } from "./dateFmt";
+import { pad2 } from "./utils";
 import type {
   EventChannel,
   EventCreate,
@@ -93,11 +94,6 @@ export interface DraftErrors {
 
 /** The default timezone label used when the local zone can't be resolved. */
 export const DEFAULT_TZ = "UTC";
-
-/** Pad a number to two digits (e.g. 9 → "09"). */
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
 
 /** Format a Date's time as HH:MM. */
 function timeOf(date: Date): string {
@@ -188,12 +184,11 @@ export function draftFromEvent(event: EventRead): EventDraft {
     !wallClock && start && event.tz
       ? datePartsInTimezone(start, event.tz)
       : null;
-  const pad = (n: number) => String(n).padStart(2, "0");
   const wallDate = wallClock
-    ? `${wallClock.year}-${pad(wallClock.month)}-${pad(wallClock.day)}`
+    ? `${wallClock.year}-${pad2(wallClock.month)}-${pad2(wallClock.day)}`
     : null;
   const wallTime = wallClock
-    ? `${pad(wallClock.hour)}:${pad(wallClock.minute)}`
+    ? `${pad2(wallClock.hour)}:${pad2(wallClock.minute)}`
     : null;
   return {
     title: event.title,
@@ -202,7 +197,7 @@ export function draftFromEvent(event: EventRead): EventDraft {
     date: start
       ? (wallDate ??
         (parts
-          ? `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`
+          ? `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}`
           : toLocalDate(start)))
       : "",
     time:
@@ -210,7 +205,7 @@ export function draftFromEvent(event: EventRead): EventDraft {
         ? ""
         : (wallTime ??
           (parts
-            ? `${pad(parts.hour)}:${pad(parts.minute)}`
+            ? `${pad2(parts.hour)}:${pad2(parts.minute)}`
             : timeOf(start))),
     tz: event.tz || DEFAULT_TZ,
     recurrence,

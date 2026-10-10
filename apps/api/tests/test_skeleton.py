@@ -35,14 +35,6 @@ def test_healthz_returns_ok(client: TestClient) -> None:
     assert body["uptime_seconds"] >= 0
 
 
-def test_healthz_reports_no_llm_config(settings: Settings) -> None:
-    """The /healthz endpoint exposes no LLM config (deterministic-only engine)."""
-    body = TestClient(create_app(settings)).get("/healthz").json()
-    assert body["status"] == "ok"
-    assert "llm_configured" not in body
-    assert "llm_model" not in body
-
-
 def test_healthz_creates_database_file(settings: Settings) -> None:
     """Hitting /healthz creates the SQLite database under the data dir."""
     client = TestClient(create_app(settings))

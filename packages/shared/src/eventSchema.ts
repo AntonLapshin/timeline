@@ -27,7 +27,7 @@ export type EventType = "one_time" | "recurrent";
 export type EventPriority = "critical" | "medium" | "low";
 
 /** Reminder delivery channels. */
-export type EventChannel = "telegram" | "email";
+export type EventChannel = "telegram";
 
 /** All allowed event statuses. */
 export const EVENT_STATUSES: readonly EventStatus[] = [
@@ -50,7 +50,7 @@ export const EVENT_PRIORITIES: readonly EventPriority[] = [
 ];
 
 /** All allowed reminder channels. */
-export const EVENT_CHANNELS: readonly EventChannel[] = ["telegram", "email"];
+export const EVENT_CHANNELS: readonly EventChannel[] = ["telegram"];
 
 /** Whether a value is a valid event status. */
 export function isEventStatus(value: string): value is EventStatus {

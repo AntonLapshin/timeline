@@ -100,8 +100,6 @@ class Event(Base):
     remind_time_of_day: Mapped[str | None] = mapped_column(String(5), nullable=True)
     repeat_until_ack: Mapped[bool] = mapped_column(Boolean, default=False)
     snooze_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
-    email_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    email_to: Mapped[str | None] = mapped_column(String(255), nullable=True)
     source: Mapped[EventSource] = mapped_column(
         Enum(
             EventSource,

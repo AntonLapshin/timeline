@@ -61,7 +61,7 @@ describe("parseGuards core module", () => {
     });
 
     it("accepts known channels", () => {
-      const result = validateDraft({ title: "x", channels: ["telegram", "email"] });
+      const result = validateDraft({ title: "x", channels: ["telegram"] });
       expect(result.ok).toBe(true);
     });
   });

@@ -74,12 +74,12 @@ def test_full_upgrade_creates_domain_tables(tmp_path: Path, monkeypatch) -> None
     ]:
         assert table in tables
 
-    # The alembic version is stamped to the head revision (0004).
+    # The alembic version is stamped to the head revision (0005).
     with engine.connect() as conn:
         version = conn.execute(
             sa.text("SELECT version_num FROM alembic_version")
         ).scalar()
-    assert version == "0004"
+    assert version == "0005"
 
     # Migration 0003 dropped the voice column from telegram_inbound.
     inbound_columns = {
@@ -88,6 +88,7 @@ def test_full_upgrade_creates_domain_tables(tmp_path: Path, monkeypatch) -> None
     assert "voice_duration_sec" not in inbound_columns
 
     # Migration 0004 dropped the AI confidence column from events.
+    # Migration 0005 dropped the email columns from events.
 
     # Spot-check the events table has the schema-aligned columns.
     event_columns = {c["name"] for c in inspect(engine).get_columns("events")}
@@ -104,6 +105,8 @@ def test_full_upgrade_creates_domain_tables(tmp_path: Path, monkeypatch) -> None
         "status",
     } <= event_columns
     assert "ai_confidence" not in event_columns
+    assert "email_enabled" not in event_columns
+    assert "email_to" not in event_columns
 
 
 def test_migration_0003_drops_and_restores_voice_column(
@@ -131,7 +134,7 @@ def test_migration_0003_drops_and_restores_voice_column(
 def test_migration_0004_drops_and_restores_ai_confidence(
     tmp_path: Path, monkeypatch
 ) -> None:  # noqa: ANN001
-    """Upgrading 0003 -> head drops ai_confidence; downgrade restores it."""
+    """Upgrading 0003 -> 0004 drops ai_confidence; downgrade restores it."""
     monkeypatch.setenv("TIMELINE_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("TIMELINE_DB_NAME", "ai_conf.db")
 
@@ -141,10 +144,35 @@ def test_migration_0004_drops_and_restores_ai_confidence(
     before = {c["name"] for c in inspect(engine).get_columns("events")}
     assert "ai_confidence" in before
 
-    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "0004")
     after = {c["name"] for c in inspect(engine).get_columns("events")}
     assert "ai_confidence" not in after
 
     command.downgrade(cfg, "0003")
     restored = {c["name"] for c in inspect(engine).get_columns("events")}
     assert "ai_confidence" in restored
+
+
+def test_migration_0005_drops_and_restores_email_columns(
+    tmp_path: Path, monkeypatch
+) -> None:  # noqa: ANN001
+    """Upgrading 0004 -> head drops email columns; downgrade restores them."""
+    monkeypatch.setenv("TIMELINE_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("TIMELINE_DB_NAME", "email_col.db")
+
+    cfg = _alembic_config(tmp_path, "email_col.db")
+    command.upgrade(cfg, "0004")
+    engine = create_engine(f"sqlite:///{tmp_path / 'email_col.db'}")
+    before = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert "email_enabled" in before
+    assert "email_to" in before
+
+    command.upgrade(cfg, "head")
+    after = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert "email_enabled" not in after
+    assert "email_to" not in after
+
+    command.downgrade(cfg, "0004")
+    restored = {c["name"] for c in inspect(engine).get_columns("events")}
+    assert "email_enabled" in restored
+    assert "email_to" in restored

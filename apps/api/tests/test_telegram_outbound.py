@@ -765,7 +765,7 @@ def test_make_telegram_job_func_skips_disallowed_channel(
 ) -> None:
     """An event not configured for Telegram is not pushed (channel filter)."""
     with session_factory() as session:
-        event = _event(channels=[EventChannel.EMAIL])
+        event = _event(channels=[])
         session.add(event)
         session.commit()
         event_id = event.id

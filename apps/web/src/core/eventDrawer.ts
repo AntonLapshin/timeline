@@ -12,7 +12,7 @@ import type { EventChannel, EventOccurrence, EventRead } from "./eventTypes";
 
 /** A renderable reminder preview derived from an event's reminder config. */
 export interface ReminderPreview {
-  /** The reminder delivery channels (telegram / email). */
+  /** The reminder delivery channels (telegram). */
   channels: EventChannel[];
   /** The reminder offsets joined for display, e.g. "7d / 1d / 2h". */
   offsetsLabel: string;

@@ -188,11 +188,11 @@ def test_catch_up_schedules_missed_and_skips_delivered(tmp_path: Path) -> None:
 
 
 def test_catch_up_skips_low_priority_and_non_telegram(tmp_path: Path) -> None:
-    """Events that never push (low priority / non-Telegram) schedule nothing."""
+    """Events that never push (low priority / empty channels) schedule nothing."""
     _, session_factory = _db(tmp_path)
     with session_factory() as session:
         session.add(_event(title="Low", priority=EventPriority.LOW))
-        session.add(_event(title="Email only", channels=[EventChannel.EMAIL]))
+        session.add(_event(title="No channel", channels=[]))
         session.commit()
 
     scheduler = _wire_scheduler(tmp_path)

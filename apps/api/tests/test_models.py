@@ -65,8 +65,6 @@ def test_event_defaults(session: Session) -> None:
     assert event.remind_time_of_day is None
     assert event.repeat_until_ack is False
     assert event.snooze_allowed is True
-    assert event.email_enabled is False
-    assert event.email_to is None
     assert event.raw_input is None
     assert event.created_at is not None
     assert event.updated_at is not None

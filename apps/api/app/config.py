@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .telegram_allowlist import TelegramAllowlist, parse_allowlist
+from .utils import bool_env as _bool_env
+from .utils import optional_env as _optional_env
 
 
 def _detect_repo_root() -> Path:
@@ -35,22 +37,6 @@ def _detect_repo_root() -> Path:
 
 _REPO_ROOT = _detect_repo_root()
 _DEFAULT_DATA_DIR = _REPO_ROOT / "data"
-
-
-def _bool_env(name: str, default: bool) -> bool:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    return raw.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _optional_env(name: str) -> str | None:
-    """Return the env value, or None when unset/blank (no quiet hours)."""
-    raw = os.getenv(name)
-    if raw is None:
-        return None
-    stripped = raw.strip()
-    return stripped or None
 
 
 @dataclass(frozen=True)
@@ -132,23 +118,6 @@ class Settings:
     telegram_user_ids: str | None = field(
         default_factory=lambda: _optional_env("TELEGRAM_USER_IDS")
     )
-    #: Email feature flag (v1 default OFF). When off no email is ever sent,
-    #: regardless of event channels (issue #61, M4-T3B).
-    email_enabled: bool = field(
-        default_factory=lambda: _bool_env("EMAIL_ENABLED", False)
-    )
-    #: SMTP host for the email sender (local .env only, never committed).
-    smtp_host: str | None = field(default_factory=lambda: _optional_env("SMTP_HOST"))
-    #: SMTP port (default 587 for STARTTLS).
-    smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "587")))
-    #: SMTP username.
-    smtp_user: str | None = field(default_factory=lambda: _optional_env("SMTP_USER"))
-    #: SMTP password (secret).
-    smtp_pass: str | None = field(default_factory=lambda: _optional_env("SMTP_PASS"))
-    #: "From" address for reminder emails.
-    smtp_from: str | None = field(default_factory=lambda: _optional_env("SMTP_FROM"))
-    #: Default "To" address for reminder emails.
-    smtp_to: str | None = field(default_factory=lambda: _optional_env("SMTP_TO"))
     #: Retrospective catch-up window in days: on startup, reminders due in
     #: ``[now - lookback, now]`` that were never delivered (service was down)
     #: are re-sent with a "missed" card. Bounded so startup stays fast.

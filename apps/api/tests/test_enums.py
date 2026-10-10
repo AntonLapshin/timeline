@@ -21,7 +21,7 @@ SHARED_STATUSES = ["draft", "active", "archived"]
 SHARED_SOURCES = ["web", "telegram_text"]
 SHARED_TYPES = ["one_time", "recurrent"]
 SHARED_PRIORITIES = ["critical", "medium", "low"]
-SHARED_CHANNELS = ["telegram", "email"]
+SHARED_CHANNELS = ["telegram"]
 
 
 def _values(enum_cls: type) -> list[str]:
@@ -54,4 +54,4 @@ def test_enums_are_str_subclasses() -> None:
     assert EventStatus.ACTIVE.value == "active"
     assert EventPriority.CRITICAL.value == "critical"
     assert EventType.RECURRENT.value == "recurrent"
-    assert EventChannel.EMAIL.value == "email"
+    assert EventChannel.TELEGRAM.value == "telegram"

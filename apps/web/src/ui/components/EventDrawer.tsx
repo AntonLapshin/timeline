@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
 import type { EventDrawerState } from "../viewModels/useEventDrawer";
 import { EVENT_CHANNELS } from "../../core/eventTypes";
+import { channelLabel } from "../../core/utils";
 import { tagStyle } from "../../core/timeline";
 import { formatRecurrence } from "../../core/recurrenceFormat";
 import { PriorityDot } from "./PriorityDot";
 import { Button } from "./Button";
 import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
-
-/** Human labels for each reminder channel. */
-const CHANNEL_LABELS: Record<string, string> = {
-  telegram: "Telegram",
-  email: "Email",
-};
 
 /** Props for the event drawer. */
 export interface EventDrawerProps {
@@ -144,7 +139,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
                   key={c}
                   className="chip border-slate-200 bg-slate-100/70 text-slate-700 dark:border-slate-600/60 dark:bg-slate-700/50 dark:text-slate-300"
                 >
-                  {CHANNEL_LABELS[c] ?? c}
+                  {channelLabel(c)}
                 </span>
               ),
             )}

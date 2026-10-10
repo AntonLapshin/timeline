@@ -1,7 +1,8 @@
 import type { EventDraft } from "../../core/eventWizard";
 import { REMINDER_OFFSET_PRESETS } from "../../core/eventWizard";
-import type { EventChannel, EventPriority } from "../../core/eventTypes";
+import type { EventPriority } from "../../core/eventTypes";
 import { EVENT_PRIORITIES, EVENT_CHANNELS } from "../../core/eventTypes";
+import { CHANNEL_LABELS, toggleValue } from "../../core/utils";
 import { Checkbox } from "./Checkbox";
 import { SEGMENT_ACTIVE_CLASSES } from "./SegmentedControl";
 
@@ -26,19 +27,6 @@ const PRIORITY_DOT: Record<EventPriority, string> = {
   medium: "from-amber-300 to-orange-500",
   low: "from-sky-300 to-indigo-400",
 };
-
-/** Human labels for each reminder channel. */
-const CHANNEL_LABELS: Record<EventChannel, string> = {
-  telegram: "Telegram",
-  email: "Email",
-};
-
-/** Toggle a value in an array (used for channels and offsets). */
-function toggleValue<T extends string>(list: T[], value: T): T[] {
-  return list.includes(value)
-    ? list.filter((v) => v !== value)
-    : [...list, value];
-}
 
 /**
  * Step 3 of the event wizard: Priority & Reminders.

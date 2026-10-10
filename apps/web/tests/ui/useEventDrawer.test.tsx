@@ -30,8 +30,6 @@ function sampleEvent(overrides: Partial<EventRead> = {}): EventRead {
     remind_time_of_day: "09:00",
     repeat_until_ack: false,
     snooze_allowed: true,
-    email_enabled: false,
-    email_to: null,
     source: "web",
     raw_input: null,
     status: "active",

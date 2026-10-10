@@ -13,6 +13,7 @@ import type {
   EventPriority,
   EventType,
 } from "./eventTypes";
+import { isKnownChannel } from "./utils";
 
 /** A parsed event draft, as produced by `POST /api/events/parse`. */
 export interface ParsedDraft {
@@ -100,7 +101,7 @@ export function validateDraft(draft: ParsedDraft): GuardResult {
   }
   if (draft.channels !== undefined) {
     for (const channel of draft.channels) {
-      if (!["telegram", "email"].includes(channel)) {
+      if (!isKnownChannel(channel)) {
         errors.push(`unknown channel: ${channel}`);
       }
     }

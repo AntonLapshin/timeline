@@ -198,12 +198,12 @@ describe("draftFromParsed", () => {
 
   it("maps a recurring draft to a recurrence choice and keeps the rrule", () => {
     const draft = draftFromParsed(
-      { title: "Pay rent", rrule: "FREQ=MONTHLY;INTERVAL=3", channels: ["telegram", "email"] },
+      { title: "Pay rent", rrule: "FREQ=MONTHLY;INTERVAL=3", channels: ["telegram"] },
       "critical",
     );
     expect(draft.recurrence).toBe("quarterly");
     expect(draft.customRrule).toBe("FREQ=MONTHLY;INTERVAL=3");
-    expect(draft.channels).toEqual(["telegram", "email"]);
+    expect(draft.channels).toEqual(["telegram"]);
     expect(draft.priority).toBe("critical");
   });
 

@@ -44,7 +44,7 @@ const SAMPLE_DRAFT: EventDraft = {
   recurrence: "weekly",
   customRrule: "FREQ=WEEKLY;BYDAY=MO",
   priority: "critical",
-  channels: ["telegram", "email"],
+  channels: ["telegram"],
   reminderOffsets: ["7d", "1d", "2h"],
 };
 

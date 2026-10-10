@@ -7,6 +7,6 @@ describe("eventTypes core module", () => {
   });
 
   it("exposes channels", () => {
-    expect(EVENT_CHANNELS).toEqual(["telegram", "email"]);
+    expect(EVENT_CHANNELS).toEqual(["telegram"]);
   });
 });

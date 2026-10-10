@@ -25,8 +25,6 @@ function makeEvent(overrides: Partial<EventRead> = {}): EventRead {
     remind_time_of_day: "09:00",
     repeat_until_ack: false,
     snooze_allowed: true,
-    email_enabled: false,
-    email_to: null,
     source: "web",
     raw_input: null,
     status: "active",
@@ -93,11 +91,11 @@ describe("reminderPreview", () => {
     expect(preview.timeOfDay).toBeNull();
   });
 
-  it("handles multiple channels and email offsets", () => {
+  it("handles channels and offsets", () => {
     const preview = reminderPreview(
-      makeEvent({ channels: ["telegram", "email"], reminder_offsets: ["1d"] }),
+      makeEvent({ channels: ["telegram"], reminder_offsets: ["1d"] }),
     );
-    expect(preview.channels).toEqual(["telegram", "email"]);
+    expect(preview.channels).toEqual(["telegram"]);
     expect(preview.offsetsLabel).toBe("1d");
   });
 

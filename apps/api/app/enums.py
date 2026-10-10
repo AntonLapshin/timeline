@@ -47,4 +47,3 @@ class EventChannel(StrEnum):
     """Reminder delivery channels (shared EventChannel)."""
 
     TELEGRAM = "telegram"
-    EMAIL = "email"

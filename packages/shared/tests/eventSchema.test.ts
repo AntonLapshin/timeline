@@ -49,7 +49,7 @@ describe("shared event schema v1", () => {
     expect(EVENT_SOURCES).toEqual(["web", "telegram_text"]);
     expect(EVENT_TYPES).toEqual(["one_time", "recurrent"]);
     expect(EVENT_PRIORITIES).toEqual(["critical", "medium", "low"]);
-    expect(EVENT_CHANNELS).toEqual(["telegram", "email"]);
+    expect(EVENT_CHANNELS).toEqual(["telegram"]);
   });
 
   it("validates membership for each enum", () => {
@@ -62,7 +62,7 @@ describe("shared event schema v1", () => {
     expect(isEventType("daily")).toBe(false);
     expect(isEventPriority("critical")).toBe(true);
     expect(isEventPriority("high")).toBe(false);
-    expect(isEventChannel("email")).toBe(true);
+    expect(isEventChannel("telegram")).toBe(true);
     expect(isEventChannel("sms")).toBe(false);
   });
 });

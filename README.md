@@ -100,7 +100,6 @@ copy it to `.env` and fill in local values. The essentials:
 |-----|---------|
 | `BOT_TOKEN` | Telegram bot token from @BotFather |
 | `TELEGRAM_USER_IDS` | Comma-separated allowlist of Telegram user ids (legacy single `TELEGRAM_USER_ID` also works) |
-| `EMAIL_ENABLED`, `SMTP_HOST/PORT/USER/PASS/FROM/TO` | Optional email reminders (feature-flag, off by default) |
 
 Local knobs (bind host/port, data/log/backup dirs, timezone, quiet hours) are
 documented in `.env.example` and the comments in `docker-compose.yml`.
