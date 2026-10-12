@@ -306,7 +306,7 @@ export const STORY_FILES: StoryFile[] = [
   {
     name: "PriorityDot",
     group: "Atoms",
-    description: "Gradient status orbs for event priorities.",
+    description: "Priority icons: fire (critical), warning (medium), down arrow (low).",
     stories: [
       {
         name: "Priorities × sizes",

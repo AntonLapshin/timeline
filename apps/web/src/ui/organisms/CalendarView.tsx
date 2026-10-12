@@ -320,7 +320,7 @@ export function WeekChip({
       title={row.occurrence.title}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
     >
-      <PriorityDot priority={row.occurrence.priority} size="sm" glyph={false} className="h-2.5 w-2.5" />
+      <PriorityDot priority={row.occurrence.priority} size="sm" className="h-2.5 w-2.5" />
       <span className="truncate">
         {!row.occurrence.all_day && <span className="font-semibold">{row.timeLabel} </span>}
         {row.occurrence.title}

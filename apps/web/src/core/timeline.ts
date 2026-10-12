@@ -81,7 +81,7 @@ export interface MonthGroup {
  *
  * `color` is a full Tailwind gradient-chip class: white text on a saturated
  * gradient in light mode with a softened gradient + tinted ring in dark mode.
- * Rendered as a gradient dot via `PriorityDot` (no glyph needed, so `icon`
+ * Rendered as a priority icon via `PriorityDot` (no glyph needed, so `icon`
  * is empty) and reused for chips/pills (week chips, summary counts).
  */
 const PRIORITY_STYLES: Record<EventPriority, PriorityStyle> = {
