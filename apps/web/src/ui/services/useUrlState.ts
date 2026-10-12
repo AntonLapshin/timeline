@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 import {
   useStateInUrl,
-  useBatchUpdate as useLibBatchUpdate,
+  parseQueryString,
+  createQueryString,
   type Param,
+  type SearchParams,
 } from "use-state-in-url";
 import { navigateUrl, useUrlLocation } from "./urlLocation";
-import type { SearchParams } from "use-state-in-url";
 
 /**
  * `use-state-in-url` wrapper for this app (no react-router here).
@@ -75,7 +76,7 @@ export function useUrlState<T>(
     [isStringParam],
   );
 
-  const [stored, update, createUpdater] = useStateInUrl(param, {
+  const [stored, , createUpdater] = useStateInUrl(param, {
     location,
     navigate,
   });
@@ -85,9 +86,29 @@ export function useUrlState<T>(
       ? (safeDecodeUrlValue(stored) as T)
       : stored;
 
+  /**
+   * Write one param to the URL.
+   *
+   * The query string is rebuilt from `window.location.search` — read live at
+   * call time — rather than from `use-state-in-url`'s internal location ref
+   * (which only syncs in a passive effect). Two param updates in the same
+   * tick (e.g. the wizard's close followed by the drawer's close in the
+   * wizard's `onSaved`) would otherwise race: the second update rebuilds the
+   * URL from the pre-first-update search and resurrects params the first
+   * update just removed (`?new=true` surviving a wizard save, then reopening
+   * the wizard on the next drawer open). `history.pushState` updates
+   * `window.location` synchronously, so the live read is always fresh. The
+   * lib's `createUpdater` still performs the optimistic React-state update;
+   * only the URL computation bypasses the stale ref.
+   */
   const setValue = useCallback(
-    (next: T) => update(encode(next)),
-    [update, encode],
+    (next: T) => {
+      const encoded = encode(next);
+      const params = parseQueryString(window.location.search);
+      createUpdater(encoded)(params);
+      navigate(`${window.location.pathname}${createQueryString(params)}`);
+    },
+    [encode, createUpdater, navigate],
   );
 
   const updaterFor = useCallback(
@@ -115,9 +136,26 @@ export function useUrlBatchUpdate(): {
     options?: { includeExisting?: boolean; path?: string },
   ) => void;
 } {
-  const location = useUrlLocation();
-  const navigate = useCallback((url: string) => navigateUrl(url), []);
-  return useLibBatchUpdate({ location, navigate });
+  const batchUpdate = useCallback(
+    (
+      updates: Array<(params: SearchParams) => SearchParams>,
+      options: { includeExisting?: boolean; path?: string } = {},
+    ) => {
+      // See `setValue` above: read the live location, not the lib's
+      // effect-synced ref, so sequential updates in one tick can't resurrect
+      // removed params.
+      const { includeExisting = true, path } = options;
+      const params: SearchParams = includeExisting
+        ? parseQueryString(window.location.search)
+        : new Map<string, string>();
+      const next = updates.reduce((acc, update) => update(acc), params);
+      navigateUrl(
+        `${path ?? window.location.pathname}${createQueryString(next)}`,
+      );
+    },
+    [],
+  );
+  return { batchUpdate };
 }
 
 /** Re-exported for param-type declarations in view models. */

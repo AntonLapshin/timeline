@@ -231,15 +231,9 @@ describe("useEventDrawer", () => {
     expect(document.body.style.overflow).toBe("");
   });
 
-  it("closes on the Escape key", async () => {
-    const { result } = renderHook(() => useEventDrawer());
-    act(() => result.current.openDrawer(sampleEvent()));
-    expect(result.current.open).toBe(true);
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    });
-    expect(result.current.open).toBe(false);
-  });
+  // Escape handling lives in `useDialogA11y` (wired up by the `EventDrawer`
+  // organism) — see `tests/ui/EventDrawer.test.tsx`. The view model only
+  // exposes `close`; it must not double-handle the key.
 
   it("openFromOccurrence fetches the full event and opens the drawer", async () => {
     const getEvent = vi.fn().mockResolvedValue(sampleEvent());

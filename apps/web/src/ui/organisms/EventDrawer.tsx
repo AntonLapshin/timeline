@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EventDrawerState } from "../viewModels/useEventDrawer";
+import { useDialogA11y } from "../molecules/useDialogA11y";
 import { EVENT_CHANNELS } from "../../core/eventTypes";
 import { channelLabel } from "../../core/utils";
 import { tagStyle } from "../../core/timeline";
@@ -57,6 +58,13 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
     setConfirmingDelete(false);
   }, [event?.id]);
 
+  // Dialog a11y contract (focus trap, initial focus, Escape, focus return,
+  // scroll lock) — the same hook `Modal`/`SlideOver` use. Runs before the
+  // early return below so the hook order stays stable; `open` follows the
+  // event (the panel only renders when an event is selected).
+  const panelRef = useRef<HTMLElement | null>(null);
+  useDialogA11y(!!event, drawer.close, panelRef);
+
   // With a slide-over, the panel only renders when an event is selected —
   // the app composition only mounts it while the drawer is open.
   if (!event) {
@@ -92,6 +100,7 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
         onClick={drawer.close}
       />
       <aside
+        ref={panelRef}
         className="fixed inset-y-0 right-0 z-50 w-full max-w-md animate-slide-in-right overflow-y-auto border-l border-slate-200/70 bg-white/95 p-6 shadow-popover backdrop-blur-xl dark:border-slate-700/70 dark:bg-ink-800/95 dark:shadow-black/50"
         role="dialog"
         aria-modal="true"

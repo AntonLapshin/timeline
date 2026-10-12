@@ -218,7 +218,14 @@ export function useEventDrawer(): EventDrawerState {
   );
 
   const close = useCallback(() => {
-    setEventId(0);
+    // Skip the URL update when the drawer is already closed: `setEventId`
+    // always pushes a history entry, and a no-op close after the wizard's
+    // own close (same tick, in `onSaved`) would otherwise push a duplicate
+    // entry. `eventId` is the drawer's source of truth (`open` derives from
+    // it), so 0 means there is nothing to close.
+    if (eventId !== 0) {
+      setEventId(0);
+    }
     setEvent(null);
     setOccurrences([]);
     setError(null);
@@ -226,7 +233,7 @@ export function useEventDrawer(): EventDrawerState {
     setDeliveriesError(null);
     setDeleting(false);
     setDeleteError(null);
-  }, [setEventId]);
+  }, [eventId, setEventId]);
 
   const deleteCurrent = useCallback(async (): Promise<boolean> => {
     if (!event || deleting) {
@@ -251,15 +258,8 @@ export function useEventDrawer(): EventDrawerState {
     }
   }, [apiClient, deleting, event, setEventId]);
 
-  // Esc closes the drawer.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, close]);
+  // Esc closes the drawer — handled by `useDialogA11y` in `EventDrawer`
+  // (single owner avoids double-close when the wizard stacks on top).
 
   // Lock body scroll while the drawer is open so the page behind the
   // slide-over's backdrop cannot scroll (issue #122). The previous inline

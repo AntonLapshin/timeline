@@ -278,4 +278,36 @@ describe("EventDrawer", () => {
     render(<EventDrawer drawer={useEventDrawerMock()} />);
     expect(screen.queryByText("Edit event")).not.toBeInTheDocument();
   });
+
+  it("closes on the Escape key (dialog a11y contract)", () => {
+    const close = vi.fn();
+    useEventDrawerMock.mockReturnValue(drawerState({ close }));
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("moves focus into the panel on open and traps Tab within it", () => {
+    useEventDrawerMock.mockReturnValue(drawerState());
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    const panel = screen.getByTestId("event-drawer");
+    // Initial focus lands inside the dialog, not on the page behind it.
+    expect(panel.contains(document.activeElement)).toBe(true);
+    const focusables = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute("disabled"));
+    expect(focusables.length).toBeGreaterThan(1);
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    // Tab on the last focusable wraps to the first …
+    last.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(first);
+    // … and Shift+Tab on the first wraps to the last.
+    first.focus();
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
 });
