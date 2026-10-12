@@ -171,7 +171,7 @@ export function Dropdown({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openWithSelection())}
         onKeyDown={onTriggerKeyDown}
-        className="field-input relative h-8 cursor-pointer pr-9 text-left sm:w-auto sm:min-w-28"
+        className="field-input relative h-8 cursor-pointer justify-start pr-9 text-left sm:w-auto sm:min-w-28"
       >
         <span className={`block truncate ${selected ? "" : "text-slate-400 dark:text-slate-500"}`}>
           {selected ? selected.label : placeholder}

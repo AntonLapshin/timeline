@@ -49,6 +49,12 @@ export interface SegmentedControlProps<T extends string> {
  * measures and tracks the active button (`useLayoutEffect` + window resize).
  * Roving tabindex: the active button is tabbable, the rest are not;
  * ArrowLeft/Right (and Home/End) move focus and select in one step.
+ *
+ * The buttons opt out of the global 32px button `min-height` (`min-h-0`) so
+ * they stay exactly the 28px track interior, and the global `:focus-visible`
+ * outline is pulled fully inside the segment (`outline-offset: -2px`) so
+ * the focus ring can never spill over the segment's own bounds. The active
+ * (indigo) segment gets a white ring so it stays visible on the gradient.
  */
 export function SegmentedControl<T extends string>({
   label,
@@ -138,9 +144,9 @@ export function SegmentedControl<T extends string>({
             tabIndex={active ? 0 : -1}
             onClick={() => select(opt.id)}
             onKeyDown={(e) => onSegmentKeyDown(e, index)}
-            className={`relative z-10 flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium leading-none transition-colors duration-200 ${
+            className={`relative z-10 flex h-7 min-h-0 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium leading-none transition-colors duration-200 [outline-offset:-2px] ${
               active
-                ? "text-white"
+                ? "text-white focus-visible:outline-white"
                 : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
             }`}
           >

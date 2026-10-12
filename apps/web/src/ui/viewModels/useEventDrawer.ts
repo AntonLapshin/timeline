@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServices } from "../services/useServices";
+import { useUrlState } from "../services/useUrlState";
+import { EVENT_PARAM } from "../services/urlParams";
 import {
   eventNextOccurrences,
   reminderPreview,
@@ -73,9 +75,16 @@ export interface EventDrawerState {
  * occurrences through the injected `apiClient`, and delegates the reminder
  * preview and next-occurrence derivation to the pure `src/core/eventDrawer`.
  * The component renders the resulting state.
+ *
+ * The selection is deep-linked via `use-state-in-url`: `?event=<id>` opens
+ * the drawer for that event, so event links are shareable and the back
+ * button closes the drawer. The full event object is kept locally as a
+ * cache; on a fresh load with `?event=<id>` it is fetched.
  */
 export function useEventDrawer(): EventDrawerState {
   const { apiClient } = useServices();
+  const [eventId, setEventId] = useUrlState(EVENT_PARAM);
+  const open = eventId !== 0;
   const [event, setEvent] = useState<EventRead | null>(null);
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([]);
   const [loading, setLoading] = useState(false);
@@ -85,6 +94,30 @@ export function useEventDrawer(): EventDrawerState {
   const [deliveriesError, setDeliveriesError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Deep link: a fresh load (or back/forward) with `?event=<id>` fetches the
+  // event. Skipped when the event is already held locally — `openDrawer` /
+  // `openFromOccurrence` set the object and the id together.
+  useEffect(() => {
+    if (eventId === 0) return;
+    if (event && event.id === eventId) return;
+    let cancelled = false;
+    setError(null);
+    apiClient
+      .getEvent(eventId)
+      .then((full) => {
+        if (cancelled) return;
+        setEvent(full);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Stale link: close the drawer rather than stranding it empty.
+        setEventId(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiClient, eventId, event, setEventId]);
 
   // The month whose occurrences we fetch: the selected event's start month,
   // interpreted in the event's own timezone so the drawer queries the same
@@ -159,11 +192,15 @@ export function useEventDrawer(): EventDrawerState {
     };
   }, [apiClient, event]);
 
-  const openDrawer = useCallback((selected: EventRead) => {
-    setEvent(selected);
-    setError(null);
-    setDeleteError(null);
-  }, []);
+  const openDrawer = useCallback(
+    (selected: EventRead) => {
+      setEvent(selected);
+      setError(null);
+      setDeleteError(null);
+      setEventId(selected.id);
+    },
+    [setEventId],
+  );
 
   const openFromOccurrence = useCallback(
     async (occurrence: EventOccurrence) => {
@@ -172,14 +209,16 @@ export function useEventDrawer(): EventDrawerState {
       try {
         const full = await apiClient.getEvent(occurrence.event_id);
         setEvent(full);
+        setEventId(full.id);
       } catch {
         setError("Failed to load event");
       }
     },
-    [apiClient],
+    [apiClient, setEventId],
   );
 
   const close = useCallback(() => {
+    setEventId(0);
     setEvent(null);
     setOccurrences([]);
     setError(null);
@@ -187,7 +226,7 @@ export function useEventDrawer(): EventDrawerState {
     setDeliveriesError(null);
     setDeleting(false);
     setDeleteError(null);
-  }, []);
+  }, [setEventId]);
 
   const deleteCurrent = useCallback(async (): Promise<boolean> => {
     if (!event || deleting) {
@@ -197,6 +236,7 @@ export function useEventDrawer(): EventDrawerState {
     setDeleteError(null);
     try {
       await apiClient.deleteEvent(event.id);
+      setEventId(0);
       setEvent(null);
       setOccurrences([]);
       setError(null);
@@ -209,29 +249,29 @@ export function useEventDrawer(): EventDrawerState {
     } finally {
       setDeleting(false);
     }
-  }, [apiClient, deleting, event]);
+  }, [apiClient, deleting, event, setEventId]);
 
   // Esc closes the drawer.
   useEffect(() => {
-    if (!event) return;
+    if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [event, close]);
+  }, [open, close]);
 
   // Lock body scroll while the drawer is open so the page behind the
   // slide-over's backdrop cannot scroll (issue #122). The previous inline
   // overflow value is restored on close/unmount.
   useEffect(() => {
-    if (!event) return;
+    if (!open) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [event]);
+  }, [open]);
 
   const preview = useMemo(
     () => (event ? reminderPreview(event) : null),
@@ -256,7 +296,7 @@ export function useEventDrawer(): EventDrawerState {
 
   return {
     event,
-    open: event !== null,
+    open,
     loading,
     error,
     preview,

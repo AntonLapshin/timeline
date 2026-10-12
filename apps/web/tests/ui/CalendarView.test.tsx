@@ -65,7 +65,10 @@ function renderWithServices(services: Services, ui: ReactNode) {
 }
 
 function apiClientWith(getOccurrences: Services["apiClient"]["getOccurrences"]) {
-  return { getOccurrences } as unknown as Services["apiClient"];
+  return {
+    getOccurrences,
+    getEventDeliveries: vi.fn().mockResolvedValue([]),
+  } as unknown as Services["apiClient"];
 }
 
 describe("CalendarView", () => {

@@ -23,14 +23,26 @@ export interface AppShellProps {
   actions?: ReactNode;
   /** Optional theme-toggle control rendered in the header. */
   themeToggleSlot?: ReactNode;
+  /**
+   * The URL the logo link points at (the "home" view). Defaults to `/`.
+   * Right-click / copy-link friendly; activation is intercepted by
+   * `onHomeClick` for SPA navigation without a reload.
+   */
+  homeHref?: string;
+  /**
+   * Called when the logo link is activated. The handler must perform the
+   * SPA "go home" navigation (view → timeline, transient UI closed); the
+   * default anchor navigation is already prevented.
+   */
+  onHomeClick?: () => void;
 }
 
 /**
  * The top-level app shell (issue #21; viewport-height layout issue #123).
  *
  * Provides the no-login localhost layout: a brand header (skip link, logo
- * mark + wordmark, view switcher, theme toggle, actions, and the
- * search/smart-input/summary slots), and the active view's content. The shell
+ * mark + wordmark linked to the home view, view switcher, theme toggle,
+ * actions, and the search/smart-input/summary slots), and the active view's content. The shell
  * is exactly the viewport height (`h-dvh` flex column) over the ambient
  * `.bg-scene` backdrop: the header stays visible and the content area
  * (`<main id="main-content">`) is the single internal scroll container, so
@@ -49,6 +61,8 @@ export function AppShell({
   smartInputSlot,
   actions,
   themeToggleSlot,
+  homeHref = "/",
+  onHomeClick,
 }: AppShellProps) {
   return (
     <div className="bg-scene flex h-dvh flex-col overflow-hidden bg-slate-100 dark:bg-ink-950">
@@ -57,7 +71,19 @@ export function AppShell({
       </a>
       <header className="shrink-0 border-b border-slate-200/70 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-ink-950/80">
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-          <div className="flex items-center gap-2.5">
+          <a
+            href={homeHref}
+            onClick={
+              onHomeClick
+                ? (e) => {
+                    e.preventDefault();
+                    onHomeClick();
+                  }
+                : undefined
+            }
+            aria-label="Timeline home"
+            className="flex items-center gap-2.5 rounded-lg"
+          >
             <span
               aria-hidden="true"
               className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 shadow-md shadow-brand-600/25"
@@ -72,7 +98,7 @@ export function AppShell({
               </svg>
             </span>
             <h1 className="brand-text">Timeline</h1>
-          </div>
+          </a>
           <div className="flex items-center gap-2">
             {themeToggleSlot}
             <nav className="flex items-center gap-2" aria-label="Views">

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useCalendar, type CalendarMode } from "../viewModels/useCalendar";
+import { selectNotificationStatus, useDeliveryLogs } from "../viewModels/useDeliveryLogs";
+import type { DeliveryLog } from "../../core/eventTypes";
+import { isPastOccurrence } from "../../core/notificationStatus";
 import {
   dayDotClasses,
   daySlots,
@@ -244,9 +247,12 @@ function MonthGrid({
 export function OccurrenceRowView({
   day,
   onEventClick,
+  logsByEvent,
 }: {
   day: CalendarDay;
   onEventClick?: (event: EventOccurrence) => void;
+  /** Delivery logs by event id (drives the past-occurrence highlight). */
+  logsByEvent?: ReadonlyMap<number, DeliveryLog[]>;
 }) {
   return (
     <ul className="space-y-2">
@@ -282,6 +288,13 @@ export function OccurrenceRowView({
               }
               tagClassName={row.tagColor}
               priority={row.occurrence.priority}
+              notificationStatus={selectNotificationStatus(
+                logsByEvent,
+                o.event_id,
+                o.start_at,
+                o.tz,
+                o.all_day,
+              )}
               onClick={onEventClick ? () => onEventClick(o) : undefined}
             />
           </li>
@@ -307,7 +320,7 @@ export function WeekChip({
       title={row.occurrence.title}
       onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
     >
-      <PriorityDot priority={row.occurrence.priority} size="sm" className="h-2.5 w-2.5" />
+      <PriorityDot priority={row.occurrence.priority} size="sm" glyph={false} className="h-2.5 w-2.5" />
       <span className="truncate">
         {!row.occurrence.all_day && <span className="font-semibold">{row.timeLabel} </span>}
         {row.occurrence.title}
@@ -355,9 +368,12 @@ export function WeekGrid({
 export function AgendaRowView({
   row,
   onEventClick,
+  logsByEvent,
 }: {
   row: AgendaRow;
   onEventClick?: (event: EventOccurrence) => void;
+  /** Delivery logs by event id (drives the past-occurrence highlight). */
+  logsByEvent?: ReadonlyMap<number, DeliveryLog[]>;
 }) {
   return (
     <li className="list-none">
@@ -389,6 +405,13 @@ export function AgendaRowView({
         }
         tagClassName={row.tagColor}
         priority={row.occurrence.priority}
+        notificationStatus={selectNotificationStatus(
+          logsByEvent,
+          row.occurrence.event_id,
+          row.occurrence.start_at,
+          row.occurrence.tz,
+          row.occurrence.all_day,
+        )}
         onClick={onEventClick ? () => onEventClick(row.occurrence) : undefined}
       />
     </li>
@@ -399,9 +422,12 @@ export function AgendaRowView({
 export function AgendaList({
   rows,
   onEventClick,
+  logsByEvent,
 }: {
   rows: AgendaRow[];
   onEventClick?: (event: EventOccurrence) => void;
+  /** Delivery logs by event id (drives the past-occurrence highlight). */
+  logsByEvent?: ReadonlyMap<number, DeliveryLog[]>;
 }) {
   if (rows.length === 0) {
     return (
@@ -419,6 +445,7 @@ export function AgendaList({
           key={`${row.occurrence.event_id}-${row.occurrence.start_at}`}
           row={row}
           onEventClick={onEventClick}
+          logsByEvent={logsByEvent}
         />
       ))}
     </ul>
@@ -471,6 +498,22 @@ export function CalendarView({
   // Local YYYY-MM-DD for the today highlight (matches the view model's
   // `toLocalDate`-based `isoDate` values).
   const todayIso = toLocalDate(new Date());
+
+  // Past occurrences get a notification-state highlight, so fetch delivery
+  // logs for the events behind the rendered past occurrences (day drawer +
+  // agenda).
+  const pastEventIds = useMemo(() => {
+    const ids = new Set<number>();
+    const collect = (o: EventOccurrence) => {
+      if (isPastOccurrence(o.start_at, o.all_day)) {
+        ids.add(o.event_id);
+      }
+    };
+    selectedDay?.occurrences.forEach(collect);
+    agenda?.forEach((row) => collect(row.occurrence));
+    return [...ids];
+  }, [selectedDay, agenda]);
+  const logsByEvent = useDeliveryLogs(pastEventIds);
 
   return (
     <div className="space-y-4">
@@ -550,7 +593,7 @@ export function CalendarView({
         (agenda.length === 0 && filter && isFiltering(filter) ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">No matches.</p>
         ) : (
-          <AgendaList rows={agenda} onEventClick={onEventClick} />
+          <AgendaList rows={agenda} onEventClick={onEventClick} logsByEvent={logsByEvent} />
         ))}
 
       {selectedDay && (
@@ -579,7 +622,7 @@ export function CalendarView({
             {selectedDay.count === 0 ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">No events this day.</p>
             ) : (
-              <OccurrenceRowView day={selectedDay} onEventClick={onEventClick} />
+              <OccurrenceRowView day={selectedDay} onEventClick={onEventClick} logsByEvent={logsByEvent} />
             )}
           </SlideOver>
         </div>

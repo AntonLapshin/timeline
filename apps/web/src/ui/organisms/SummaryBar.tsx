@@ -85,6 +85,7 @@ export function SummaryBar({ refreshKey }: { refreshKey?: number }) {
                   <PriorityDot
                     priority={priority}
                     size="sm"
+                    glyph={false}
                     className="h-2.5 w-2.5"
                   />
                 }

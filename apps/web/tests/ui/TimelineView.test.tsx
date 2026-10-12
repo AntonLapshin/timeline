@@ -55,7 +55,7 @@ describe("TimelineView", () => {
         rrule: "FREQ=MONTHLY;INTERVAL=3",
       }),
     ]);
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
@@ -72,7 +72,7 @@ describe("TimelineView", () => {
 
   it("shows the error message when the load fails", async () => {
     const listEvents = vi.fn().mockRejectedValue(new Error("boom"));
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
@@ -86,7 +86,7 @@ describe("TimelineView", () => {
       .fn()
       .mockRejectedValueOnce(new Error("boom"))
       .mockResolvedValueOnce([makeEvent({ id: 1, title: "Recovered" })]);
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
@@ -102,7 +102,7 @@ describe("TimelineView", () => {
     const listEvents = vi.fn().mockResolvedValue([
       makeEvent({ id: 1, title: "HRA" }),
     ]);
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     const { rerender } = renderWithServices(services, <TimelineView />);
 
@@ -122,7 +122,7 @@ describe("TimelineView", () => {
 
   it("shows an empty state when there are no events", async () => {
     const listEvents = vi.fn().mockResolvedValue([]);
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
@@ -132,7 +132,7 @@ describe("TimelineView", () => {
   it("calls onCreate from the empty state CTA", async () => {
     const listEvents = vi.fn().mockResolvedValue([]);
     const onCreate = vi.fn();
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView onCreate={onCreate} />);
 
@@ -148,7 +148,7 @@ describe("TimelineView", () => {
     const listEvents = vi.fn().mockReturnValue(new Promise<EventRead[]>((r) => {
       resolve = r;
     }));
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
@@ -161,7 +161,7 @@ describe("TimelineView", () => {
     const listEvents = vi.fn().mockResolvedValue([
       makeEvent({ id: 1, title: "HRA", priority: "critical" }),
     ]);
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(
       services,
@@ -176,7 +176,7 @@ describe("TimelineView", () => {
       makeEvent({ id: i + 1, title: `Event ${i + 1}` }),
     );
     const listEvents = vi.fn().mockResolvedValue(events);
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(services, <TimelineView />);
 
@@ -194,7 +194,7 @@ describe("TimelineView", () => {
     const event = makeEvent({ id: 1, title: "HRA" });
     const listEvents = vi.fn().mockResolvedValue([event]);
     const onEventClick = vi.fn();
-    const services = { apiClient: { listEvents }, quickParser: {} } as unknown as Services;
+    const services = { apiClient: { listEvents, getEventDeliveries: vi.fn().mockResolvedValue([]) }, quickParser: {} } as unknown as Services;
 
     renderWithServices(
       services,

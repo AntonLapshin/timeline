@@ -1,6 +1,9 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, type CSSProperties } from "react";
 import { useTimeline } from "../viewModels/useTimeline";
+import { selectNotificationStatus, useDeliveryLogs } from "../viewModels/useDeliveryLogs";
 import type { EventRow, WeekGroup, MonthGroup } from "../../core/timeline";
+import { isPastOccurrence } from "../../core/notificationStatus";
+import type { DeliveryLog } from "../../core/eventTypes";
 import { isFiltering, type EventFilter } from "../../core/searchFilter";
 import type { EventRead } from "../../core/eventTypes";
 import { Button } from "../atoms/Button";
@@ -19,6 +22,12 @@ export interface EventRowViewProps {
   onEventClick?: (event: EventRead) => void;
   /** Flat row index used for the staggered entrance delay. */
   staggerIndex?: number;
+  /**
+   * Delivery logs by event id. When provided, a past occurrence's card is
+   * highlighted by notification state (green = sent and acknowledged,
+   * amber = sent but not acknowledged, red = never sent).
+   */
+  logsByEvent?: ReadonlyMap<number, DeliveryLog[]>;
 }
 
 /**
@@ -33,7 +42,19 @@ export function EventRowView({
   row,
   onEventClick,
   staggerIndex = 0,
+  logsByEvent,
 }: EventRowViewProps) {
+  const notificationStatus = useMemo(
+    () =>
+      selectNotificationStatus(
+        logsByEvent,
+        row.event.id,
+        row.startIso,
+        row.event.tz,
+        row.event.all_day,
+      ),
+    [logsByEvent, row],
+  );
   return (
     <li className="list-none">
       <EventCard
@@ -62,6 +83,7 @@ export function EventRowView({
         }
         tagClassName={row.tagColor}
         priority={row.event.priority}
+        notificationStatus={notificationStatus}
         onClick={onEventClick ? () => onEventClick(row.event) : undefined}
         style={{ "--enter-delay": `${Math.min(staggerIndex, 8) * 45}ms` } as CSSProperties}
         className="animate-enter"
@@ -74,9 +96,12 @@ export function EventRowView({
 export function MonthGroupView({
   group,
   onEventClick,
+  logsByEvent,
 }: {
   group: MonthGroup;
   onEventClick?: (event: EventRead) => void;
+  /** Delivery logs by event id (drives the past-occurrence highlight). */
+  logsByEvent?: ReadonlyMap<number, DeliveryLog[]>;
 }) {
   const totalEvents = group.weeks.reduce((n, week) => n + week.rows.length, 0);
   return (
@@ -99,6 +124,7 @@ export function MonthGroupView({
                 row={row}
                 onEventClick={onEventClick}
                 staggerIndex={weekIdx * 10 + rowIdx}
+                logsByEvent={logsByEvent}
               />
             ))}
           </ul>
@@ -136,6 +162,24 @@ export function TimelineView({
     refreshKey,
   );
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Past occurrences get a notification-state highlight (green = sent and
+  // acknowledged, amber = sent but not acknowledged, red = never sent), so
+  // fetch delivery logs for the events behind the rendered past rows.
+  const pastEventIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const group of groups) {
+      for (const week of group.weeks) {
+        for (const row of week.rows) {
+          if (isPastOccurrence(row.startIso, row.event.all_day)) {
+            ids.add(row.event.id);
+          }
+        }
+      }
+    }
+    return [...ids];
+  }, [groups]);
+  const logsByEvent = useDeliveryLogs(pastEventIds);
 
   // Infinite scroll: when the end sentinel scrolls into view, reveal the
   // next batch. Works inside any scroll container (the app scrolls `<main>`
@@ -213,7 +257,12 @@ export function TimelineView({
   return (
     <div data-testid="timeline-view" className="space-y-8">
       {groups.map((group) => (
-        <MonthGroupView key={group.key} group={group} onEventClick={onEventClick} />
+        <MonthGroupView
+          key={group.key}
+          group={group}
+          onEventClick={onEventClick}
+          logsByEvent={logsByEvent}
+        />
       ))}
       {hasMore && (
         <>

@@ -9,6 +9,10 @@ import { SearchFilterBar } from "./ui/organisms/SearchFilterBar";
 import { SmartInputBox } from "./ui/organisms/SmartInputBox";
 import { ThemeToggle } from "./ui/molecules/ThemeToggle";
 import { useServices } from "./ui/services/useServices";
+import { useUrlBatchUpdate, useUrlState } from "./ui/services/useUrlState";
+import { stripUrlParams, useUrlLocation } from "./ui/services/urlLocation";
+import { HOME_RESET_PARAMS, VIEW_PARAM } from "./ui/services/urlParams";
+import type { SearchParams } from "use-state-in-url";
 import { PlusIcon } from "@heroicons/react/24/outline";
 import { useEventWizard } from "./ui/viewModels/useEventWizard";
 import { useEventDrawer } from "./ui/viewModels/useEventDrawer";
@@ -16,6 +20,16 @@ import { useSearchFilter } from "./ui/viewModels/useSearchFilter";
 import { useSmartInput } from "./ui/viewModels/useSmartInput";
 import { allMonths, allTags } from "./core/searchFilter";
 import type { EventRead } from "./core/eventTypes";
+
+/** Remove one query param (for `batchUpdate`). */
+function deleteParam(
+  name: string,
+): (params: SearchParams) => SearchParams {
+  return (params) => {
+    params.delete(name);
+    return params;
+  };
+}
 
 /**
  * App root.
@@ -27,7 +41,26 @@ import type { EventRead } from "./core/eventTypes";
  */
 export default function App() {
   const { apiClient } = useServices();
-  const [view, setView] = useState<AppView>("timeline");
+  // The active view is deep-linked (`?view=calendar`); a hand-crafted bogus
+  // value falls back to the timeline.
+  const [viewRaw, setViewRaw] = useUrlState(VIEW_PARAM);
+  const view: AppView = viewRaw === "calendar" ? "calendar" : "timeline";
+  const setView = useCallback(
+    (next: AppView) => setViewRaw(next),
+    [setViewRaw],
+  );
+  const { batchUpdate } = useUrlBatchUpdate();
+  const location = useUrlLocation();
+  // "Home" (logo click): back to the timeline with all transient UI closed
+  // (calendar position, drawers, modals) in a single history entry.
+  // Search/filter params are kept — they are user data, not navigation.
+  const goHome = useCallback(() => {
+    batchUpdate(HOME_RESET_PARAMS.map(deleteParam));
+  }, [batchUpdate]);
+  const homeHref = useMemo(
+    () => stripUrlParams(location.search, HOME_RESET_PARAMS),
+    [location.search],
+  );
   // Bumped after a successful wizard save so every data view (timeline,
   // calendar, summary, filter dropdowns) refetches without a reload (#121).
   const [refreshKey, setRefreshKey] = useState(0);
@@ -106,6 +139,8 @@ export default function App() {
       <AppShell
         view={view}
         onViewChange={setView}
+        homeHref={homeHref}
+        onHomeClick={goHome}
         summarySlot={<SummaryBar refreshKey={refreshKey} />}
         searchSlot={
           <SearchFilterBar

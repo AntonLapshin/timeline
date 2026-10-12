@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { EventPriority } from "../../core/eventTypes";
+import type { NotificationStatus } from "../../core/notificationStatus";
 import { PriorityDot } from "../atoms/PriorityDot";
 
 export interface EventCardProps {
@@ -19,6 +20,13 @@ export interface EventCardProps {
   tagClassName?: string;
   /** Drives the stripe, dot, and icon-tint colors. */
   priority: EventPriority;
+  /**
+   * Notification state of a past occurrence. When set, the card background
+   * is tinted: green = reminder sent and acknowledged, amber = sent but not
+   * acknowledged, red = never sent. Null/undefined keeps the default card
+   * treatment (e.g. for future occurrences).
+   */
+  notificationStatus?: NotificationStatus | null;
   /**
    * Click handler. Optional for future non-interactive uses — the card is
    * always rendered as a `<button>` so the hit target stays consistent.
@@ -47,6 +55,25 @@ const TINT_CLASSES: Record<EventPriority, string> = {
 };
 
 /**
+ * Card background tints for the notification state of past occurrences.
+ * Muted pastel washes in light mode, translucent tints in dark mode.
+ */
+const NOTIFICATION_TINT_CLASSES: Record<NotificationStatus, string> = {
+  acked:
+    "border-emerald-200/70 bg-emerald-50/70 dark:border-emerald-400/20 dark:bg-emerald-400/10",
+  sent: "border-amber-200/70 bg-amber-50/70 dark:border-amber-400/20 dark:bg-amber-400/10",
+  unsent:
+    "border-red-200/70 bg-red-50/70 dark:border-red-400/20 dark:bg-red-400/10",
+};
+
+/** Screen-reader label for the notification state. */
+const NOTIFICATION_LABELS: Record<NotificationStatus, string> = {
+  acked: "reminder sent and acknowledged",
+  sent: "reminder sent, not acknowledged",
+  unsent: "reminder never sent",
+};
+
+/**
  * The timeline/occurrence card.
  *
  * A priority-striped interactive card: dot-in-a-tint, truncated title with
@@ -63,6 +90,7 @@ export function EventCard({
   tagLabel,
   tagClassName = "",
   priority,
+  notificationStatus = null,
   onClick,
   style,
   testId,
@@ -74,7 +102,12 @@ export function EventCard({
       onClick={onClick}
       style={style}
       data-testid={testId}
-      className={`card-interactive group relative w-full overflow-hidden p-4 text-left ${className}`}
+      aria-label={
+        notificationStatus && typeof title === "string"
+          ? `${title} (${NOTIFICATION_LABELS[notificationStatus]})`
+          : undefined
+      }
+      className={`card-interactive group relative w-full overflow-hidden p-4 text-left ${notificationStatus ? NOTIFICATION_TINT_CLASSES[notificationStatus] : ""} ${className}`}
     >
       <span
         aria-hidden

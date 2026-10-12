@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useServices } from "../services/useServices";
+import { useUrlBatchUpdate, useUrlState } from "../services/useUrlState";
+import { EDIT_MODAL_PARAM, NEW_MODAL_PARAM } from "../services/urlParams";
 import {
   emptyDraft,
   draftFromEvent,
@@ -70,6 +72,12 @@ export interface EventWizardState {
  * `src/core/eventWizard`, and performs the create/update I/O through the
  * injected `apiClient`. Components render the resulting state.
  *
+ * The modal's open state is deep-linked via `use-state-in-url`: `?new=true`
+ * opens the create form, `?edit=<id>` opens the editor for that event, so
+ * the modal is shareable and the back button closes it. Step/draft stay
+ * local; on a fresh load with `?edit=<id>` the event is fetched to pre-fill
+ * the draft.
+ *
  * A successful save closes the wizard (no dead-end success state) and fires
  * the `onSaved` callback so the app can refresh its data views; a failed save
  * keeps the modal open with an error (issue #121). Esc also closes the wizard
@@ -78,7 +86,10 @@ export interface EventWizardState {
 export function useEventWizard(options?: EventWizardOptions): EventWizardState {
   const { apiClient } = useServices();
   const { onSaved } = options ?? {};
-  const [open, setOpen] = useState(false);
+  const [isNewOpen, setNewOpen, newUpdater] = useUrlState(NEW_MODAL_PARAM);
+  const [editId, setEditId, editUpdater] = useUrlState(EDIT_MODAL_PARAM);
+  const { batchUpdate } = useUrlBatchUpdate();
+  const open = isNewOpen || editId !== 0;
   const [editingEvent, setEditingEvent] = useState<EventRead | null>(null);
   const [step, setStep] = useState<WizardStep>(1);
   const [draft, setDraft] = useState<EventDraft>(() => emptyDraft());
@@ -90,29 +101,62 @@ export function useEventWizard(options?: EventWizardOptions): EventWizardState {
     setEditingEvent(null);
     setStep(1);
     setError(null);
-    setOpen(true);
-  }, []);
+    setNewOpen(true);
+  }, [setNewOpen]);
 
-  const openCreateWithDraft = useCallback((draft: EventDraft) => {
-    setDraft(draft);
-    setEditingEvent(null);
-    setStep(1);
-    setError(null);
-    setOpen(true);
-  }, []);
+  const openCreateWithDraft = useCallback(
+    (next: EventDraft) => {
+      setDraft(next);
+      setEditingEvent(null);
+      setStep(1);
+      setError(null);
+      setNewOpen(true);
+    },
+    [setNewOpen],
+  );
 
-  const openEdit = useCallback((event: EventRead) => {
-    setDraft(draftFromEvent(event));
-    setEditingEvent(event);
-    setStep(1);
-    setError(null);
-    setOpen(true);
-  }, []);
+  const openEdit = useCallback(
+    (event: EventRead) => {
+      setDraft(draftFromEvent(event));
+      setEditingEvent(event);
+      setStep(1);
+      setError(null);
+      setEditId(event.id);
+    },
+    [setEditId],
+  );
 
+  // Close via one history entry (not two param updates).
   const close = useCallback(() => {
-    setOpen(false);
+    batchUpdate([newUpdater(false), editUpdater(0)]);
     setError(null);
-  }, []);
+  }, [batchUpdate, newUpdater, editUpdater]);
+
+  // Deep link: a fresh load (or back/forward) with `?edit=<id>` fetches the
+  // event so the editor has something to pre-fill. Skipped when the event is
+  // already held locally (the `openEdit(event)` path sets both together).
+  useEffect(() => {
+    if (editId === 0) return;
+    if (editingEvent && editingEvent.id === editId) return;
+    let cancelled = false;
+    setError(null);
+    apiClient
+      .getEvent(editId)
+      .then((event) => {
+        if (cancelled) return;
+        setEditingEvent(event);
+        setDraft(draftFromEvent(event));
+        setStep(1);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Stale link: close the modal rather than stranding it empty.
+        setEditId(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiClient, editId, editingEvent, setEditId]);
 
   const next = useCallback(() => {
     setStep((s) => nextStep(s));
