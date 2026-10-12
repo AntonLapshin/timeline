@@ -75,6 +75,18 @@ from .telegram_outbound import priority_emoji, telegram_reminder_job
 logger = logging.getLogger(__name__)
 
 
+#: How many times an outbound Telegram reply is attempted before giving up.
+#: The 2026-10-12 outage ("nothing happened" on /add) was a single transient
+#: TLS ``ConnectError`` during ``send_message``: the update was received,
+#: parsed and recorded, but the draft card never reached the owner because
+#: the send had no retry and no error handler was registered.
+_REPLY_MAX_ATTEMPTS = 3
+
+#: Base delay (seconds) between reply retries; backs off linearly
+#: (1s, 2s, …) so a transient blip is retried quickly without hammering.
+_REPLY_RETRY_BASE_DELAY_SEC = 1.0
+
+
 #: How many occurrences to expand per event when scanning for today/upcoming.
 #: A 30-day horizon holds at most 30 daily occurrences, so this comfortably
 #: covers it while staying well under the recurrence module's safety bound.
@@ -1005,7 +1017,7 @@ def build_telegram_inbound_application(
         if reply is None:
             return
         if message is not None:
-            await _send_reply(message.reply_text, reply)
+            await _send_reply_with_retry(message.reply_text, reply)
 
     async def voice_not_supported_handler(update: Any, _context: Any) -> None:
         # Voice messages are not supported (no transcription pipeline): send
@@ -1028,8 +1040,7 @@ def build_telegram_inbound_application(
             return
         sender = getattr(message, "reply_text", None)
         if sender is not None:
-            with contextlib.suppress(Exception):
-                await sender(voice_not_supported())
+            await _send_text_with_retry(sender, voice_not_supported())
 
     async def callback_handler(update: Any, _context: Any) -> None:
         query = getattr(update, "callback_query", None)
@@ -1051,14 +1062,32 @@ def build_telegram_inbound_application(
             return
         sender = getattr(query, "answer", None)
         if sender is not None:
-            await sender()
+            with contextlib.suppress(Exception):
+                try:
+                    await sender()
+                except Exception:
+                    logger.warning(
+                        "Telegram callback answer failed (non-fatal).",
+                        exc_info=True,
+                    )
         message = getattr(query, "message", None)
         if message is not None:
-            await _send_reply(message.reply_text, reply)
+            await _send_reply_with_retry(message.reply_text, reply)
+
+    async def _on_error(update: Any, context: Any) -> None:
+        """Log an unhandled Telegram update error loudly (never silent)."""
+        err = getattr(context, "error", None)
+        logger.error(
+            "Telegram update failed: %s (update=%r)",
+            err,
+            getattr(update, "update_id", update),
+            exc_info=err if isinstance(err, BaseException) else None,
+        )
 
     app.add_handler(MessageHandler(filters.TEXT, handler))
     app.add_handler(MessageHandler(filters.VOICE, voice_not_supported_handler))
     app.add_handler(CallbackQueryHandler(callback_handler))
+    app.add_error_handler(_on_error)
     return app
 
 
@@ -1074,3 +1103,66 @@ async def _send_reply(reply_text: Any, reply: BotReply) -> None:
         for row in reply.reply_markup
     ]
     await reply_text(reply.text, reply_markup=InlineKeyboardMarkup(rows))
+
+
+async def _send_reply_with_retry(reply_text: Any, reply: BotReply) -> bool:
+    """Send a ``BotReply``, retrying transient network failures.
+
+    Retries :data:`_REPLY_MAX_ATTEMPTS` times with a linear backoff so a
+    single TLS/connection blip (the 2026-10-12 ``httpx.ConnectError`` that
+    made ``/add`` look dead) does not silently drop the reply. Every failure
+    is logged; the final failure is logged as an error (with traceback) and
+    ``False`` is returned instead of raising, so the polling loop keeps
+    running and the pending draft stays in the store for a resend.
+    Returns ``True`` when the send succeeded.
+    """
+    last_exc: BaseException | None = None
+    for attempt in range(1, _REPLY_MAX_ATTEMPTS + 1):
+        try:
+            await _send_reply(reply_text, reply)
+            return True
+        except Exception as exc:  # noqa: BLE001 — retry transient sends
+            last_exc = exc
+            if attempt >= _REPLY_MAX_ATTEMPTS:
+                break
+            logger.warning(
+                "Telegram reply send failed (attempt %d/%d: %s); retrying.",
+                attempt,
+                _REPLY_MAX_ATTEMPTS,
+                exc,
+            )
+            await asyncio.sleep(_REPLY_RETRY_BASE_DELAY_SEC * attempt)
+    logger.error(
+        "Telegram reply send failed after %d attempts: %s",
+        _REPLY_MAX_ATTEMPTS,
+        last_exc,
+        exc_info=last_exc if isinstance(last_exc, BaseException) else None,
+    )
+    return False
+
+
+async def _send_text_with_retry(sender: Any, text: str) -> bool:
+    """Send plain text via ``sender``, retrying transient failures (see above)."""
+    last_exc: BaseException | None = None
+    for attempt in range(1, _REPLY_MAX_ATTEMPTS + 1):
+        try:
+            await sender(text)
+            return True
+        except Exception as exc:  # noqa: BLE001 — retry transient sends
+            last_exc = exc
+            if attempt >= _REPLY_MAX_ATTEMPTS:
+                break
+            logger.warning(
+                "Telegram text send failed (attempt %d/%d: %s); retrying.",
+                attempt,
+                _REPLY_MAX_ATTEMPTS,
+                exc,
+            )
+            await asyncio.sleep(_REPLY_RETRY_BASE_DELAY_SEC * attempt)
+    logger.error(
+        "Telegram text send failed after %d attempts: %s",
+        _REPLY_MAX_ATTEMPTS,
+        last_exc,
+        exc_info=last_exc if isinstance(last_exc, BaseException) else None,
+    )
+    return False

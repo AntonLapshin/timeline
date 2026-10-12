@@ -39,6 +39,7 @@ from app.enums import (
 from app.models import Event, TelegramInbound
 from app.quick_parse import ParsedDraft
 from app.telegram_inbound import (
+    BotReply,
     Command,
     DraftAction,
     DraftStore,
@@ -46,6 +47,8 @@ from app.telegram_inbound import (
     _handle_callback_query,
     _handle_update,
     _save_draft,
+    _send_reply_with_retry,
+    _send_text_with_retry,
     build_draft_keyboard,
     build_inbound_record,
     build_telegram_inbound_application,
@@ -1413,3 +1416,113 @@ def test_quick_draft_save_persists_event(
         assert event.status == EventStatus.ACTIVE
         assert event.source == EventSource.TELEGRAM_TEXT
         assert event.reminder_offsets == ["1d"]
+
+
+# --- reply retry (2026-10-12 /add outage: transient ConnectError) --------------
+
+
+def test_send_reply_with_retry_succeeds_first_try() -> None:
+    """A healthy send returns True after a single attempt."""
+    import asyncio
+
+    sent: list[str] = []
+
+    async def _ok(text: str, **kwargs: object) -> None:
+        sent.append(text)
+
+    ok = asyncio.run(_send_reply_with_retry(_ok, BotReply("hi")))
+    assert ok is True
+    assert sent == ["hi"]
+
+
+def test_send_reply_with_retry_retries_transient_failure() -> None:
+    """One transient failure is retried and the reply still goes out."""
+    import asyncio
+
+    calls: list[int] = []
+
+    async def _flaky(text: str, **kwargs: object) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise ConnectionError("tls blip")
+        return None
+
+    ok = asyncio.run(_send_reply_with_retry(_flaky, BotReply("card")))
+    assert ok is True
+    assert len(calls) == 2
+
+
+def test_send_reply_with_retry_gives_up_loudly() -> None:
+    """Persistent failure returns False (no raise) after max attempts."""
+    import asyncio
+
+    calls: list[int] = []
+
+    async def _dead(text: str, **kwargs: object) -> None:
+        calls.append(1)
+        raise ConnectionError("down")
+
+    ok = asyncio.run(_send_reply_with_retry(_dead, BotReply("card")))
+    assert ok is False
+    from app import telegram_inbound as _inbound
+
+    assert len(calls) == _inbound._REPLY_MAX_ATTEMPTS
+
+
+def test_send_text_with_retry_retries_then_succeeds() -> None:
+    """The voice-path text sender also retries a transient failure."""
+    import asyncio
+
+    calls: list[int] = []
+
+    async def _flaky(text: str) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise TimeoutError("blip")
+
+    ok = asyncio.run(_send_text_with_retry(_flaky, "hello"))
+    assert ok is True
+    assert len(calls) == 2
+
+
+def test_build_application_registers_error_handler() -> None:
+    """The application has an error handler so failures are never silent."""
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    app = build_telegram_inbound_application(settings, None, now=_now())
+    assert app is not None
+    assert app.error_handlers  # type: ignore[attr-defined]
+
+
+def test_text_handler_survives_transient_send_failure(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The /today handler retries the send instead of raising (no silent drop)."""
+    import asyncio
+
+    with session_factory() as session:
+        session.add(_event(start_at=_now() + timedelta(hours=1)))
+        session.commit()
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    app = build_telegram_inbound_application(settings, session_factory, now=_now())
+    assert app is not None
+    handler = app.handlers[0][0].callback
+
+    calls: list[int] = []
+    replied: list[str] = []
+
+    class _FlakyMessage(_FakeMessage):
+        async def reply_text(self, text: str, **kwargs: object) -> None:
+            calls.append(1)
+            if len(calls) == 1:
+                raise ConnectionError("tls blip")
+            replied.append(text)
+
+    update = _FakeUpdate(
+        _FlakyMessage(_FakeChat(123, "private"), _FakeUser(42), "/today")
+    )
+    asyncio.run(handler(update, None))  # must not raise
+
+    assert len(calls) == 2
+    assert len(replied) == 1
+    assert "📅 Today" in replied[0]
