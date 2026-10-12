@@ -176,15 +176,6 @@
   }
 
   /*
-   * Custom dropdown options: taller than the 32px control baseline so the
-   * open panel reads as a styled menu, not a native popup.
-   */
-  .dropdown-option {
-    height: auto;
-    min-height: 44px;
-  }
-
-  /*
    * Cards: the primary surface. Rounded-2xl, layered soft shadow, and a
    * hover lift reserved for interactive cards (`.card-interactive`).
    */

@@ -107,13 +107,13 @@ export function EventCard({
           ? `${title} (${NOTIFICATION_LABELS[notificationStatus]})`
           : undefined
       }
-      className={`card-interactive group relative w-full overflow-hidden p-4 text-left ${notificationStatus ? NOTIFICATION_TINT_CLASSES[notificationStatus] : ""} ${className}`}
+      className={`card-interactive group relative w-full justify-start overflow-hidden p-4 text-left ${notificationStatus ? NOTIFICATION_TINT_CLASSES[notificationStatus] : ""} ${className}`}
     >
       <span
         aria-hidden
         className={`absolute left-0 top-0 h-full w-1 bg-gradient-to-b ${STRIPE_CLASSES[priority]}`}
       />
-      <div className="flex items-start gap-3 pl-1.5">
+      <div className="flex w-full items-start gap-3 pl-1.5">
         <span
           aria-hidden
           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${TINT_CLASSES[priority]}`}
