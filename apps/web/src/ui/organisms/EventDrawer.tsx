@@ -5,11 +5,22 @@ import { EVENT_CHANNELS } from "../../core/eventTypes";
 import { channelLabel } from "../../core/utils";
 import { tagStyle } from "../../core/timeline";
 import { formatRecurrence } from "../../core/recurrenceFormat";
+import {
+  notificationStatusFromLogs,
+  type NotificationStatus,
+} from "../../core/notificationStatus";
 import { PriorityDot } from "../atoms/PriorityDot";
 import { Button } from "../atoms/Button";
 import { IconButton } from "../atoms/IconButton";
 import { Chip } from "../atoms/Chip";
 import { ArrowPathIcon, XMarkIcon } from "@heroicons/react/24/outline";
+
+/** Header chip + reminders-row copy for an overall notification status. */
+const ACK_CHIP: Record<NotificationStatus, { tone: "green" | "amber" | "red"; label: string }> = {
+  acked: { tone: "green", label: "Acknowledged ✓" },
+  sent: { tone: "amber", label: "Sent — not acknowledged" },
+  unsent: { tone: "red", label: "Not sent" },
+};
 
 /** Props for the event drawer. */
 export interface EventDrawerProps {
@@ -89,6 +100,15 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
   const firstTag = event.tags.length > 0 ? event.tags[0] : null;
   const tag = firstTag ? tagStyle(firstTag) : null;
 
+  // Overall acknowledgment state across all delivery rows (acked beats sent
+  // beats unsent). Null while loading or when the fetch failed — the
+  // delivery-log section below owns those states.
+  const ackStatus: NotificationStatus | null =
+    deliveriesLoading || deliveriesError
+      ? null
+      : notificationStatusFromLogs(deliveries.map((row) => row.log));
+  const ackChip = ackStatus ? ACK_CHIP[ackStatus] : null;
+
   return (
     <>
       {/* Dimmed backdrop: click to close. Sits below the panel (z-40 vs
@@ -122,6 +142,13 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
                 >
                   {badge.label}
                 </Chip>
+              )}
+              {ackChip && (
+                <span data-testid="event-ack-status">
+                  <Chip tone={ackChip.tone} className="shrink-0">
+                    {ackChip.label}
+                  </Chip>
+                </span>
               )}
             </div>
             {firstTag && (
@@ -169,6 +196,18 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
                   {preview.timeOfDay}
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">Acknowledged:</span>
+                {deliveriesLoading ? (
+                  <span className="text-slate-500 dark:text-slate-400">Loading…</span>
+                ) : deliveriesError ? (
+                  <span className="text-slate-500 dark:text-slate-400">Unavailable</span>
+                ) : ackChip ? (
+                  <span data-testid="event-ack-status-detail">
+                    <Chip tone={ackChip.tone}>{ackChip.label}</Chip>
+                  </span>
+                ) : null}
+              </div>
             </div>
           ) : (
             <p className="text-sm text-slate-500 dark:text-slate-400">

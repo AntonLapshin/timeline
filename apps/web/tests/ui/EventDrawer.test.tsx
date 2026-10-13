@@ -243,6 +243,69 @@ describe("EventDrawer", () => {
     expect(screen.getByText(/No deliveries yet/)).toBeInTheDocument();
   });
 
+  it("shows the acknowledgment status chip when deliveries are acknowledged", () => {
+    useEventDrawerMock.mockReturnValue(
+      drawerState({
+        deliveries: [
+          {
+            log: {
+              id: 2,
+              event_id: 3,
+              occurrence_id: "occ-2",
+              offset: "1d",
+              status: "acked",
+              scheduled_at: "2026-09-05T09:00:00",
+              sent_at: "2026-09-05T09:00:00",
+              error: null,
+              created_at: "2026-09-05T09:00:00",
+              updated_at: "2026-09-05T09:00:00",
+            },
+            statusLabel: "Acknowledged",
+            statusStyle: { color: "text-sky-700 bg-sky-50 border-sky-200", icon: "☑" },
+            detailLabel: "1d before · occ-2",
+            timeLabel: "Sep 5, 9:00 AM",
+          },
+        ],
+      }),
+    );
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByTestId("event-ack-status")).toHaveTextContent("Acknowledged");
+    expect(screen.getByTestId("event-ack-status-detail")).toHaveTextContent(
+      "Acknowledged",
+    );
+  });
+
+  it("shows sent-but-not-acknowledged when deliveries are unacked", () => {
+    useEventDrawerMock.mockReturnValue(
+      drawerState({
+        deliveries: [
+          {
+            log: {
+              id: 1,
+              event_id: 3,
+              occurrence_id: "occ-1",
+              offset: "1d",
+              status: "sent",
+              scheduled_at: "2026-09-05T09:00:00",
+              sent_at: "2026-09-05T09:00:00",
+              error: null,
+              created_at: "2026-09-05T09:00:00",
+              updated_at: "2026-09-05T09:00:00",
+            },
+            statusLabel: "Sent",
+            statusStyle: { color: "", icon: "✓" },
+            detailLabel: "1d before · occ-1",
+            timeLabel: "Sep 5, 9:00 AM",
+          },
+        ],
+      }),
+    );
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByTestId("event-ack-status")).toHaveTextContent(
+      "not acknowledged",
+    );
+  });
+
   it("shows a loading state while the delivery log loads", () => {
     useEventDrawerMock.mockReturnValue(drawerState({ deliveriesLoading: true }));
     render(<EventDrawer drawer={useEventDrawerMock()} />);

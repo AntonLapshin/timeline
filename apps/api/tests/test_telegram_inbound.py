@@ -45,6 +45,7 @@ from app.telegram_inbound import (
     DraftStore,
     PendingDraft,
     _handle_callback_query,
+    _handle_reminder_callback_query,
     _handle_update,
     _save_draft,
     _send_reply_with_retry,
@@ -1526,3 +1527,131 @@ def test_text_handler_survives_transient_send_failure(
     assert len(calls) == 2
     assert len(replied) == 1
     assert "📅 Today" in replied[0]
+
+
+# --- reminder-card callbacks (ack / snooze / delete) --------------------------
+
+
+def _add_sent_log(session: Session, event_id: int, occurrence: str = "occ") -> None:
+    from app.models import DeliveryLog
+
+    session.add(
+        DeliveryLog(
+            event_id=event_id,
+            occurrence_id=occurrence,
+            offset="1h",
+            status="sent",
+        )
+    )
+
+
+def test_reminder_callback_ack_persists(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Tapping Ack on a reminder card marks the delivery acked (green card)."""
+    from app.models import DeliveryLog
+    from app.telegram_outbound import callback_data
+
+    with session_factory() as session:
+        session.add(_event())
+        session.flush()
+        _add_sent_log(session, session.query(Event).one().id)
+        session.commit()
+        event_id = session.query(Event).one().id
+
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    query = _FakeCallback(callback_data("ack", event_id, "occ", "1h"), 42, 123)
+    reply = _handle_reminder_callback_query(
+        query, settings, session_factory, now=_now()
+    )
+    assert reply is not None
+    assert "Acknowledged" in reply.text
+    with session_factory() as session:
+        assert session.query(DeliveryLog).one().status == "acked"
+
+
+def test_reminder_callback_ignores_non_reminder_payload() -> None:
+    """Draft payloads fall through (None) so the draft handler runs next."""
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    assert (
+        _handle_reminder_callback_query(
+            _FakeCallback("draft:save:0", 42, 123), settings, None, now=_now()
+        )
+        is None
+    )
+    assert (
+        _handle_reminder_callback_query(
+            _FakeCallback("bogus:data", 42, 123), settings, None, now=_now()
+        )
+        is None
+    )
+
+
+def test_reminder_callback_rejects_non_allowlisted_user(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """Callbacks from other users are ignored (no reply, no state change)."""
+    from app.telegram_outbound import callback_data
+
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    query = _FakeCallback(callback_data("ack", 1, "occ", "1h"), 999, 123)
+    assert (
+        _handle_reminder_callback_query(query, settings, session_factory, now=_now())
+        is None
+    )
+
+
+def test_reminder_callback_no_db_replies_busy() -> None:
+    """A reminder action with no database replies instead of crashing."""
+    from app.telegram_outbound import callback_data
+
+    settings = Settings(telegram_user_id="42", telegram_bot_token="123:abc")
+    query = _FakeCallback(callback_data("ack", 1, "occ", "1h"), 42, 123)
+    reply = _handle_reminder_callback_query(query, settings, None, now=_now())
+    assert reply is not None
+    assert "no database" in reply.text
+
+
+def test_callback_handler_routes_reminder_ack(
+    session_factory: sessionmaker[Session],
+) -> None:
+    """The polling callback handler answers Ack taps (previously dropped)."""
+    import asyncio
+
+    from app.models import DeliveryLog
+    from app.telegram_outbound import callback_data
+
+    with session_factory() as session:
+        session.add(_event())
+        session.flush()
+        _add_sent_log(session, session.query(Event).one().id)
+        session.commit()
+        event_id = session.query(Event).one().id
+
+    settings = Settings(telegram_bot_token="123:abc", telegram_user_id="42")
+    app = build_telegram_inbound_application(
+        settings, session_factory, now=_now(), draft_store=DraftStore()
+    )
+    assert app is not None
+    callback = app.handlers[0][2].callback  # [0]=text, [1]=voice, [2]=callback
+
+    sent: list[str] = []
+
+    class _ReplyMessage(_FakeMessage):
+        async def reply_text(self, text: str, **kwargs: object) -> None:
+            sent.append(text)
+
+    class _Query(_FakeCallback):
+        async def answer(self) -> None:
+            pass
+
+    class _Update:
+        callback_query = _Query(callback_data("ack", event_id, "occ", "1h"), 42, 123)
+        callback_query.message = _ReplyMessage(
+            _FakeChat(123, "private"), _FakeUser(42), "x"
+        )
+
+    asyncio.run(callback(_Update(), None))
+    assert sent == ["Acknowledged ✓"]
+    with session_factory() as session:
+        assert session.query(DeliveryLog).one().status == "acked"

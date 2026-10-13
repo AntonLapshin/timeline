@@ -121,23 +121,45 @@ function occurrenceInstantMs(startIso: string, tz: string): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+/** Suffix markers the backend appends for repeat/snooze follow-up deliveries. */
+const OCCURRENCE_SUFFIX_MARKERS = ["~repeat@", "~snooze@"] as const;
+
+/**
+ * Strip any repeat/snooze follow-up suffix from an occurrence id, returning
+ * the base occurrence the follow-up traces back to. Mirrors the backend's
+ * `base_occurrence_id` so ack/state lookups stay consistent.
+ */
+export function stripOccurrenceSuffix(occurrenceId: string): string {
+  for (const marker of OCCURRENCE_SUFFIX_MARKERS) {
+    const idx = occurrenceId.indexOf(marker);
+    if (idx >= 0) {
+      return occurrenceId.slice(0, idx);
+    }
+  }
+  return occurrenceId;
+}
+
 /**
  * Whether a delivery-log row targets the given occurrence.
  *
  * The backend keys `DeliveryLog.occurrence_id` as the local date
  * (`YYYY-MM-DD`) for all-day occurrences and as a UTC ISO instant for timed
  * ones. Rows without an occurrence id are treated as applying (single-shot
- * events whose scheduler rows carry no occurrence).
+ * events whose scheduler rows carry no occurrence). Repeat-until-ack and
+ * snooze follow-ups use suffixed ids (`<base>~repeat@…`, `<base>~snooze@…`)
+ * so their dedupe keys don't collide — the suffix is stripped before
+ * matching so follow-ups trace back to their base occurrence.
  */
 export function logAppliesToOccurrence(
   log: DeliveryLog,
   startIso: string,
   tz: string,
 ): boolean {
-  const occurrenceId = log.occurrence_id?.trim() ?? "";
-  if (occurrenceId === "") {
+  const rawId = log.occurrence_id?.trim() ?? "";
+  if (rawId === "") {
     return true;
   }
+  const occurrenceId = stripOccurrenceSuffix(rawId);
   if (/^\d{4}-\d{2}-\d{2}$/.test(occurrenceId)) {
     return occurrenceLocalDate(startIso, tz) === occurrenceId;
   }

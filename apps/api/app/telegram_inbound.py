@@ -70,7 +70,16 @@ from .quick_parse import (
 from .recurrence import Occurrence, next_occurrences
 from .redaction import redact_text
 from .schemas import EventCreate
-from .telegram_outbound import priority_emoji, telegram_reminder_job
+from .telegram_outbound import (
+    handle_callback as handle_reminder_callback,
+)
+from .telegram_outbound import (
+    parse_callback_data as parse_reminder_callback,
+)
+from .telegram_outbound import (
+    priority_emoji,
+    telegram_reminder_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -849,6 +858,50 @@ def _handle_add_flow(
     )
 
 
+def _handle_reminder_callback_query(
+    query: Any,
+    settings: Settings,
+    session_factory: sessionmaker[Session] | None,
+    *,
+    now: datetime | None = None,
+    scheduler: Any | None = None,
+    job_func: Callable[..., object] | None = None,
+) -> BotReply | None:
+    """Route a reminder-card callback (Ack / Snooze / Delete) to its action.
+
+    Reminder cards carry ``{action}|{event_id}|{occurrence_id}|{offset}``
+    payloads (see ``telegram_outbound.callback_data``). Applies the same
+    allowlist gate as the draft buttons, applies the state transition via
+    ``telegram_outbound.handle_callback`` and commits. Returns ``None`` when
+    the payload is not a reminder action so the caller can try the draft
+    buttons next.
+    """
+    user = getattr(query, "from_user", None)
+    user_id = getattr(user, "id", None) if user is not None else None
+    if not _gate_user(user_id, settings, kind="reminder callback"):
+        return None
+    data = getattr(query, "data", None)
+    if not isinstance(data, str) or parse_reminder_callback(data) is None:
+        return None
+    if session_factory is None:
+        logger.warning("Reminder callback with no database.")
+        return BotReply("Can't process that right now (no database).")
+    try:
+        with session_factory() as session:
+            text = handle_reminder_callback(
+                data=data,
+                session=session,
+                scheduler=scheduler,
+                job_func=job_func if job_func is not None else telegram_reminder_job,
+                now=now,
+            )
+            session.commit()
+    except Exception:
+        logger.exception("Reminder callback failed.")
+        return BotReply("Couldn't process that action — please try again.")
+    return BotReply(text)
+
+
 def _handle_callback_query(
     query: Any,
     settings: Settings,
@@ -975,7 +1028,8 @@ def build_telegram_inbound_application(
     without Telegram (same guard as the outbound sender). Registers a text
     handler for commands, a voice handler that sends the static
     not-supported reply (there is no transcription pipeline) and a
-    ``CallbackQueryHandler`` for the draft buttons. The caller is responsible
+    ``CallbackQueryHandler`` for the draft buttons and the reminder-card
+    actions (Ack / Snooze / Delete). The caller is responsible
     for ``run_polling()`` (the API lifespan does this).
 
     When a running reminder scheduler is supplied (issue #134), saved drafts
@@ -1046,18 +1100,30 @@ def build_telegram_inbound_application(
         query = getattr(update, "callback_query", None)
         if query is None:
             return
-        # Off the event loop like the other handlers: the save path does
+        # Off the event loop like the other handlers: both paths do
         # blocking DB commits + scheduler work on the shared loop.
+        # Reminder-card actions (ack|snooze|delete) are routed first; draft
+        # buttons (save/edit/discard) second.
         reply = await asyncio.to_thread(
-            _handle_callback_query,
+            _handle_reminder_callback_query,
             query,
             settings,
             session_factory,
-            draft_store,
             now=now,
             scheduler=scheduler,
             job_func=job_func,
         )
+        if reply is None:
+            reply = await asyncio.to_thread(
+                _handle_callback_query,
+                query,
+                settings,
+                session_factory,
+                draft_store,
+                now=now,
+                scheduler=scheduler,
+                job_func=job_func,
+            )
         if reply is None:
             return
         sender = getattr(query, "answer", None)

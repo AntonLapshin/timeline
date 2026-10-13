@@ -234,6 +234,30 @@ describe("logAppliesToOccurrence", () => {
       ),
     ).toBe(false);
   });
+
+  it("matches repeat/snooze follow-up ids against their base occurrence", () => {
+    expect(
+      logAppliesToOccurrence(
+        makeLog({ occurrence_id: "2026-10-12T14:00:00+00:00~repeat@20261012150000" }),
+        "2026-10-12T14:00:30Z",
+        "UTC",
+      ),
+    ).toBe(true);
+    expect(
+      logAppliesToOccurrence(
+        makeLog({ occurrence_id: "2026-10-12~snooze@20261012150000" }),
+        "2026-10-12",
+        "UTC",
+      ),
+    ).toBe(true);
+    expect(
+      logAppliesToOccurrence(
+        makeLog({ occurrence_id: "2026-10-13~repeat@20261012150000" }),
+        "2026-10-12",
+        "UTC",
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("logsForOccurrence", () => {
