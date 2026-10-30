@@ -31,6 +31,14 @@ export interface DrawerOccurrence {
 export interface EventDrawerState {
   /** The selected event, or null when the drawer is closed. */
   event: EventRead | null;
+  /**
+   * The occurrence the drawer was opened for, or null when it was opened
+   * for the event as a whole (timeline view). The drawer uses it to show
+   * that occurrence's own notification status instead of an aggregate
+   * across the whole series, so opening today's occurrence never reports
+   * the first occurrence's delivery as if it were today's.
+   */
+  selectedOccurrence?: EventOccurrence | null;
   /** Whether the drawer is open. */
   open: boolean;
   /** Whether the next-occurrences data is still loading. */
@@ -86,6 +94,8 @@ export function useEventDrawer(): EventDrawerState {
   const [eventId, setEventId] = useUrlState(EVENT_PARAM);
   const open = eventId !== 0;
   const [event, setEvent] = useState<EventRead | null>(null);
+  const [selectedOccurrence, setSelectedOccurrence] =
+    useState<EventOccurrence | null>(null);
   const [occurrences, setOccurrences] = useState<EventOccurrence[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +205,7 @@ export function useEventDrawer(): EventDrawerState {
   const openDrawer = useCallback(
     (selected: EventRead) => {
       setEvent(selected);
+      setSelectedOccurrence(null);
       setError(null);
       setDeleteError(null);
       setEventId(selected.id);
@@ -209,6 +220,7 @@ export function useEventDrawer(): EventDrawerState {
       try {
         const full = await apiClient.getEvent(occurrence.event_id);
         setEvent(full);
+        setSelectedOccurrence(occurrence);
         setEventId(full.id);
       } catch {
         setError("Failed to load event");
@@ -227,6 +239,7 @@ export function useEventDrawer(): EventDrawerState {
       setEventId(0);
     }
     setEvent(null);
+    setSelectedOccurrence(null);
     setOccurrences([]);
     setError(null);
     setDeliveriesRaw([]);
@@ -245,6 +258,7 @@ export function useEventDrawer(): EventDrawerState {
       await apiClient.deleteEvent(event.id);
       setEventId(0);
       setEvent(null);
+      setSelectedOccurrence(null);
       setOccurrences([]);
       setError(null);
       setDeliveriesRaw([]);
@@ -296,6 +310,7 @@ export function useEventDrawer(): EventDrawerState {
 
   return {
     event,
+    selectedOccurrence,
     open,
     loading,
     error,

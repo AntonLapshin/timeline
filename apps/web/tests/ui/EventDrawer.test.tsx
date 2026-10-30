@@ -306,6 +306,101 @@ describe("EventDrawer", () => {
     );
   });
 
+  it("shows the latest occurrence's status, not the first occurrence's", () => {
+    // First occurrence acked, latest sent-but-not-acknowledged: the old
+    // aggregate chip would say "Acknowledged" for the whole series.
+    useEventDrawerMock.mockReturnValue(
+      drawerState({
+        deliveries: [
+          {
+            log: {
+              id: 1,
+              event_id: 3,
+              occurrence_id: "2026-09-05",
+              offset: "1d",
+              status: "acked",
+              scheduled_at: "2026-09-05T09:00:00",
+              sent_at: "2026-09-05T09:00:00",
+              error: null,
+              created_at: "2026-09-05T09:00:00",
+              updated_at: "2026-09-05T09:00:00",
+            },
+            statusLabel: "Acknowledged",
+            statusStyle: { color: "", icon: "☑" },
+            detailLabel: "1d before · 2026-09-05",
+            timeLabel: "Sep 5, 9:00 AM",
+          },
+          {
+            log: {
+              id: 2,
+              event_id: 3,
+              occurrence_id: "2026-09-12",
+              offset: "1d",
+              status: "sent",
+              scheduled_at: "2026-09-12T09:00:00",
+              sent_at: "2026-09-12T09:00:00",
+              error: null,
+              created_at: "2026-09-12T09:00:00",
+              updated_at: "2026-09-12T09:00:00",
+            },
+            statusLabel: "Sent",
+            statusStyle: { color: "", icon: "✓" },
+            detailLabel: "1d before · 2026-09-12",
+            timeLabel: "Sep 12, 9:00 AM",
+          },
+        ],
+      }),
+    );
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByTestId("event-ack-status")).toHaveTextContent(
+      "not acknowledged",
+    );
+  });
+
+  it("shows the selected occurrence's status, even when it was never sent", () => {
+    // Opened for the Sep 12 occurrence, whose only delivery row belongs to
+    // Sep 5: the chip must say "Not sent" for Sep 12, not Sep 5's "Sent".
+    useEventDrawerMock.mockReturnValue(
+      drawerState({
+        selectedOccurrence: {
+          event_id: 3,
+          title: "HRA",
+          priority: "critical",
+          tag: "health",
+          rrule: "FREQ=MONTHLY;INTERVAL=3",
+          start_at: "2026-09-12T10:00:00",
+          all_day: false,
+          tz: "UTC",
+          next_occurrence: null,
+        },
+        deliveries: [
+          {
+            log: {
+              id: 1,
+              event_id: 3,
+              occurrence_id: "2026-09-05",
+              offset: "1d",
+              status: "sent",
+              scheduled_at: "2026-09-05T09:00:00",
+              sent_at: "2026-09-05T09:00:00",
+              error: null,
+              created_at: "2026-09-05T09:00:00",
+              updated_at: "2026-09-05T09:00:00",
+            },
+            statusLabel: "Sent",
+            statusStyle: { color: "", icon: "✓" },
+            detailLabel: "1d before · 2026-09-05",
+            timeLabel: "Sep 5, 9:00 AM",
+          },
+        ],
+      }),
+    );
+    render(<EventDrawer drawer={useEventDrawerMock()} />);
+    expect(screen.getByTestId("event-ack-status")).toHaveTextContent(
+      "Not sent",
+    );
+  });
+
   it("shows a loading state while the delivery log loads", () => {
     useEventDrawerMock.mockReturnValue(drawerState({ deliveriesLoading: true }));
     render(<EventDrawer drawer={useEventDrawerMock()} />);

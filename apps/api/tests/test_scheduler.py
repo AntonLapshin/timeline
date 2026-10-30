@@ -585,6 +585,54 @@ def test_add_reminder_job_dedupe() -> None:
         _shutdown(scheduler)
 
 
+def test_add_reminder_job_replaces_stale_persisted_job() -> None:
+    """A job past by more than the misfire grace is replaced, not deduped away.
+
+    Regression: a reminder job persisted in the jobstore whose run time came
+    due while the service was down, with a restart more than 24h later, was
+    kept by the dedupe check and then dropped by APScheduler as a misfire on
+    start — the recurring reminder was lost silently (no DeliveryLog, no
+    retry, next occurrence a week away). Re-adding it must drain it to now.
+    A job that is only recently past (inside the misfire grace, so
+    APScheduler will still fire it on start) keeps the dedupe no-op.
+    """
+    from apscheduler.triggers.date import DateTrigger
+
+    settings = Settings(data_dir=Path("/tmp"), db_name=f"sched-{id(object())}.db")
+    scheduler = build_scheduler(settings)
+    try:
+        now = datetime(2026, 1, 10, 12, 0, tzinfo=UTC)
+        planned = _planned(run_at=datetime(2026, 1, 1, 9, 0, tzinfo=UTC))
+        key = dedupe_key(1, planned.occurrence_id, "1h")
+        # Stale: run 9 days ago, far past the 24h misfire grace.
+        scheduler.add_job(
+            _noop_job,
+            trigger=DateTrigger(run_date=datetime(2026, 1, 1, 9, 0, tzinfo=UTC)),
+            id=key,
+            replace_existing=True,
+        )
+        replaced = add_reminder_job(scheduler, planned, _noop_job, now=now)
+        assert replaced == key
+        assert scheduler.get_job(key).trigger.run_date == now
+
+        # Recently past: run 1h ago, inside the grace -> dedupe no-op.
+        recent_key = dedupe_key(1, "2026-01-02T10:00:00+00:00", "1h")
+        recent_run = now - timedelta(hours=1)
+        scheduler.add_job(
+            _noop_job,
+            trigger=DateTrigger(run_date=recent_run),
+            id=recent_key,
+            replace_existing=True,
+        )
+        recent_planned = _planned(
+            occurrence_id="2026-01-02T10:00:00+00:00", run_at=recent_run
+        )
+        assert add_reminder_job(scheduler, recent_planned, _noop_job, now=now) is None
+        assert scheduler.get_job(recent_key).trigger.run_date == recent_run
+    finally:
+        _shutdown(scheduler)
+
+
 def test_add_reminder_job_drains_missed() -> None:
     """A reminder whose run time passed is drained to run immediately."""
     settings = Settings(data_dir=Path("/tmp"), db_name=f"sched-{id(object())}.db")

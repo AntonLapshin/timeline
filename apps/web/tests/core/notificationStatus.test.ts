@@ -3,6 +3,7 @@ import {
   isPastOccurrence,
   logAppliesToOccurrence,
   logsForOccurrence,
+  notificationStatusForLatestOccurrence,
   notificationStatusForOccurrence,
   notificationStatusFromLogs,
   occurrenceLocalDate,
@@ -92,6 +93,66 @@ describe("notificationStatusFromLogs", () => {
         makeLog({ status: "acked" }),
       ]),
     ).toBe("acked");
+  });
+});
+
+describe("notificationStatusForLatestOccurrence", () => {
+  it("returns unsent when there are no rows", () => {
+    expect(notificationStatusForLatestOccurrence([])).toBe("unsent");
+  });
+
+  it("matches the overall status for a single occurrence", () => {
+    expect(
+      notificationStatusForLatestOccurrence([
+        makeLog({ occurrence_id: "2026-10-11", status: "sent" }),
+      ]),
+    ).toBe("sent");
+  });
+
+  it("uses only the latest delivered occurrence, not the first", () => {
+    // Regression (recurring events): the first occurrence was acknowledged,
+    // the latest was sent but not acknowledged. An aggregate over all rows
+    // reports "acked" (acked beats sent); the drawer must report the latest
+    // occurrence's "sent", or a missed later occurrence stays hidden behind
+    // the first one's status.
+    const logs = [
+      makeLog({
+        id: 1,
+        occurrence_id: "2026-10-04",
+        status: "acked",
+        sent_at: "2026-10-04T09:00:00",
+        created_at: "2026-10-04T09:00:00",
+      }),
+      makeLog({
+        id: 2,
+        occurrence_id: "2026-10-11",
+        status: "sent",
+        sent_at: "2026-10-11T09:00:00",
+        created_at: "2026-10-11T09:00:00",
+      }),
+    ];
+    expect(notificationStatusForLatestOccurrence(logs)).toBe("sent");
+    expect(notificationStatusFromLogs(logs)).toBe("acked");
+  });
+
+  it("groups repeat/snooze follow-ups with their base occurrence", () => {
+    const logs = [
+      makeLog({
+        id: 1,
+        occurrence_id: "2026-10-04",
+        status: "acked",
+        sent_at: "2026-10-04T09:00:00",
+        created_at: "2026-10-04T09:00:00",
+      }),
+      makeLog({
+        id: 2,
+        occurrence_id: "2026-10-11~repeat@20261011100000",
+        status: "sent",
+        sent_at: "2026-10-11T10:00:00",
+        created_at: "2026-10-11T10:00:00",
+      }),
+    ];
+    expect(notificationStatusForLatestOccurrence(logs)).toBe("sent");
   });
 });
 

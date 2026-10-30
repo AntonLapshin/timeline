@@ -522,6 +522,32 @@ def build_scheduler(
     )
 
 
+def _existing_job_run_time(
+    scheduler: BackgroundScheduler,
+    key: str,
+    *,
+    jobstore: str = "default",
+) -> datetime | None:
+    """Return an existing job's run time, or None when it has none / is absent.
+
+    A started scheduler exposes ``next_run_time``; a not-yet-started one
+    (the startup drain / catch-up path) only carries the trigger's
+    ``run_date``. A job with neither has already fired (or is firing) and
+    must not be treated as a pending job with a known run time.
+    """
+    job = scheduler.get_job(key, jobstore=jobstore)
+    if job is None:
+        return None
+    run_at = getattr(job, "next_run_time", None)
+    if run_at is None:
+        run_at = getattr(job.trigger, "run_date", None)
+    if run_at is None:
+        return None
+    if run_at.tzinfo is None:
+        run_at = run_at.replace(tzinfo=UTC)
+    return run_at
+
+
 def add_reminder_job(
     scheduler: BackgroundScheduler,
     planned: PlannedReminder,
@@ -533,14 +559,40 @@ def add_reminder_job(
     """Schedule a reminder job, idempotent by dedupe key (at-least-once).
 
     The job id is the dedupe key ``(event_id, occurrence_id, offset)``, so
-    scheduling the same reminder again is a no-op that returns ``None``. A
-    reminder whose run time is already past (missed while down) is drained to
-    run immediately. Returns the job id when a new job was added.
+    scheduling the same pending reminder again is a no-op that returns
+    ``None``. A reminder whose run time is already past (missed while down)
+    is drained to run immediately. Returns the job id when a new job was added.
+
+    A stale job with the same key is the exception to the dedupe no-op: a
+    job persisted in the SQLite jobstore whose run time is already past by
+    more than the misfire grace (24h — e.g. the reminder came due while the
+    service was down, and the restart is later than that) would otherwise
+    survive ``drain_schedule`` / ``catch_up_missed`` untouched — the dedupe
+    check sees a job and returns None — and then be dropped by APScheduler
+    on ``scheduler.start()`` as a misfire, with no DeliveryLog row and no
+    retry. That is exactly a silently lost recurring reminder: the next
+    occurrence is a week away, so nothing rescues it. A stale job is
+    therefore removed and re-added drained to ``now`` (its planned run time
+    is past, so draining is the same treatment a brand-new missed job gets).
+    A future pending job, a job with no known run time (already firing),
+    and a job that is only recently past (still inside the misfire grace,
+    so APScheduler will fire it on start) are left alone — replacing those
+    would break the dedupe no-op for just-drained jobs, whose run time is
+    ``now`` at creation and therefore a hair in the past on the next call.
     """
     now = now or datetime.now(UTC)
     key = dedupe_key(planned.event_id, planned.occurrence_id, planned.offset)
-    if scheduler.get_job(key, jobstore=jobstore) is not None:
-        return None
+    existing_run_at = _existing_job_run_time(scheduler, key, jobstore=jobstore)
+    existing = scheduler.get_job(key, jobstore=jobstore)
+    if existing is not None:
+        stale_cutoff = now - timedelta(seconds=_MISFIRE_GRACE_SEC)
+        if existing_run_at is None or existing_run_at >= stale_cutoff:
+            return None
+        # Stale persisted job: drop it so the drained re-add below (with
+        # replace_existing=True) actually takes effect instead of the
+        # dedupe no-op above silently keeping the past run date.
+        with contextlib.suppress(JobLookupError):
+            scheduler.remove_job(key, jobstore=jobstore)
     run_at = planned.run_at if planned.run_at >= now else now
     scheduler.add_job(
         job_func,
@@ -660,6 +712,12 @@ def catch_up_missed(
     immediate jobs via :func:`add_reminder_job` (drained to ``now``). The
     delivery itself renders a "missed" card (see ``app.telegram_outbound``),
     so the retrospective message is explicit about the outage.
+
+    A missed reminder whose job is still persisted in the jobstore with its
+    original past run time is not skipped as "already scheduled":
+    :func:`add_reminder_job` replaces such a stale job with a drained one,
+    otherwise APScheduler would drop it as a misfire on start (grace is
+    24h, the lookback here is 7d) and the reminder would be lost silently.
 
     Why no extra "last-sent timestamp" table: ``DeliveryLog`` already records
     one row per delivered (event, occurrence, offset) instance — the exact

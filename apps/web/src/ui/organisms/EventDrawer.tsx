@@ -6,7 +6,8 @@ import { channelLabel } from "../../core/utils";
 import { tagStyle } from "../../core/timeline";
 import { formatRecurrence } from "../../core/recurrenceFormat";
 import {
-  notificationStatusFromLogs,
+  notificationStatusForLatestOccurrence,
+  notificationStatusForOccurrence,
   type NotificationStatus,
 } from "../../core/notificationStatus";
 import { PriorityDot } from "../atoms/PriorityDot";
@@ -100,13 +101,28 @@ export function EventDrawer({ drawer, onEdit, onDeleted }: EventDrawerProps) {
   const firstTag = event.tags.length > 0 ? event.tags[0] : null;
   const tag = firstTag ? tagStyle(firstTag) : null;
 
-  // Overall acknowledgment state across all delivery rows (acked beats sent
-  // beats unsent). Null while loading or when the fetch failed — the
-  // delivery-log section below owns those states.
+  // Acknowledgment state for the occurrence this drawer was opened for, or
+  // for the most recently delivered occurrence when opened for the event as
+  // a whole. Never an aggregate across all rows: for a recurring event an
+  // aggregate let the first occurrence's "sent — not acknowledged" row speak
+  // for the whole series, hiding that a later occurrence (e.g. today's) was
+  // never sent at all. Null while loading, when the fetch failed, or when
+  // the selected occurrence is still in the future — the delivery-log
+  // section below owns the loading/error states.
+  const selectedOccurrence = drawer.selectedOccurrence ?? null;
   const ackStatus: NotificationStatus | null =
     deliveriesLoading || deliveriesError
       ? null
-      : notificationStatusFromLogs(deliveries.map((row) => row.log));
+      : selectedOccurrence
+        ? notificationStatusForOccurrence(
+            deliveries.map((row) => row.log),
+            selectedOccurrence.start_at,
+            event.tz,
+            selectedOccurrence.all_day,
+          )
+        : notificationStatusForLatestOccurrence(
+            deliveries.map((row) => row.log),
+          );
   const ackChip = ackStatus ? ACK_CHIP[ackStatus] : null;
 
   return (

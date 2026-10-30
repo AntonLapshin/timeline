@@ -187,6 +187,65 @@ def test_catch_up_schedules_missed_and_skips_delivered(tmp_path: Path) -> None:
         _shutdown(scheduler)
 
 
+def test_catch_up_rescues_stale_persisted_job(tmp_path: Path) -> None:
+    """A missed reminder with a stale jobstore job is still re-sent on startup.
+
+    Regression (recurring reminders): when the service was down at the
+    reminder's run time and restarts more than the 24h misfire grace later
+    (but inside the 7d catch-up lookback), the persisted job's past run date
+    used to make ``catch_up_missed`` a no-op (dedupe saw a job) and
+    APScheduler then dropped that job as a misfire — no card, no DeliveryLog.
+    The stale job must be replaced with a drained (immediate) one.
+    """
+    from apscheduler.triggers.date import DateTrigger
+
+    from app.scheduler import dedupe_key as _dedupe_key
+
+    _, session_factory = _db(tmp_path)
+    with session_factory() as session:
+        # Weekly recurring event: Thu 2026-10-29 occurrence, 1d reminder due
+        # Wed 2026-10-28 08:00 UTC.
+        event = _event(
+            title="Trash can",
+            rrule="FREQ=WEEKLY",
+            start_at=datetime(2026, 10, 1, 8, 0, tzinfo=UTC),
+            channels=[EventChannel.TELEGRAM],
+            reminder_offsets=["1d"],
+        )
+        session.add(event)
+        session.commit()
+        event_id = event.id
+
+    scheduler = _wire_scheduler(tmp_path)
+    try:
+        key = _dedupe_key(event_id, "2026-10-29T08:00:00+00:00", "1d")
+        # Simulate the job persisted from before the outage, still carrying
+        # its original (now stale) run date.
+        scheduler.add_job(
+            lambda *a, **k: None,
+            trigger=DateTrigger(run_date=datetime(2026, 10, 28, 8, 0, tzinfo=UTC)),
+            id=key,
+            replace_existing=True,
+        )
+        now = datetime(2026, 10, 29, 23, 58, tzinfo=UTC)
+        added = catch_up_missed(
+            scheduler, session_factory, job_func=lambda *a, **k: None, now=now
+        )
+        assert added == 1
+        job = scheduler.get_job(key)
+        assert job is not None
+        assert job.trigger.run_date == now
+        # Second pass at the same instant is a no-op (drained job deduped).
+        assert (
+            catch_up_missed(
+                scheduler, session_factory, job_func=lambda *a, **k: None, now=now
+            )
+            == 0
+        )
+    finally:
+        _shutdown(scheduler)
+
+
 def test_catch_up_skips_low_priority_and_non_telegram(tmp_path: Path) -> None:
     """Events that never push (low priority / empty channels) schedule nothing."""
     _, session_factory = _db(tmp_path)

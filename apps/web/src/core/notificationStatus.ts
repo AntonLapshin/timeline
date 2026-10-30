@@ -182,6 +182,50 @@ export function logsForOccurrence(
 }
 
 /**
+ * The notification status of the most recently delivered occurrence.
+ *
+ * Delivery rows are grouped by their (suffix-stripped) occurrence id and
+ * the group with the newest delivery timestamp wins; the status is derived
+ * from that group alone. This is what the event drawer falls back to when
+ * it was opened for the event as a whole rather than for one occurrence:
+ * deriving the chip from *all* rows (the previous behaviour) let the very
+ * first occurrence's "sent — not acknowledged" row dominate the chip
+ * forever, hiding that a later occurrence was never sent at all (or was
+ * acknowledged). With a single occurrence this is identical to
+ * `notificationStatusFromLogs`; with several, the first occurrence no
+ * longer speaks for the whole series.
+ */
+export function notificationStatusForLatestOccurrence(
+  logs: readonly DeliveryLog[],
+): NotificationStatus {
+  if (logs.length === 0) {
+    return "unsent";
+  }
+  const groups = new Map<string, { logs: DeliveryLog[]; latestMs: number }>();
+  for (const log of logs) {
+    const rawId = log.occurrence_id?.trim() ?? "";
+    const key = rawId === "" ? "" : stripOccurrenceSuffix(rawId);
+    const rawTime = log.sent_at ?? log.scheduled_at ?? log.created_at;
+    const ms = rawTime ? Date.parse(rawTime) : Number.NaN;
+    const timeMs = Number.isFinite(ms) ? ms : 0;
+    const group = groups.get(key);
+    if (group) {
+      group.logs.push(log);
+      group.latestMs = Math.max(group.latestMs, timeMs);
+    } else {
+      groups.set(key, { logs: [log], latestMs: timeMs });
+    }
+  }
+  let best: { logs: DeliveryLog[]; latestMs: number } | null = null;
+  for (const group of groups.values()) {
+    if (best === null || group.latestMs > best.latestMs) {
+      best = group;
+    }
+  }
+  return notificationStatusFromLogs(best?.logs ?? []);
+}
+
+/**
  * The card highlight for an occurrence, or null when no highlight applies.
  *
  * Only past occurrences are highlighted; future (and present) ones return
